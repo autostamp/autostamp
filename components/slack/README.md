@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:slack@0.5.0` |
-| Published version | `0.5.0+slack-1.7.0` |
+| Package | `autostamp:slack@0.6.0` |
+| Published version | `0.6.0+slack-1.7.0` |
 | Tag filter | all tags |
 | Operations generated | 174 |
 | Infer API-key credentials | enabled — not triggered |

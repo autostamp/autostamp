@@ -27,7 +27,7 @@ const OP_TAX_RATES_TAX_TAX_RATE_REPOSITORY_V1_SAVE_PUT: OpSpec = OpSpec {
 fn iface_tax_rates__tax_data_tax_rate_interface__to_json(p: &iface_tax_rates::TaxDataTaxRateInterface) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_tax_rates__tax_data_tax_rate_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("rate".into(), serde_json::Number::from_f64(*(&p.rate)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("region_name".into(), match (&p.region_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -41,23 +41,25 @@ fn iface_tax_rates__tax_data_tax_rate_interface__to_json(p: &iface_tax_rates::Ta
     Value::Object(m)
 }
 
-fn iface_tax_rates__tax_data_tax_rate_extension_interface__to_json(p: &iface_tax_rates::TaxDataTaxRateExtensionInterface) -> Value {
+fn iface_tax_rates__tax_data_tax_rate_extension_interface_entry__to_json(p: &iface_tax_rates::TaxDataTaxRateExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_tax_rates__tax_data_tax_rate_title_interface__to_json(p: &iface_tax_rates::TaxDataTaxRateTitleInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_tax_rates__tax_data_tax_rate_title_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("store_id".into(), Value::String((&p.store_id).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tax_rates__tax_data_tax_rate_title_extension_interface__to_json(p: &iface_tax_rates::TaxDataTaxRateTitleExtensionInterface) -> Value {
+fn iface_tax_rates__tax_data_tax_rate_title_extension_interface_entry__to_json(p: &iface_tax_rates::TaxDataTaxRateTitleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -77,7 +79,7 @@ fn iface_tax_rates__tax_data_tax_rate_interface__from_json(v: &Value) -> Option<
     let m = v.as_object()?;
     Some(iface_tax_rates::TaxDataTaxRateInterface {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_tax_rates__tax_data_tax_rate_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tax_rates::TaxDataTaxRateExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         rate: m.get("rate").and_then(|v| (v).as_f64()).unwrap_or_default(),
         region_name: m.get("region_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -91,26 +93,28 @@ fn iface_tax_rates__tax_data_tax_rate_interface__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_tax_rates__tax_data_tax_rate_extension_interface__from_json(v: &Value) -> Option<iface_tax_rates::TaxDataTaxRateExtensionInterface> {
+fn iface_tax_rates__tax_data_tax_rate_extension_interface_entry__from_json(v: &Value) -> Option<iface_tax_rates::TaxDataTaxRateExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_tax_rates::TaxDataTaxRateExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tax_rates::TaxDataTaxRateExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tax_rates__tax_data_tax_rate_title_interface__from_json(v: &Value) -> Option<iface_tax_rates::TaxDataTaxRateTitleInterface> {
     let m = v.as_object()?;
     Some(iface_tax_rates::TaxDataTaxRateTitleInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_tax_rates__tax_data_tax_rate_title_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tax_rates::TaxDataTaxRateTitleExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         store_id: m.get("store_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_tax_rates__tax_data_tax_rate_title_extension_interface__from_json(v: &Value) -> Option<iface_tax_rates::TaxDataTaxRateTitleExtensionInterface> {
+fn iface_tax_rates__tax_data_tax_rate_title_extension_interface_entry__from_json(v: &Value) -> Option<iface_tax_rates::TaxDataTaxRateTitleExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_tax_rates::TaxDataTaxRateTitleExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tax_rates::TaxDataTaxRateTitleExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

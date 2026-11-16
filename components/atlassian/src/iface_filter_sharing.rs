@@ -216,9 +216,9 @@ fn iface_filter_sharing__project__to_json(p: &iface_filter_sharing::Project) -> 
     m.insert("permissions".into(), match (&p.permissions) { Some(v) => iface_filter_sharing__project_permissions__to_json(v), None => Value::Null });
     m.insert("projectCategory".into(), match (&p.project_category) { Some(v) => iface_filter_sharing__project_category__to_json(v), None => Value::Null });
     m.insert("projectTypeKey".into(), match (&p.project_type_key) { Some(v) => Value::String(iface_filter_sharing__project_details_project_type_key_enum__to_str(v).into()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_filter_sharing__project_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("retentionTillDate".into(), match (&p.retention_till_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("roles".into(), match (&p.roles) { Some(v) => iface_filter_sharing__project_roles__to_json(v), None => Value::Null });
+    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("simplified".into(), match (&p.simplified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("style".into(), match (&p.style) { Some(v) => Value::String(iface_filter_sharing__project_style_enum__to_str(v).into()), None => Value::Null });
@@ -400,7 +400,7 @@ fn iface_filter_sharing__updated_project_category__to_json(p: &iface_filter_shar
 
 fn iface_filter_sharing__project_landing_page_info__to_json(p: &iface_filter_sharing::ProjectLandingPageInfo) -> Value {
     let mut m = Map::new();
-    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_filter_sharing__project_landing_page_info_attributes__to_json(v), None => Value::Null });
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("boardId".into(), match (&p.board_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("boardName".into(), match (&p.board_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("projectKey".into(), match (&p.project_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -414,9 +414,10 @@ fn iface_filter_sharing__project_landing_page_info__to_json(p: &iface_filter_sha
     Value::Object(m)
 }
 
-fn iface_filter_sharing__project_landing_page_info_attributes__to_json(p: &iface_filter_sharing::ProjectLandingPageInfoAttributes) -> Value {
+fn iface_filter_sharing__project_landing_page_info_attributes_entry__to_json(p: &iface_filter_sharing::ProjectLandingPageInfoAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -435,15 +436,17 @@ fn iface_filter_sharing__project_category__to_json(p: &iface_filter_sharing::Pro
     Value::Object(m)
 }
 
-fn iface_filter_sharing__project_properties__to_json(p: &iface_filter_sharing::ProjectProperties) -> Value {
+fn iface_filter_sharing__project_properties_entry__to_json(p: &iface_filter_sharing::ProjectPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_filter_sharing__project_roles__to_json(p: &iface_filter_sharing::ProjectRoles) -> Value {
+fn iface_filter_sharing__project_roles_entry__to_json(p: &iface_filter_sharing::ProjectRolesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -648,9 +651,9 @@ fn iface_filter_sharing__project__from_json(v: &Value) -> Option<iface_filter_sh
         permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| iface_filter_sharing__project_permissions__from_json(v)),
         project_category: m.get("projectCategory").filter(|v| !v.is_null()).and_then(|v| iface_filter_sharing__project_category__from_json(v)),
         project_type_key: m.get("projectTypeKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_filter_sharing__project_details_project_type_key_enum__from_str)),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_filter_sharing__project_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_filter_sharing::ProjectPropertiesEntry { key: k.clone(), value: val })).collect())),
         retention_till_date: m.get("retentionTillDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| iface_filter_sharing__project_roles__from_json(v)),
+        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_filter_sharing::ProjectRolesEntry { key: k.clone(), value: val })).collect())),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         simplified: m.get("simplified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         style: m.get("style").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_filter_sharing__project_style_enum__from_str)),
@@ -848,7 +851,7 @@ fn iface_filter_sharing__updated_project_category__from_json(v: &Value) -> Optio
 fn iface_filter_sharing__project_landing_page_info__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectLandingPageInfo> {
     let m = v.as_object()?;
     Some(iface_filter_sharing::ProjectLandingPageInfo {
-        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_filter_sharing__project_landing_page_info_attributes__from_json(v)),
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_filter_sharing::ProjectLandingPageInfoAttributesEntry { key: k.clone(), value: val })).collect())),
         board_id: m.get("boardId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         board_name: m.get("boardName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         project_key: m.get("projectKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -862,10 +865,11 @@ fn iface_filter_sharing__project_landing_page_info__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_filter_sharing__project_landing_page_info_attributes__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectLandingPageInfoAttributes> {
+fn iface_filter_sharing__project_landing_page_info_attributes_entry__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectLandingPageInfoAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_filter_sharing::ProjectLandingPageInfoAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_filter_sharing::ProjectLandingPageInfoAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -886,17 +890,19 @@ fn iface_filter_sharing__project_category__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_filter_sharing__project_properties__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectProperties> {
+fn iface_filter_sharing__project_properties_entry__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_filter_sharing::ProjectProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_filter_sharing::ProjectPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_filter_sharing__project_roles__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectRoles> {
+fn iface_filter_sharing__project_roles_entry__from_json(v: &Value) -> Option<iface_filter_sharing::ProjectRolesEntry> {
     let m = v.as_object()?;
-    Some(iface_filter_sharing::ProjectRoles {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_filter_sharing::ProjectRolesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

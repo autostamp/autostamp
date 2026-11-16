@@ -407,14 +407,15 @@ fn iface_on_demand_videos__category_subcategories_item__to_json(p: &iface_on_dem
 fn iface_on_demand_videos__video_context__to_json(p: &iface_on_demand_videos::VideoContext) -> Value {
     let mut m = Map::new();
     m.insert("action".into(), Value::String(iface_on_demand_videos__video_context_action_enum__to_str(&p.action).into()));
-    m.insert("resource".into(), iface_on_demand_videos__video_context_resource_op__to_json(&p.resource_op));
+    m.insert("resource".into(), Value::Object((&p.resource_op).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("resource_type".into(), Value::String((&p.resource_type).clone()));
     Value::Object(m)
 }
 
-fn iface_on_demand_videos__video_context_resource_op__to_json(p: &iface_on_demand_videos::VideoContextResourceOp) -> Value {
+fn iface_on_demand_videos__video_context_resource_op_entry__to_json(p: &iface_on_demand_videos::VideoContextResourceOpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1188,14 +1189,15 @@ fn iface_on_demand_videos__on_demand_video__to_json(p: &iface_on_demand_videos::
 fn iface_on_demand_videos__on_demand_video_buy__to_json(p: &iface_on_demand_videos::OnDemandVideoBuy) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), Value::Bool(*(&p.active)));
-    m.insert("price".into(), iface_on_demand_videos__on_demand_video_buy_price__to_json(&p.price));
+    m.insert("price".into(), Value::Object((&p.price).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("purchased".into(), match (&p.purchased) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_on_demand_videos__on_demand_video_buy_price__to_json(p: &iface_on_demand_videos::OnDemandVideoBuyPrice) -> Value {
+fn iface_on_demand_videos__on_demand_video_buy_price_entry__to_json(p: &iface_on_demand_videos::OnDemandVideoBuyPriceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1260,14 +1262,15 @@ fn iface_on_demand_videos__on_demand_video_metadata_interactions_watchlater__to_
 fn iface_on_demand_videos__on_demand_video_rent__to_json(p: &iface_on_demand_videos::OnDemandVideoRent) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), Value::Bool(*(&p.active)));
-    m.insert("price".into(), iface_on_demand_videos__on_demand_video_rent_price__to_json(&p.price));
+    m.insert("price".into(), Value::Object((&p.price).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("purchased".into(), match (&p.purchased) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_on_demand_videos__on_demand_video_rent_price__to_json(p: &iface_on_demand_videos::OnDemandVideoRentPrice) -> Value {
+fn iface_on_demand_videos__on_demand_video_rent_price_entry__to_json(p: &iface_on_demand_videos::OnDemandVideoRentPriceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1475,15 +1478,16 @@ fn iface_on_demand_videos__video_context__from_json(v: &Value) -> Option<iface_o
     let m = v.as_object()?;
     Some(iface_on_demand_videos::VideoContext {
         action: match m.get("action").and_then(|v| (v).as_str().and_then(iface_on_demand_videos__video_context_action_enum__from_str)) { Some(x) => x, None => return None },
-        resource_op: match m.get("resource").and_then(|v| iface_on_demand_videos__video_context_resource_op__from_json(v)) { Some(x) => x, None => return None },
+        resource_op: m.get("resource").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_on_demand_videos::VideoContextResourceOpEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         resource_type: m.get("resource_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_on_demand_videos__video_context_resource_op__from_json(v: &Value) -> Option<iface_on_demand_videos::VideoContextResourceOp> {
+fn iface_on_demand_videos__video_context_resource_op_entry__from_json(v: &Value) -> Option<iface_on_demand_videos::VideoContextResourceOpEntry> {
     let m = v.as_object()?;
-    Some(iface_on_demand_videos::VideoContextResourceOp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_on_demand_videos::VideoContextResourceOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2292,15 +2296,16 @@ fn iface_on_demand_videos__on_demand_video_buy__from_json(v: &Value) -> Option<i
     let m = v.as_object()?;
     Some(iface_on_demand_videos::OnDemandVideoBuy {
         active: m.get("active").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        price: match m.get("price").and_then(|v| iface_on_demand_videos__on_demand_video_buy_price__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_on_demand_videos::OnDemandVideoBuyPriceEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         purchased: m.get("purchased").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_on_demand_videos__on_demand_video_buy_price__from_json(v: &Value) -> Option<iface_on_demand_videos::OnDemandVideoBuyPrice> {
+fn iface_on_demand_videos__on_demand_video_buy_price_entry__from_json(v: &Value) -> Option<iface_on_demand_videos::OnDemandVideoBuyPriceEntry> {
     let m = v.as_object()?;
-    Some(iface_on_demand_videos::OnDemandVideoBuyPrice {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_on_demand_videos::OnDemandVideoBuyPriceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2374,15 +2379,16 @@ fn iface_on_demand_videos__on_demand_video_rent__from_json(v: &Value) -> Option<
     let m = v.as_object()?;
     Some(iface_on_demand_videos::OnDemandVideoRent {
         active: m.get("active").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        price: match m.get("price").and_then(|v| iface_on_demand_videos__on_demand_video_rent_price__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_on_demand_videos::OnDemandVideoRentPriceEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         purchased: m.get("purchased").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_on_demand_videos__on_demand_video_rent_price__from_json(v: &Value) -> Option<iface_on_demand_videos::OnDemandVideoRentPrice> {
+fn iface_on_demand_videos__on_demand_video_rent_price_entry__from_json(v: &Value) -> Option<iface_on_demand_videos::OnDemandVideoRentPriceEntry> {
     let m = v.as_object()?;
-    Some(iface_on_demand_videos::OnDemandVideoRentPrice {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_on_demand_videos::OnDemandVideoRentPriceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

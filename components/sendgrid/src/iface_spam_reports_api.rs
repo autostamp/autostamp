@@ -56,21 +56,33 @@ const OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS_EMAIL: OpSpec = OpSpec
     ],
 };
 
-fn iface_spam_reports_api__spam_reports_response__to_json(p: &iface_spam_reports_api::SpamReportsResponse) -> Value {
+fn iface_spam_reports_api__spam_reports_response_item__to_json(p: &iface_spam_reports_api::SpamReportsResponseItem) -> Value {
     let mut m = Map::new();
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("ip".into(), Value::String((&p.ip).clone()));
+    Value::Object(m)
+}
+
+fn iface_spam_reports_api__delete_suppression_spam_reports_response_entry__to_json(p: &iface_spam_reports_api::DeleteSuppressionSpamReportsResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_spam_reports_api__delete_suppression_spam_reports_response__to_json(p: &iface_spam_reports_api::DeleteSuppressionSpamReportsResponse) -> Value {
+fn iface_spam_reports_api__spam_reports_response_item_v2__to_json(p: &iface_spam_reports_api::SpamReportsResponseItemV2) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("ip".into(), Value::String((&p.ip).clone()));
     Value::Object(m)
 }
 
-fn iface_spam_reports_api__delete_suppression_spam_reports_email_response__to_json(p: &iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponse) -> Value {
+fn iface_spam_reports_api__delete_suppression_spam_reports_email_response_entry__to_json(p: &iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -106,33 +118,46 @@ fn iface_spam_reports_api__delete_suppression_spam_reports_email_params__to_json
     Value::Object(m)
 }
 
-fn iface_spam_reports_api__spam_reports_response__from_json(v: &Value) -> Option<iface_spam_reports_api::SpamReportsResponse> {
+fn iface_spam_reports_api__spam_reports_response_item__from_json(v: &Value) -> Option<iface_spam_reports_api::SpamReportsResponseItem> {
     let m = v.as_object()?;
-    Some(iface_spam_reports_api::SpamReportsResponse {
+    Some(iface_spam_reports_api::SpamReportsResponseItem {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        email: m.get("email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ip: m.get("ip").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_spam_reports_api__delete_suppression_spam_reports_response_entry__from_json(v: &Value) -> Option<iface_spam_reports_api::DeleteSuppressionSpamReportsResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_spam_reports_api::DeleteSuppressionSpamReportsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_spam_reports_api__delete_suppression_spam_reports_response__from_json(v: &Value) -> Option<iface_spam_reports_api::DeleteSuppressionSpamReportsResponse> {
+fn iface_spam_reports_api__spam_reports_response_item_v2__from_json(v: &Value) -> Option<iface_spam_reports_api::SpamReportsResponseItemV2> {
     let m = v.as_object()?;
-    Some(iface_spam_reports_api::DeleteSuppressionSpamReportsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_spam_reports_api::SpamReportsResponseItemV2 {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        email: m.get("email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ip: m.get("ip").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_spam_reports_api__delete_suppression_spam_reports_email_response__from_json(v: &Value) -> Option<iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponse> {
+fn iface_spam_reports_api__delete_suppression_spam_reports_email_response_entry__from_json(v: &Value) -> Option<iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_spam_reports_api__get_suppression_spam_reports__ok(body: String) -> Result<iface_spam_reports_api::SpamReportsResponse, crate::runtime::DispatchError> {
+fn iface_spam_reports_api__get_suppression_spam_reports__ok(body: String) -> Result<Vec<iface_spam_reports_api::SpamReportsResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_spam_reports_api__spam_reports_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_spam_reports_api__spam_reports_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -145,12 +170,12 @@ fn iface_spam_reports_api__get_suppression_spam_reports__err(e: crate::runtime::
     }
 }
 
-fn iface_spam_reports_api__delete_suppression_spam_reports__ok(body: String) -> Result<iface_spam_reports_api::DeleteSuppressionSpamReportsResponse, crate::runtime::DispatchError> {
+fn iface_spam_reports_api__delete_suppression_spam_reports__ok(body: String) -> Result<Vec<iface_spam_reports_api::DeleteSuppressionSpamReportsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_spam_reports_api__delete_suppression_spam_reports_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_spam_reports_api::DeleteSuppressionSpamReportsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -163,12 +188,12 @@ fn iface_spam_reports_api__delete_suppression_spam_reports__err(e: crate::runtim
     }
 }
 
-fn iface_spam_reports_api__get_suppression_spam_reports_email__ok(body: String) -> Result<iface_spam_reports_api::SpamReportsResponse, crate::runtime::DispatchError> {
+fn iface_spam_reports_api__get_suppression_spam_reports_email__ok(body: String) -> Result<Vec<iface_spam_reports_api::SpamReportsResponseItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_spam_reports_api__spam_reports_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_spam_reports_api__spam_reports_response_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -181,12 +206,12 @@ fn iface_spam_reports_api__get_suppression_spam_reports_email__err(e: crate::run
     }
 }
 
-fn iface_spam_reports_api__delete_suppression_spam_reports_email__ok(body: String) -> Result<iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponse, crate::runtime::DispatchError> {
+fn iface_spam_reports_api__delete_suppression_spam_reports_email__ok(body: String) -> Result<Vec<iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_spam_reports_api__delete_suppression_spam_reports_email_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -200,28 +225,28 @@ fn iface_spam_reports_api__delete_suppression_spam_reports_email__err(e: crate::
 }
 
 impl iface_spam_reports_api::Guest for crate::Component {
-    fn get_suppression_spam_reports(params: iface_spam_reports_api::GetSuppressionSpamReportsParams) -> Result<iface_spam_reports_api::SpamReportsResponse, String> {
+    fn get_suppression_spam_reports(params: iface_spam_reports_api::GetSuppressionSpamReportsParams) -> Result<Vec<iface_spam_reports_api::SpamReportsResponseItem>, String> {
         let json = iface_spam_reports_api__get_suppression_spam_reports_params__to_json(&params);
         match dispatch(&OP_SPAM_REPORTS_API_GET_SUPPRESSION_SPAM_REPORTS, json).and_then(iface_spam_reports_api__get_suppression_spam_reports__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_spam_reports_api__get_suppression_spam_reports__err(e)),
         }
     }
-    fn delete_suppression_spam_reports(params: iface_spam_reports_api::DeleteSuppressionSpamReportsParams) -> Result<iface_spam_reports_api::DeleteSuppressionSpamReportsResponse, String> {
+    fn delete_suppression_spam_reports(params: iface_spam_reports_api::DeleteSuppressionSpamReportsParams) -> Result<Vec<iface_spam_reports_api::DeleteSuppressionSpamReportsResponseEntry>, String> {
         let json = iface_spam_reports_api__delete_suppression_spam_reports_params__to_json(&params);
         match dispatch(&OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS, json).and_then(iface_spam_reports_api__delete_suppression_spam_reports__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_spam_reports_api__delete_suppression_spam_reports__err(e)),
         }
     }
-    fn get_suppression_spam_reports_email(params: iface_spam_reports_api::GetSuppressionSpamReportsEmailParams) -> Result<iface_spam_reports_api::SpamReportsResponse, String> {
+    fn get_suppression_spam_reports_email(params: iface_spam_reports_api::GetSuppressionSpamReportsEmailParams) -> Result<Vec<iface_spam_reports_api::SpamReportsResponseItemV2>, String> {
         let json = iface_spam_reports_api__get_suppression_spam_reports_email_params__to_json(&params);
         match dispatch(&OP_SPAM_REPORTS_API_GET_SUPPRESSION_SPAM_REPORTS_EMAIL, json).and_then(iface_spam_reports_api__get_suppression_spam_reports_email__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_spam_reports_api__get_suppression_spam_reports_email__err(e)),
         }
     }
-    fn delete_suppression_spam_reports_email(params: iface_spam_reports_api::DeleteSuppressionSpamReportsEmailParams) -> Result<iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponse, String> {
+    fn delete_suppression_spam_reports_email(params: iface_spam_reports_api::DeleteSuppressionSpamReportsEmailParams) -> Result<Vec<iface_spam_reports_api::DeleteSuppressionSpamReportsEmailResponseEntry>, String> {
         let json = iface_spam_reports_api__delete_suppression_spam_reports_email_params__to_json(&params);
         match dispatch(&OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS_EMAIL, json).and_then(iface_spam_reports_api__delete_suppression_spam_reports_email__ok) {
             Ok(v) => Ok(v),

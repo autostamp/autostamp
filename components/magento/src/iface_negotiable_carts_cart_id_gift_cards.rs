@@ -19,16 +19,17 @@ fn iface_negotiable_carts_cart_id_gift_cards__gift_card_account_data_gift_card_a
     let mut m = Map::new();
     m.insert("base_gift_cards_amount".into(), serde_json::Number::from_f64(*(&p.base_gift_cards_amount)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("base_gift_cards_amount_used".into(), serde_json::Number::from_f64(*(&p.base_gift_cards_amount_used)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_carts_cart_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("gift_cards".into(), Value::Array((&p.gift_cards).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("gift_cards_amount".into(), serde_json::Number::from_f64(*(&p.gift_cards_amount)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("gift_cards_amount_used".into(), serde_json::Number::from_f64(*(&p.gift_cards_amount_used)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_negotiable_carts_cart_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface__to_json(p: &iface_negotiable_carts_cart_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterface) -> Value {
+fn iface_negotiable_carts_cart_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface_entry__to_json(p: &iface_negotiable_carts_cart_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

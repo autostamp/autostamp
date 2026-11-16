@@ -23,14 +23,15 @@ fn iface_company_credits_company_company_id__company_credit_data_credit_limit_in
     m.insert("credit_limit".into(), match (&p.credit_limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("currency_code".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exceed_limit".into(), Value::Bool(*(&p.exceed_limit)));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_company_credits_company_company_id__company_credit_data_credit_limit_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_company_credits_company_company_id__company_credit_data_credit_limit_extension_interface__to_json(p: &iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterface) -> Value {
+fn iface_company_credits_company_company_id__company_credit_data_credit_limit_extension_interface_entry__to_json(p: &iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -50,15 +51,16 @@ fn iface_company_credits_company_company_id__company_credit_data_credit_limit_in
         credit_limit: m.get("credit_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         currency_code: m.get("currency_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         exceed_limit: m.get("exceed_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_company_credits_company_company_id__company_credit_data_credit_limit_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_company_credits_company_company_id__company_credit_data_credit_limit_extension_interface__from_json(v: &Value) -> Option<iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterface> {
+fn iface_company_credits_company_company_id__company_credit_data_credit_limit_extension_interface_entry__from_json(v: &Value) -> Option<iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_company_credits_company_company_id::CompanyCreditDataCreditLimitExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

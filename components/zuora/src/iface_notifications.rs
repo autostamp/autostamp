@@ -300,6 +300,38 @@ fn iface_notifications__get_public_notification_definition_response_callout_http
     }
 }
 
+fn iface_notifications__filter_rule_parameter_definition_value_type_enum__to_str(e: &iface_notifications::FilterRuleParameterDefinitionValueTypeEnum) -> &'static str {
+    match e {
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::StringOp => "STRING",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Byte => "BYTE",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Short => "SHORT",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Character => "CHARACTER",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Integer => "INTEGER",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Long => "LONG",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Float => "FLOAT",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Double => "DOUBLE",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Boolean => "BOOLEAN",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigInteger => "BIG_INTEGER",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigDecimal => "BIG_DECIMAL",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDate => "LOCAL_DATE",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDateTime => "LOCAL_DATE_TIME",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Timestamp => "TIMESTAMP",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::ByteArray => "BYTE_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::ShortArray => "SHORT_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::CharacterArray => "CHARACTER_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::IntegerArray => "INTEGER_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::FloatArray => "FLOAT_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::DoubleArray => "DOUBLE_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BooleanArray => "BOOLEAN_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::StringArray => "STRING_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigIntegerArray => "BIG_INTEGER_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigDecimalArray => "BIG_DECIMAL_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDateArray => "LOCAL_DATE_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDateTimeArray => "LOCAL_DATE_TIME_ARRAY",
+        iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::TimestampArray => "TIMESTAMP_ARRAY",
+    }
+}
+
 fn iface_notifications__get_query_email_templates_response__to_json(p: &iface_notifications::GetQueryEmailTemplatesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_notifications__get_public_email_template_response__to_json(v)).collect()), None => Value::Null });
@@ -357,7 +389,7 @@ fn iface_notifications__get_public_notification_definition_response__to_json(p: 
     m.insert("eventTypeName".into(), match (&p.event_type_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("eventTypeNamespace".into(), match (&p.event_type_namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filterRule".into(), match (&p.filter_rule) { Some(v) => iface_notifications__get_public_notification_definition_response_filter_rule__to_json(v), None => Value::Null });
-    m.insert("filterRuleParams".into(), match (&p.filter_rule_params) { Some(v) => iface_notifications__filter_rule_parameter_values__to_json(v), None => Value::Null });
+    m.insert("filterRuleParams".into(), match (&p.filter_rule_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updatedBy".into(), match (&p.updated_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -370,7 +402,7 @@ fn iface_notifications__get_public_notification_definition_response_callout__to_
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("calloutAuth".into(), match (&p.callout_auth) { Some(v) => iface_notifications__callout_auth__to_json(v), None => Value::Null });
     m.insert("calloutBaseurl".into(), match (&p.callout_baseurl) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("calloutParams".into(), match (&p.callout_params) { Some(v) => iface_notifications__callout_merge_fields__to_json(v), None => Value::Null });
+    m.insert("calloutParams".into(), match (&p.callout_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("calloutRetry".into(), match (&p.callout_retry) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("eventTypeName".into(), match (&p.event_type_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -390,9 +422,10 @@ fn iface_notifications__callout_auth__to_json(p: &iface_notifications::CalloutAu
     Value::Object(m)
 }
 
-fn iface_notifications__callout_merge_fields__to_json(p: &iface_notifications::CalloutMergeFields) -> Value {
+fn iface_notifications__callout_merge_fields_entry__to_json(p: &iface_notifications::CalloutMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -402,19 +435,30 @@ fn iface_notifications__get_public_notification_definition_response_filter_rule_
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("eventTypeName".into(), match (&p.event_type_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("parameters".into(), match (&p.parameters) { Some(v) => iface_notifications__filter_rule_parameter_definitions__to_json(v), None => Value::Null });
+    m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_notifications__filter_rule_parameter_definition__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_notifications__filter_rule_parameter_definitions__to_json(p: &iface_notifications::FilterRuleParameterDefinitions) -> Value {
+fn iface_notifications__filter_rule_parameter_definition__to_json(p: &iface_notifications::FilterRuleParameterDefinition) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("displayName".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("valueType".into(), match (&p.value_type) { Some(v) => Value::String(iface_notifications__filter_rule_parameter_definition_value_type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_notifications__filter_rule_parameter_values__to_json(p: &iface_notifications::FilterRuleParameterValues) -> Value {
+fn iface_notifications__filter_rule_parameter_definitions_entry__to_json(p: &iface_notifications::FilterRuleParameterDefinitionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_notifications__filter_rule_parameter_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_notifications__filter_rule_parameter_values_entry__to_json(p: &iface_notifications::FilterRuleParameterValuesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -423,7 +467,7 @@ fn iface_notifications__post_public_notification_definition_request_callout__to_
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("calloutAuth".into(), match (&p.callout_auth) { Some(v) => iface_notifications__callout_auth__to_json(v), None => Value::Null });
     m.insert("calloutBaseurl".into(), Value::String((&p.callout_baseurl).clone()));
-    m.insert("calloutParams".into(), match (&p.callout_params) { Some(v) => iface_notifications__callout_merge_fields__to_json(v), None => Value::Null });
+    m.insert("calloutParams".into(), match (&p.callout_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("calloutRetry".into(), match (&p.callout_retry) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("eventTypeName".into(), Value::String((&p.event_type_name).clone()));
@@ -433,11 +477,32 @@ fn iface_notifications__post_public_notification_definition_request_callout__to_
     Value::Object(m)
 }
 
+fn iface_notifications__callout_merge_fields_entry_v2__to_json(p: &iface_notifications::CalloutMergeFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_notifications__post_public_notification_definition_request_filter_rule__to_json(p: &iface_notifications::PostPublicNotificationDefinitionRequestFilterRule) -> Value {
     let mut m = Map::new();
     m.insert("condition".into(), Value::String((&p.condition).clone()));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("parameters".into(), iface_notifications__filter_rule_parameter_definitions__to_json(&p.parameters));
+    m.insert("parameters".into(), Value::Object((&p.parameters).iter().map(|e| (e.key.clone(), iface_notifications__filter_rule_parameter_definition__to_json(&e.value))).collect()));
+    Value::Object(m)
+}
+
+fn iface_notifications__filter_rule_parameter_definitions_entry_v2__to_json(p: &iface_notifications::FilterRuleParameterDefinitionsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_notifications__filter_rule_parameter_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_notifications__filter_rule_parameter_values_entry_v2__to_json(p: &iface_notifications::FilterRuleParameterValuesEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -446,7 +511,7 @@ fn iface_notifications__put_public_notification_definition_request_callout__to_j
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("calloutAuth".into(), match (&p.callout_auth) { Some(v) => iface_notifications__callout_auth__to_json(v), None => Value::Null });
     m.insert("calloutBaseurl".into(), Value::String((&p.callout_baseurl).clone()));
-    m.insert("calloutParams".into(), match (&p.callout_params) { Some(v) => iface_notifications__callout_merge_fields__to_json(v), None => Value::Null });
+    m.insert("calloutParams".into(), match (&p.callout_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("calloutRetry".into(), match (&p.callout_retry) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("httpMethod".into(), Value::String(iface_notifications__get_public_notification_definition_response_callout_http_method_enum__to_str(&p.http_method).into()));
@@ -455,11 +520,32 @@ fn iface_notifications__put_public_notification_definition_request_callout__to_j
     Value::Object(m)
 }
 
+fn iface_notifications__callout_merge_fields_entry_v3__to_json(p: &iface_notifications::CalloutMergeFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_notifications__put_public_notification_definition_request_filter_rule__to_json(p: &iface_notifications::PutPublicNotificationDefinitionRequestFilterRule) -> Value {
     let mut m = Map::new();
     m.insert("condition".into(), Value::String((&p.condition).clone()));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("parameters".into(), iface_notifications__filter_rule_parameter_definitions__to_json(&p.parameters));
+    m.insert("parameters".into(), Value::Object((&p.parameters).iter().map(|e| (e.key.clone(), iface_notifications__filter_rule_parameter_definition__to_json(&e.value))).collect()));
+    Value::Object(m)
+}
+
+fn iface_notifications__filter_rule_parameter_definitions_entry_v3__to_json(p: &iface_notifications::FilterRuleParameterDefinitionsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_notifications__filter_rule_parameter_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_notifications__filter_rule_parameter_values_entry_v3__to_json(p: &iface_notifications::FilterRuleParameterValuesEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -592,7 +678,7 @@ fn iface_notifications__post_create_notification_definition_params__to_json(p: &
     m.insert("event_type_name".into(), Value::String((&p.event_type_name).clone()));
     m.insert("event_type_namespace".into(), match (&p.event_type_namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_rule".into(), match (&p.filter_rule) { Some(v) => iface_notifications__post_public_notification_definition_request_filter_rule__to_json(v), None => Value::Null });
-    m.insert("filter_rule_params".into(), match (&p.filter_rule_params) { Some(v) => iface_notifications__filter_rule_parameter_values__to_json(v), None => Value::Null });
+    m.insert("filter_rule_params".into(), match (&p.filter_rule_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
@@ -620,7 +706,7 @@ fn iface_notifications__put_update_notification_definition_params__to_json(p: &i
     m.insert("email_active".into(), match (&p.email_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("email_template_id".into(), match (&p.email_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_rule".into(), match (&p.filter_rule) { Some(v) => iface_notifications__put_public_notification_definition_request_filter_rule__to_json(v), None => Value::Null });
-    m.insert("filter_rule_params".into(), match (&p.filter_rule_params) { Some(v) => iface_notifications__filter_rule_parameter_values__to_json(v), None => Value::Null });
+    m.insert("filter_rule_params".into(), match (&p.filter_rule_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -722,7 +808,7 @@ fn iface_notifications__get_public_notification_definition_response__from_json(v
         event_type_name: m.get("eventTypeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         event_type_namespace: m.get("eventTypeNamespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         filter_rule: m.get("filterRule").filter(|v| !v.is_null()).and_then(|v| iface_notifications__get_public_notification_definition_response_filter_rule__from_json(v)),
-        filter_rule_params: m.get("filterRuleParams").filter(|v| !v.is_null()).and_then(|v| iface_notifications__filter_rule_parameter_values__from_json(v)),
+        filter_rule_params: m.get("filterRuleParams").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_notifications::FilterRuleParameterValuesEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updated_by: m.get("updatedBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -736,7 +822,7 @@ fn iface_notifications__get_public_notification_definition_response_callout__fro
         active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         callout_auth: m.get("calloutAuth").filter(|v| !v.is_null()).and_then(|v| iface_notifications__callout_auth__from_json(v)),
         callout_baseurl: m.get("calloutBaseurl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        callout_params: m.get("calloutParams").filter(|v| !v.is_null()).and_then(|v| iface_notifications__callout_merge_fields__from_json(v)),
+        callout_params: m.get("calloutParams").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_notifications::CalloutMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         callout_retry: m.get("calloutRetry").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         event_type_name: m.get("eventTypeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -757,10 +843,11 @@ fn iface_notifications__callout_auth__from_json(v: &Value) -> Option<iface_notif
     })
 }
 
-fn iface_notifications__callout_merge_fields__from_json(v: &Value) -> Option<iface_notifications::CalloutMergeFields> {
+fn iface_notifications__callout_merge_fields_entry__from_json(v: &Value) -> Option<iface_notifications::CalloutMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_notifications::CalloutMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_notifications::CalloutMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -771,21 +858,33 @@ fn iface_notifications__get_public_notification_definition_response_filter_rule_
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         event_type_name: m.get("eventTypeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        parameters: m.get("parameters").filter(|v| !v.is_null()).and_then(|v| iface_notifications__filter_rule_parameter_definitions__from_json(v)),
+        parameters: m.get("parameters").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_notifications__filter_rule_parameter_definition__from_json(x)).map(|val| iface_notifications::FilterRuleParameterDefinitionsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_notifications__filter_rule_parameter_definitions__from_json(v: &Value) -> Option<iface_notifications::FilterRuleParameterDefinitions> {
+fn iface_notifications__filter_rule_parameter_definition__from_json(v: &Value) -> Option<iface_notifications::FilterRuleParameterDefinition> {
     let m = v.as_object()?;
-    Some(iface_notifications::FilterRuleParameterDefinitions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_notifications::FilterRuleParameterDefinition {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("displayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        value_type: m.get("valueType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_notifications__filter_rule_parameter_definition_value_type_enum__from_str)),
     })
 }
 
-fn iface_notifications__filter_rule_parameter_values__from_json(v: &Value) -> Option<iface_notifications::FilterRuleParameterValues> {
+fn iface_notifications__filter_rule_parameter_definitions_entry__from_json(v: &Value) -> Option<iface_notifications::FilterRuleParameterDefinitionsEntry> {
     let m = v.as_object()?;
-    Some(iface_notifications::FilterRuleParameterValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_notifications::FilterRuleParameterDefinitionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_notifications__filter_rule_parameter_definition__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_notifications__filter_rule_parameter_values_entry__from_json(v: &Value) -> Option<iface_notifications::FilterRuleParameterValuesEntry> {
+    let m = v.as_object()?;
+    Some(iface_notifications::FilterRuleParameterValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -831,6 +930,39 @@ fn iface_notifications__get_public_notification_definition_response_callout_http
         "PUT" => Some(iface_notifications::GetPublicNotificationDefinitionResponseCalloutHttpMethodEnum::Put),
         "POST" => Some(iface_notifications::GetPublicNotificationDefinitionResponseCalloutHttpMethodEnum::Post),
         "DELETE" => Some(iface_notifications::GetPublicNotificationDefinitionResponseCalloutHttpMethodEnum::Delete),
+        _ => None,
+    }
+}
+
+fn iface_notifications__filter_rule_parameter_definition_value_type_enum__from_str(s: &str) -> Option<iface_notifications::FilterRuleParameterDefinitionValueTypeEnum> {
+    match s {
+        "STRING" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::StringOp),
+        "BYTE" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Byte),
+        "SHORT" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Short),
+        "CHARACTER" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Character),
+        "INTEGER" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Integer),
+        "LONG" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Long),
+        "FLOAT" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Float),
+        "DOUBLE" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Double),
+        "BOOLEAN" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Boolean),
+        "BIG_INTEGER" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigInteger),
+        "BIG_DECIMAL" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigDecimal),
+        "LOCAL_DATE" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDate),
+        "LOCAL_DATE_TIME" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDateTime),
+        "TIMESTAMP" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::Timestamp),
+        "BYTE_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::ByteArray),
+        "SHORT_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::ShortArray),
+        "CHARACTER_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::CharacterArray),
+        "INTEGER_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::IntegerArray),
+        "FLOAT_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::FloatArray),
+        "DOUBLE_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::DoubleArray),
+        "BOOLEAN_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BooleanArray),
+        "STRING_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::StringArray),
+        "BIG_INTEGER_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigIntegerArray),
+        "BIG_DECIMAL_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::BigDecimalArray),
+        "LOCAL_DATE_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDateArray),
+        "LOCAL_DATE_TIME_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::LocalDateTimeArray),
+        "TIMESTAMP_ARRAY" => Some(iface_notifications::FilterRuleParameterDefinitionValueTypeEnum::TimestampArray),
         _ => None,
     }
 }

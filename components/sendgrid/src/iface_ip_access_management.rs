@@ -113,15 +113,17 @@ fn iface_ip_access_management__post_access_settings_whitelist_body_ips_item__to_
     Value::Object(m)
 }
 
-fn iface_ip_access_management__delete_access_settings_whitelist_response__to_json(p: &iface_ip_access_management::DeleteAccessSettingsWhitelistResponse) -> Value {
+fn iface_ip_access_management__delete_access_settings_whitelist_response_entry__to_json(p: &iface_ip_access_management::DeleteAccessSettingsWhitelistResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_ip_access_management__delete_access_settings_whitelist_rule_id_response__to_json(p: &iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponse) -> Value {
+fn iface_ip_access_management__delete_access_settings_whitelist_rule_id_response_entry__to_json(p: &iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -202,17 +204,19 @@ fn iface_ip_access_management__ip_access_response_result_op_item__from_json(v: &
     })
 }
 
-fn iface_ip_access_management__delete_access_settings_whitelist_response__from_json(v: &Value) -> Option<iface_ip_access_management::DeleteAccessSettingsWhitelistResponse> {
+fn iface_ip_access_management__delete_access_settings_whitelist_response_entry__from_json(v: &Value) -> Option<iface_ip_access_management::DeleteAccessSettingsWhitelistResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_ip_access_management::DeleteAccessSettingsWhitelistResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_ip_access_management::DeleteAccessSettingsWhitelistResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_ip_access_management__delete_access_settings_whitelist_rule_id_response__from_json(v: &Value) -> Option<iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponse> {
+fn iface_ip_access_management__delete_access_settings_whitelist_rule_id_response_entry__from_json(v: &Value) -> Option<iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -288,12 +292,12 @@ fn iface_ip_access_management__post_access_settings_whitelist__err(e: crate::run
     }
 }
 
-fn iface_ip_access_management__delete_access_settings_whitelist__ok(body: String) -> Result<iface_ip_access_management::DeleteAccessSettingsWhitelistResponse, crate::runtime::DispatchError> {
+fn iface_ip_access_management__delete_access_settings_whitelist__ok(body: String) -> Result<Vec<iface_ip_access_management::DeleteAccessSettingsWhitelistResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_access_management__delete_access_settings_whitelist_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ip_access_management::DeleteAccessSettingsWhitelistResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -330,12 +334,12 @@ fn iface_ip_access_management__get_access_settings_whitelist_rule_id__err(e: cra
     }
 }
 
-fn iface_ip_access_management__delete_access_settings_whitelist_rule_id__ok(body: String) -> Result<iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponse, crate::runtime::DispatchError> {
+fn iface_ip_access_management__delete_access_settings_whitelist_rule_id__ok(body: String) -> Result<Vec<iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_access_management__delete_access_settings_whitelist_rule_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -370,7 +374,7 @@ impl iface_ip_access_management::Guest for crate::Component {
             Err(e) => Err(iface_ip_access_management__post_access_settings_whitelist__err(e)),
         }
     }
-    fn delete_access_settings_whitelist(params: iface_ip_access_management::DeleteAccessSettingsWhitelistParams) -> Result<iface_ip_access_management::DeleteAccessSettingsWhitelistResponse, iface_ip_access_management::DeleteAccessSettingsWhitelistError> {
+    fn delete_access_settings_whitelist(params: iface_ip_access_management::DeleteAccessSettingsWhitelistParams) -> Result<Vec<iface_ip_access_management::DeleteAccessSettingsWhitelistResponseEntry>, iface_ip_access_management::DeleteAccessSettingsWhitelistError> {
         let json = iface_ip_access_management__delete_access_settings_whitelist_params__to_json(&params);
         match dispatch(&OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST, json).and_then(iface_ip_access_management__delete_access_settings_whitelist__ok) {
             Ok(v) => Ok(v),
@@ -384,7 +388,7 @@ impl iface_ip_access_management::Guest for crate::Component {
             Err(e) => Err(iface_ip_access_management__get_access_settings_whitelist_rule_id__err(e)),
         }
     }
-    fn delete_access_settings_whitelist_rule_id(params: iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdParams) -> Result<iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponse, String> {
+    fn delete_access_settings_whitelist_rule_id(params: iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdParams) -> Result<Vec<iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdResponseEntry>, String> {
         let json = iface_ip_access_management__delete_access_settings_whitelist_rule_id_params__to_json(&params);
         match dispatch(&OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST_RULE_ID, json).and_then(iface_ip_access_management__delete_access_settings_whitelist_rule_id__ok) {
             Ok(v) => Ok(v),

@@ -35,19 +35,20 @@ const OP_DYNAMIC_MODULES_RESOURCE_REMOVE_MODULES_DELETE: OpSpec = OpSpec {
 
 fn iface_dynamic_modules__connect_modules__to_json(p: &iface_dynamic_modules::ConnectModules) -> Value {
     let mut m = Map::new();
-    m.insert("modules".into(), Value::Array((&p.modules).iter().map(|v| iface_dynamic_modules__connect_module__to_json(v)).collect()));
+    m.insert("modules".into(), Value::Array((&p.modules).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_dynamic_modules__connect_module__to_json(p: &iface_dynamic_modules::ConnectModule) -> Value {
+fn iface_dynamic_modules__connect_module_entry__to_json(p: &iface_dynamic_modules::ConnectModuleEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_dynamic_modules__resource_register_modules_post_params__to_json(p: &iface_dynamic_modules::ResourceRegisterModulesPostParams) -> Value {
     let mut m = Map::new();
-    m.insert("modules".into(), Value::Array((&p.modules).iter().map(|v| iface_dynamic_modules__connect_module__to_json(v)).collect()));
+    m.insert("modules".into(), Value::Array((&p.modules).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     Value::Object(m)
 }
 
@@ -60,14 +61,15 @@ fn iface_dynamic_modules__resource_remove_modules_delete_params__to_json(p: &ifa
 fn iface_dynamic_modules__connect_modules__from_json(v: &Value) -> Option<iface_dynamic_modules::ConnectModules> {
     let m = v.as_object()?;
     Some(iface_dynamic_modules::ConnectModules {
-        modules: m.get("modules").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_dynamic_modules__connect_module__from_json(x)).collect())).unwrap_or_default(),
+        modules: m.get("modules").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_dynamic_modules::ConnectModuleEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_dynamic_modules__connect_module__from_json(v: &Value) -> Option<iface_dynamic_modules::ConnectModule> {
+fn iface_dynamic_modules__connect_module_entry__from_json(v: &Value) -> Option<iface_dynamic_modules::ConnectModuleEntry> {
     let m = v.as_object()?;
-    Some(iface_dynamic_modules::ConnectModule {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_dynamic_modules::ConnectModuleEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -453,7 +453,7 @@ fn iface_terminal__location__to_json(p: &iface_terminal::Location) -> Value {
     m.insert("display_name".into(), Value::String((&p.display_name).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_terminal__location_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_terminal__location_object_enum__to_str(&p.object).into()));
     Value::Object(m)
 }
@@ -469,9 +469,10 @@ fn iface_terminal__address__to_json(p: &iface_terminal::Address) -> Value {
     Value::Object(m)
 }
 
-fn iface_terminal__location_metadata__to_json(p: &iface_terminal::LocationMetadata) -> Value {
+fn iface_terminal__location_metadata_entry__to_json(p: &iface_terminal::LocationMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -524,16 +525,17 @@ fn iface_terminal__reader__to_json(p: &iface_terminal::Reader) -> Value {
     m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), iface_terminal__reader_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_terminal__reader_object_enum__to_str(&p.object).into()));
     m.insert("serial_number".into(), Value::String((&p.serial_number).clone()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_terminal__reader_metadata__to_json(p: &iface_terminal::ReaderMetadata) -> Value {
+fn iface_terminal__reader_metadata_entry__to_json(p: &iface_terminal::ReaderMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -558,9 +560,10 @@ fn iface_terminal__post_terminal_readers_reader_process_payment_intent_body_proc
     Value::Object(m)
 }
 
-fn iface_terminal__post_terminal_readers_reader_refund_payment_body_metadata__to_json(p: &iface_terminal::PostTerminalReadersReaderRefundPaymentBodyMetadata) -> Value {
+fn iface_terminal__post_terminal_readers_reader_refund_payment_body_metadata_entry__to_json(p: &iface_terminal::PostTerminalReadersReaderRefundPaymentBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -757,7 +760,7 @@ fn iface_terminal__post_terminal_readers_reader_refund_payment_params__to_json(p
     m.insert("amount".into(), match (&p.amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("charge".into(), match (&p.charge) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_terminal__post_terminal_readers_reader_refund_payment_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("payment_intent".into(), match (&p.payment_intent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_application_fee".into(), match (&p.refund_application_fee) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("reverse_transfer".into(), match (&p.reverse_transfer) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -868,7 +871,7 @@ fn iface_terminal__location__from_json(v: &Value) -> Option<iface_terminal::Loca
         display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_terminal__location_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_terminal::LocationMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_terminal__location_object_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
@@ -885,10 +888,11 @@ fn iface_terminal__address__from_json(v: &Value) -> Option<iface_terminal::Addre
     })
 }
 
-fn iface_terminal__location_metadata__from_json(v: &Value) -> Option<iface_terminal::LocationMetadata> {
+fn iface_terminal__location_metadata_entry__from_json(v: &Value) -> Option<iface_terminal::LocationMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_terminal::LocationMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_terminal::LocationMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -922,17 +926,18 @@ fn iface_terminal__reader__from_json(v: &Value) -> Option<iface_terminal::Reader
         label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: match m.get("metadata").and_then(|v| iface_terminal__reader_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_terminal::ReaderMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_terminal__reader_object_enum__from_str)) { Some(x) => x, None => return None },
         serial_number: m.get("serial_number").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_terminal__reader_metadata__from_json(v: &Value) -> Option<iface_terminal::ReaderMetadata> {
+fn iface_terminal__reader_metadata_entry__from_json(v: &Value) -> Option<iface_terminal::ReaderMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_terminal::ReaderMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_terminal::ReaderMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

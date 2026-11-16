@@ -272,9 +272,10 @@ fn iface_sim_cards__wireless_connectivity_log_log_type_enum__to_str(e: &iface_si
     }
 }
 
-fn iface_sim_cards__mobile_operator_networks_preferences_request__to_json(p: &iface_sim_cards::MobileOperatorNetworksPreferencesRequest) -> Value {
+fn iface_sim_cards__mobile_operator_network_preferences_request__to_json(p: &iface_sim_cards::MobileOperatorNetworkPreferencesRequest) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("mobile_operator_network_id".into(), match (&p.mobile_operator_network_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -288,7 +289,7 @@ fn iface_sim_cards__bulk_sim_card_network_preferences_response__to_json(p: &ifac
 fn iface_sim_cards__sim_card_network_preference_with_ota_updates__to_json(p: &iface_sim_cards::SimCardNetworkPreferenceWithOtaUpdates) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => iface_sim_cards__mobile_operator_networks_preferences_response__to_json(v), None => Value::Null });
+    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => Value::Array((v).iter().map(|v| iface_sim_cards__mobile_operator_network_preferences_response__to_json(v)).collect()), None => Value::Null });
     m.insert("ota_updates".into(), match (&p.ota_updates) { Some(v) => Value::Array((v).iter().map(|v| iface_sim_cards__complete_ota_update__to_json(v)).collect()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sim_card_id".into(), match (&p.sim_card_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -296,9 +297,11 @@ fn iface_sim_cards__sim_card_network_preference_with_ota_updates__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_sim_cards__mobile_operator_networks_preferences_response__to_json(p: &iface_sim_cards::MobileOperatorNetworksPreferencesResponse) -> Value {
+fn iface_sim_cards__mobile_operator_network_preferences_response__to_json(p: &iface_sim_cards::MobileOperatorNetworkPreferencesResponse) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("mobile_operator_network_id".into(), match (&p.mobile_operator_network_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mobile_operator_network_name".into(), match (&p.mobile_operator_network_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -317,7 +320,7 @@ fn iface_sim_cards__complete_ota_update__to_json(p: &iface_sim_cards::CompleteOt
 
 fn iface_sim_cards__complete_ota_update_settings__to_json(p: &iface_sim_cards::CompleteOtaUpdateSettings) -> Value {
     let mut m = Map::new();
-    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => iface_sim_cards__mobile_operator_networks_preferences_response__to_json(v), None => Value::Null });
+    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => Value::Array((v).iter().map(|v| iface_sim_cards__mobile_operator_network_preferences_response__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -325,15 +328,16 @@ fn iface_sim_cards__error__to_json(p: &iface_sim_cards::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_sim_cards__error_meta__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => iface_sim_cards__error_source__to_json(v), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     Value::Object(m)
 }
 
-fn iface_sim_cards__error_meta__to_json(p: &iface_sim_cards::ErrorMeta) -> Value {
+fn iface_sim_cards__error_meta_entry__to_json(p: &iface_sim_cards::ErrorMetaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -456,13 +460,6 @@ fn iface_sim_cards__sim_card_network_preferences_get_response__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_sim_cards__mobile_operator_network_preferences_request__to_json(p: &iface_sim_cards::MobileOperatorNetworkPreferencesRequest) -> Value {
-    let mut m = Map::new();
-    m.insert("mobile_operator_network_id".into(), match (&p.mobile_operator_network_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
 fn iface_sim_cards__sim_card_network_preferences_put_response__to_json(p: &iface_sim_cards::SimCardNetworkPreferencesPutResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_sim_cards__sim_card_network_preference_with_ota_updates__to_json(v), None => Value::Null });
@@ -542,7 +539,7 @@ fn iface_sim_cards__wireless_connectivity_log__to_json(p: &iface_sim_cards::Wire
 
 fn iface_sim_cards__bulk_sim_card_network_preferences_params__to_json(p: &iface_sim_cards::BulkSimCardNetworkPreferencesParams) -> Value {
     let mut m = Map::new();
-    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => iface_sim_cards__mobile_operator_networks_preferences_request__to_json(v), None => Value::Null });
+    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => Value::Array((v).iter().map(|v| iface_sim_cards__mobile_operator_network_preferences_request__to_json(v)).collect()), None => Value::Null });
     m.insert("sim_card_ids".into(), match (&p.sim_card_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -680,7 +677,7 @@ fn iface_sim_cards__sim_card_network_preference_with_ota_updates__from_json(v: &
     let m = v.as_object()?;
     Some(iface_sim_cards::SimCardNetworkPreferenceWithOtaUpdates {
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        mobile_operator_networks_preferences: m.get("mobile_operator_networks_preferences").filter(|v| !v.is_null()).and_then(|v| iface_sim_cards__mobile_operator_networks_preferences_response__from_json(v)),
+        mobile_operator_networks_preferences: m.get("mobile_operator_networks_preferences").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sim_cards__mobile_operator_network_preferences_response__from_json(x)).collect())),
         ota_updates: m.get("ota_updates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sim_cards__complete_ota_update__from_json(x)).collect())),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sim_card_id: m.get("sim_card_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -688,10 +685,12 @@ fn iface_sim_cards__sim_card_network_preference_with_ota_updates__from_json(v: &
     })
 }
 
-fn iface_sim_cards__mobile_operator_networks_preferences_response__from_json(v: &Value) -> Option<iface_sim_cards::MobileOperatorNetworksPreferencesResponse> {
+fn iface_sim_cards__mobile_operator_network_preferences_response__from_json(v: &Value) -> Option<iface_sim_cards::MobileOperatorNetworkPreferencesResponse> {
     let m = v.as_object()?;
-    Some(iface_sim_cards::MobileOperatorNetworksPreferencesResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_sim_cards::MobileOperatorNetworkPreferencesResponse {
+        mobile_operator_network_id: m.get("mobile_operator_network_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mobile_operator_network_name: m.get("mobile_operator_network_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -712,7 +711,7 @@ fn iface_sim_cards__complete_ota_update__from_json(v: &Value) -> Option<iface_si
 fn iface_sim_cards__complete_ota_update_settings__from_json(v: &Value) -> Option<iface_sim_cards::CompleteOtaUpdateSettings> {
     let m = v.as_object()?;
     Some(iface_sim_cards::CompleteOtaUpdateSettings {
-        mobile_operator_networks_preferences: m.get("mobile_operator_networks_preferences").filter(|v| !v.is_null()).and_then(|v| iface_sim_cards__mobile_operator_networks_preferences_response__from_json(v)),
+        mobile_operator_networks_preferences: m.get("mobile_operator_networks_preferences").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sim_cards__mobile_operator_network_preferences_response__from_json(x)).collect())),
     })
 }
 
@@ -721,16 +720,17 @@ fn iface_sim_cards__error__from_json(v: &Value) -> Option<iface_sim_cards::Error
     Some(iface_sim_cards::Error {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_sim_cards__error_meta__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sim_cards::ErrorMetaEntry { key: k.clone(), value: val })).collect())),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_sim_cards__error_source__from_json(v)),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_sim_cards__error_meta__from_json(v: &Value) -> Option<iface_sim_cards::ErrorMeta> {
+fn iface_sim_cards__error_meta_entry__from_json(v: &Value) -> Option<iface_sim_cards::ErrorMetaEntry> {
     let m = v.as_object()?;
-    Some(iface_sim_cards::ErrorMeta {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sim_cards::ErrorMetaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -106,14 +106,15 @@ fn iface_enterprise_knowledge_graph__enterprise_knowledge_graph__to_json(p: &ifa
 fn iface_enterprise_knowledge_graph__properties__to_json(p: &iface_enterprise_knowledge_graph::Properties) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_enterprise_knowledge_graph__properties_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("provisioningState".into(), match (&p.provisioning_state) { Some(v) => Value::String(iface_enterprise_knowledge_graph__properties_provisioning_state_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_enterprise_knowledge_graph__properties_metadata__to_json(p: &iface_enterprise_knowledge_graph::PropertiesMetadata) -> Value {
+fn iface_enterprise_knowledge_graph__properties_metadata_entry__to_json(p: &iface_enterprise_knowledge_graph::PropertiesMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -189,15 +190,16 @@ fn iface_enterprise_knowledge_graph__properties__from_json(v: &Value) -> Option<
     let m = v.as_object()?;
     Some(iface_enterprise_knowledge_graph::Properties {
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_enterprise_knowledge_graph__properties_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_enterprise_knowledge_graph::PropertiesMetadataEntry { key: k.clone(), value: val })).collect())),
         provisioning_state: m.get("provisioningState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_enterprise_knowledge_graph__properties_provisioning_state_enum__from_str)),
     })
 }
 
-fn iface_enterprise_knowledge_graph__properties_metadata__from_json(v: &Value) -> Option<iface_enterprise_knowledge_graph::PropertiesMetadata> {
+fn iface_enterprise_knowledge_graph__properties_metadata_entry__from_json(v: &Value) -> Option<iface_enterprise_knowledge_graph::PropertiesMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_enterprise_knowledge_graph::PropertiesMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_enterprise_knowledge_graph::PropertiesMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -56,6 +56,22 @@ const OP_REQUISITIONS_DELETE_REQUISITION_BY_ID_V2: OpSpec = OpSpec {
     ],
 };
 
+fn iface_requisitions__status1c5_enum__to_str(e: &iface_requisitions::Status1c5Enum) -> &'static str {
+    match e {
+        iface_requisitions::Status1c5Enum::Cr => "CR",
+        iface_requisitions::Status1c5Enum::Id => "ID",
+        iface_requisitions::Status1c5Enum::Ln => "LN",
+        iface_requisitions::Status1c5Enum::Rj => "RJ",
+        iface_requisitions::Status1c5Enum::Er => "ER",
+        iface_requisitions::Status1c5Enum::Su => "SU",
+        iface_requisitions::Status1c5Enum::Ex => "EX",
+        iface_requisitions::Status1c5Enum::Gc => "GC",
+        iface_requisitions::Status1c5Enum::Ua => "UA",
+        iface_requisitions::Status1c5Enum::Ga => "GA",
+        iface_requisitions::Status1c5Enum::Sa => "SA",
+    }
+}
+
 fn iface_requisitions__paginated_requisition_list__to_json(p: &iface_requisitions::PaginatedRequisitionList) -> Value {
     let mut m = Map::new();
     m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -78,14 +94,8 @@ fn iface_requisitions__requisition__to_json(p: &iface_requisitions::Requisition)
     m.insert("redirect_immediate".into(), match (&p.redirect_immediate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("reference".into(), match (&p.reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ssn".into(), match (&p.ssn) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_requisitions__status1c5_enum__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_requisitions__status1c5_enum__to_str(v).into()), None => Value::Null });
     m.insert("user_language".into(), match (&p.user_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requisitions__status1c5_enum__to_json(p: &iface_requisitions::Status1c5Enum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -102,7 +112,7 @@ fn iface_requisitions__spectacular_requisition__to_json(p: &iface_requisitions::
     m.insert("redirect_immediate".into(), match (&p.redirect_immediate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("reference".into(), match (&p.reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ssn".into(), match (&p.ssn) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_requisitions__status1c5_enum__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_requisitions__status1c5_enum__to_str(v).into()), None => Value::Null });
     m.insert("user_language".into(), match (&p.user_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -163,15 +173,8 @@ fn iface_requisitions__requisition__from_json(v: &Value) -> Option<iface_requisi
         redirect_immediate: m.get("redirect_immediate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         reference: m.get("reference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ssn: m.get("ssn").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_requisitions__status1c5_enum__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_requisitions__status1c5_enum__from_str)),
         user_language: m.get("user_language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_requisitions__status1c5_enum__from_json(v: &Value) -> Option<iface_requisitions::Status1c5Enum> {
-    let m = v.as_object()?;
-    Some(iface_requisitions::Status1c5Enum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -189,9 +192,26 @@ fn iface_requisitions__spectacular_requisition__from_json(v: &Value) -> Option<i
         redirect_immediate: m.get("redirect_immediate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         reference: m.get("reference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ssn: m.get("ssn").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_requisitions__status1c5_enum__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_requisitions__status1c5_enum__from_str)),
         user_language: m.get("user_language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_requisitions__status1c5_enum__from_str(s: &str) -> Option<iface_requisitions::Status1c5Enum> {
+    match s {
+        "CR" => Some(iface_requisitions::Status1c5Enum::Cr),
+        "ID" => Some(iface_requisitions::Status1c5Enum::Id),
+        "LN" => Some(iface_requisitions::Status1c5Enum::Ln),
+        "RJ" => Some(iface_requisitions::Status1c5Enum::Rj),
+        "ER" => Some(iface_requisitions::Status1c5Enum::Er),
+        "SU" => Some(iface_requisitions::Status1c5Enum::Su),
+        "EX" => Some(iface_requisitions::Status1c5Enum::Ex),
+        "GC" => Some(iface_requisitions::Status1c5Enum::Gc),
+        "UA" => Some(iface_requisitions::Status1c5Enum::Ua),
+        "GA" => Some(iface_requisitions::Status1c5Enum::Ga),
+        "SA" => Some(iface_requisitions::Status1c5Enum::Sa),
+        _ => None,
+    }
 }
 
 fn iface_requisitions__retrieve_all_requisitions__ok(body: String) -> Result<iface_requisitions::PaginatedRequisitionList, crate::runtime::DispatchError> {

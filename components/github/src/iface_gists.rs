@@ -229,6 +229,19 @@ const OP_GISTS_LIST_FOR_USER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_gists__author_association__to_str(e: &iface_gists::AuthorAssociation) -> &'static str {
+    match e {
+        iface_gists::AuthorAssociation::Collaborator => "COLLABORATOR",
+        iface_gists::AuthorAssociation::Contributor => "CONTRIBUTOR",
+        iface_gists::AuthorAssociation::FirstTimer => "FIRST_TIMER",
+        iface_gists::AuthorAssociation::FirstTimeContributor => "FIRST_TIME_CONTRIBUTOR",
+        iface_gists::AuthorAssociation::Mannequin => "MANNEQUIN",
+        iface_gists::AuthorAssociation::Member => "MEMBER",
+        iface_gists::AuthorAssociation::None => "NONE",
+        iface_gists::AuthorAssociation::Owner => "OWNER",
+    }
+}
+
 fn iface_gists__base_gist__to_json(p: &iface_gists::BaseGist) -> Value {
     let mut m = Map::new();
     m.insert("comments".into(), Value::Number(serde_json::Number::from(*(&p.comments))));
@@ -236,7 +249,7 @@ fn iface_gists__base_gist__to_json(p: &iface_gists::BaseGist) -> Value {
     m.insert("commits_url".into(), Value::String((&p.commits_url).clone()));
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("description".into(), Value::String((&p.description).clone()));
-    m.insert("files".into(), iface_gists__base_gist_files__to_json(&p.files));
+    m.insert("files".into(), Value::Object((&p.files).iter().map(|e| (e.key.clone(), iface_gists__base_gist_files_value__to_json(&e.value))).collect()));
     m.insert("forks".into(), match (&p.forks) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("forks_url".into(), Value::String((&p.forks_url).clone()));
     m.insert("git_pull_url".into(), Value::String((&p.git_pull_url).clone()));
@@ -254,9 +267,20 @@ fn iface_gists__base_gist__to_json(p: &iface_gists::BaseGist) -> Value {
     Value::Object(m)
 }
 
-fn iface_gists__base_gist_files__to_json(p: &iface_gists::BaseGistFiles) -> Value {
+fn iface_gists__base_gist_files_value__to_json(p: &iface_gists::BaseGistFilesValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("raw_url".into(), match (&p.raw_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gists__base_gist_files_entry__to_json(p: &iface_gists::BaseGistFilesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_gists__base_gist_files_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -312,9 +336,16 @@ fn iface_gists__nullable_simple_user__to_json(p: &iface_gists::NullableSimpleUse
     Value::Object(m)
 }
 
-fn iface_gists__create_body_files__to_json(p: &iface_gists::CreateBodyFiles) -> Value {
+fn iface_gists__create_body_files_value__to_json(p: &iface_gists::CreateBodyFilesValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content".into(), Value::String((&p.content).clone()));
+    Value::Object(m)
+}
+
+fn iface_gists__create_body_files_entry__to_json(p: &iface_gists::CreateBodyFilesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_gists__create_body_files_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -325,7 +356,7 @@ fn iface_gists__gist_simple__to_json(p: &iface_gists::GistSimple) -> Value {
     m.insert("commits_url".into(), match (&p.commits_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("files".into(), match (&p.files) { Some(v) => iface_gists__gist_simple_files__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_gists__gist_simple_files_value__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("fork_of".into(), match (&p.fork_of) { Some(v) => iface_gists__gist_simple_fork_of__to_json(v), None => Value::Null });
     m.insert("forks".into(), match (&p.forks) { Some(v) => Value::Array((v).iter().map(|v| iface_gists__gist_simple_forks_item__to_json(v)).collect()), None => Value::Null });
     m.insert("forks_url".into(), match (&p.forks_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -344,9 +375,22 @@ fn iface_gists__gist_simple__to_json(p: &iface_gists::GistSimple) -> Value {
     Value::Object(m)
 }
 
-fn iface_gists__gist_simple_files__to_json(p: &iface_gists::GistSimpleFiles) -> Value {
+fn iface_gists__gist_simple_files_value__to_json(p: &iface_gists::GistSimpleFilesValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("raw_url".into(), match (&p.raw_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("truncated".into(), match (&p.truncated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gists__gist_simple_files_entry__to_json(p: &iface_gists::GistSimpleFilesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_gists__gist_simple_files_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -357,7 +401,7 @@ fn iface_gists__gist_simple_fork_of__to_json(p: &iface_gists::GistSimpleForkOf) 
     m.insert("commits_url".into(), Value::String((&p.commits_url).clone()));
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("description".into(), Value::String((&p.description).clone()));
-    m.insert("files".into(), iface_gists__gist_simple_fork_of_files__to_json(&p.files));
+    m.insert("files".into(), Value::Object((&p.files).iter().map(|e| (e.key.clone(), iface_gists__gist_simple_fork_of_files_value__to_json(&e.value))).collect()));
     m.insert("forks".into(), match (&p.forks) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("forks_url".into(), Value::String((&p.forks_url).clone()));
     m.insert("git_pull_url".into(), Value::String((&p.git_pull_url).clone()));
@@ -375,9 +419,20 @@ fn iface_gists__gist_simple_fork_of__to_json(p: &iface_gists::GistSimpleForkOf) 
     Value::Object(m)
 }
 
-fn iface_gists__gist_simple_fork_of_files__to_json(p: &iface_gists::GistSimpleForkOfFiles) -> Value {
+fn iface_gists__gist_simple_fork_of_files_value__to_json(p: &iface_gists::GistSimpleForkOfFilesValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("raw_url".into(), match (&p.raw_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gists__gist_simple_fork_of_files_entry__to_json(p: &iface_gists::GistSimpleForkOfFilesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_gists__gist_simple_fork_of_files_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -462,15 +517,23 @@ fn iface_gists__gist_history_change_status__to_json(p: &iface_gists::GistHistory
     Value::Object(m)
 }
 
-fn iface_gists__update_body_files__to_json(p: &iface_gists::UpdateBodyFiles) -> Value {
+fn iface_gists__update_body_files_value__to_json(p: &iface_gists::UpdateBodyFilesValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gists__update_body_files_entry__to_json(p: &iface_gists::UpdateBodyFilesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_gists__update_body_files_value__to_json(&p.value));
     Value::Object(m)
 }
 
 fn iface_gists__gist_comment__to_json(p: &iface_gists::GistComment) -> Value {
     let mut m = Map::new();
-    m.insert("author_association".into(), iface_gists__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_gists__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), Value::String((&p.body).clone()));
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
@@ -478,12 +541,6 @@ fn iface_gists__gist_comment__to_json(p: &iface_gists::GistComment) -> Value {
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("user".into(), iface_gists__nullable_simple_user__to_json(&p.user));
-    Value::Object(m)
-}
-
-fn iface_gists__author_association__to_json(p: &iface_gists::AuthorAssociation) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -516,7 +573,7 @@ fn iface_gists__list_op_params__to_json(p: &iface_gists::ListOpParams) -> Value 
 fn iface_gists__create_params__to_json(p: &iface_gists::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("files".into(), iface_gists__create_body_files__to_json(&p.files));
+    m.insert("files".into(), Value::Object((&p.files).iter().map(|e| (e.key.clone(), iface_gists__create_body_files_value__to_json(&e.value))).collect()));
     m.insert("public".into(), match (&p.public) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -547,7 +604,7 @@ fn iface_gists__update_params__to_json(p: &iface_gists::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("gist_id".into(), Value::String((&p.gist_id).clone()));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("files".into(), match (&p.files) { Some(v) => iface_gists__update_body_files__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_gists__update_body_files_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -658,7 +715,7 @@ fn iface_gists__base_gist__from_json(v: &Value) -> Option<iface_gists::BaseGist>
         commits_url: m.get("commits_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        files: match m.get("files").and_then(|v| iface_gists__base_gist_files__from_json(v)) { Some(x) => x, None => return None },
+        files: m.get("files").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_gists__base_gist_files_value__from_json(x)).map(|val| iface_gists::BaseGistFilesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         forks: m.get("forks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         forks_url: m.get("forks_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         git_pull_url: m.get("git_pull_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -676,10 +733,22 @@ fn iface_gists__base_gist__from_json(v: &Value) -> Option<iface_gists::BaseGist>
     })
 }
 
-fn iface_gists__base_gist_files__from_json(v: &Value) -> Option<iface_gists::BaseGistFiles> {
+fn iface_gists__base_gist_files_value__from_json(v: &Value) -> Option<iface_gists::BaseGistFilesValue> {
     let m = v.as_object()?;
-    Some(iface_gists::BaseGistFiles {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_gists::BaseGistFilesValue {
+        filename: m.get("filename").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        raw_url: m.get("raw_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gists__base_gist_files_entry__from_json(v: &Value) -> Option<iface_gists::BaseGistFilesEntry> {
+    let m = v.as_object()?;
+    Some(iface_gists::BaseGistFilesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_gists__base_gist_files_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -745,7 +814,7 @@ fn iface_gists__gist_simple__from_json(v: &Value) -> Option<iface_gists::GistSim
         commits_url: m.get("commits_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        files: m.get("files").filter(|v| !v.is_null()).and_then(|v| iface_gists__gist_simple_files__from_json(v)),
+        files: m.get("files").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_gists__gist_simple_files_value__from_json(x)).map(|val| iface_gists::GistSimpleFilesEntry { key: k.clone(), value: val })).collect())),
         fork_of: m.get("fork_of").filter(|v| !v.is_null()).and_then(|v| iface_gists__gist_simple_fork_of__from_json(v)),
         forks: m.get("forks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_gists__gist_simple_forks_item__from_json(x)).collect())),
         forks_url: m.get("forks_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -764,10 +833,24 @@ fn iface_gists__gist_simple__from_json(v: &Value) -> Option<iface_gists::GistSim
     })
 }
 
-fn iface_gists__gist_simple_files__from_json(v: &Value) -> Option<iface_gists::GistSimpleFiles> {
+fn iface_gists__gist_simple_files_value__from_json(v: &Value) -> Option<iface_gists::GistSimpleFilesValue> {
     let m = v.as_object()?;
-    Some(iface_gists::GistSimpleFiles {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_gists::GistSimpleFilesValue {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filename: m.get("filename").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        raw_url: m.get("raw_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        truncated: m.get("truncated").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gists__gist_simple_files_entry__from_json(v: &Value) -> Option<iface_gists::GistSimpleFilesEntry> {
+    let m = v.as_object()?;
+    Some(iface_gists::GistSimpleFilesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_gists__gist_simple_files_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -779,7 +862,7 @@ fn iface_gists__gist_simple_fork_of__from_json(v: &Value) -> Option<iface_gists:
         commits_url: m.get("commits_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        files: match m.get("files").and_then(|v| iface_gists__gist_simple_fork_of_files__from_json(v)) { Some(x) => x, None => return None },
+        files: m.get("files").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_gists__gist_simple_fork_of_files_value__from_json(x)).map(|val| iface_gists::GistSimpleForkOfFilesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         forks: m.get("forks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         forks_url: m.get("forks_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         git_pull_url: m.get("git_pull_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -797,10 +880,22 @@ fn iface_gists__gist_simple_fork_of__from_json(v: &Value) -> Option<iface_gists:
     })
 }
 
-fn iface_gists__gist_simple_fork_of_files__from_json(v: &Value) -> Option<iface_gists::GistSimpleForkOfFiles> {
+fn iface_gists__gist_simple_fork_of_files_value__from_json(v: &Value) -> Option<iface_gists::GistSimpleForkOfFilesValue> {
     let m = v.as_object()?;
-    Some(iface_gists::GistSimpleForkOfFiles {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_gists::GistSimpleForkOfFilesValue {
+        filename: m.get("filename").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        raw_url: m.get("raw_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gists__gist_simple_fork_of_files_entry__from_json(v: &Value) -> Option<iface_gists::GistSimpleForkOfFilesEntry> {
+    let m = v.as_object()?;
+    Some(iface_gists::GistSimpleForkOfFilesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_gists__gist_simple_fork_of_files_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -893,7 +988,7 @@ fn iface_gists__gist_history_change_status__from_json(v: &Value) -> Option<iface
 fn iface_gists__gist_comment__from_json(v: &Value) -> Option<iface_gists::GistComment> {
     let m = v.as_object()?;
     Some(iface_gists::GistComment {
-        author_association: match m.get("author_association").and_then(|v| iface_gists__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_gists__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -901,13 +996,6 @@ fn iface_gists__gist_comment__from_json(v: &Value) -> Option<iface_gists::GistCo
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user: match m.get("user").and_then(|v| iface_gists__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_gists__author_association__from_json(v: &Value) -> Option<iface_gists::AuthorAssociation> {
-    let m = v.as_object()?;
-    Some(iface_gists::AuthorAssociation {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -929,6 +1017,20 @@ fn iface_gists__gist_commit_change_status__from_json(v: &Value) -> Option<iface_
         deletions: m.get("deletions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
+}
+
+fn iface_gists__author_association__from_str(s: &str) -> Option<iface_gists::AuthorAssociation> {
+    match s {
+        "COLLABORATOR" => Some(iface_gists::AuthorAssociation::Collaborator),
+        "CONTRIBUTOR" => Some(iface_gists::AuthorAssociation::Contributor),
+        "FIRST_TIMER" => Some(iface_gists::AuthorAssociation::FirstTimer),
+        "FIRST_TIME_CONTRIBUTOR" => Some(iface_gists::AuthorAssociation::FirstTimeContributor),
+        "MANNEQUIN" => Some(iface_gists::AuthorAssociation::Mannequin),
+        "MEMBER" => Some(iface_gists::AuthorAssociation::Member),
+        "NONE" => Some(iface_gists::AuthorAssociation::None),
+        "OWNER" => Some(iface_gists::AuthorAssociation::Owner),
+        _ => None,
+    }
 }
 
 fn iface_gists__list_op__ok(body: String) -> Result<Vec<iface_gists::BaseGist>, crate::runtime::DispatchError> {

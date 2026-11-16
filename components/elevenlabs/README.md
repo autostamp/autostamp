@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:elevenlabs@0.5.0` |
-| Published version | `0.5.0+elevenlabs-1.0` |
+| Package | `autostamp:elevenlabs@0.6.0` |
+| Published version | `0.6.0+elevenlabs-1.0` |
 | Tag filter | all tags |
 | Operations generated | 19 |
 | Infer API-key credentials | enabled — not triggered |

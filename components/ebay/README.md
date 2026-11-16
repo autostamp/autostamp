@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ebay@0.5.0` |
-| Published version | `0.5.0+ebay-v1.3.0` |
+| Package | `autostamp:ebay@0.6.0` |
+| Published version | `0.6.0+ebay-v1.3.0` |
 | Tag filter | all tags |
 | Operations generated | 4 |
 | Infer API-key credentials | enabled — not triggered |

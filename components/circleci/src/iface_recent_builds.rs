@@ -16,9 +16,63 @@ const OP_RECENT_BUILDS_GET_RECENT_BUILDS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_recent_builds__builds__to_json(p: &iface_recent_builds::Builds) -> Value {
+fn iface_recent_builds__lifecycle__to_str(e: &iface_recent_builds::Lifecycle) -> &'static str {
+    match e {
+        iface_recent_builds::Lifecycle::Queued => "queued",
+        iface_recent_builds::Lifecycle::Scheduled => "scheduled",
+        iface_recent_builds::Lifecycle::NotRun => "not_run",
+        iface_recent_builds::Lifecycle::NotRunning => "not_running",
+        iface_recent_builds::Lifecycle::Running => "running",
+        iface_recent_builds::Lifecycle::Finished => "finished",
+    }
+}
+
+fn iface_recent_builds__status__to_str(e: &iface_recent_builds::Status) -> &'static str {
+    match e {
+        iface_recent_builds::Status::Retried => "retried",
+        iface_recent_builds::Status::Canceled => "canceled",
+        iface_recent_builds::Status::InfrastructureFail => "infrastructure_fail",
+        iface_recent_builds::Status::Timedout => "timedout",
+        iface_recent_builds::Status::NotRun => "not_run",
+        iface_recent_builds::Status::Running => "running",
+        iface_recent_builds::Status::Failed => "failed",
+        iface_recent_builds::Status::Queued => "queued",
+        iface_recent_builds::Status::Scheduled => "scheduled",
+        iface_recent_builds::Status::NotRunning => "not_running",
+        iface_recent_builds::Status::NoTests => "no_tests",
+        iface_recent_builds::Status::Fixed => "fixed",
+        iface_recent_builds::Status::Success => "success",
+    }
+}
+
+fn iface_recent_builds__build__to_json(p: &iface_recent_builds::Build) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_time_millis".into(), match (&p.build_time_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("build_url".into(), match (&p.build_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_email".into(), match (&p.committer_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_name".into(), match (&p.committer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dont_build".into(), match (&p.dont_build) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => Value::String(iface_recent_builds__lifecycle__to_str(v).into()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => iface_recent_builds__previous_build__to_json(v), None => Value::Null });
+    m.insert("queued_at".into(), match (&p.queued_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reponame".into(), match (&p.reponame) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("retry_of".into(), match (&p.retry_of) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stop_time".into(), match (&p.stop_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vcs_url".into(), match (&p.vcs_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("why".into(), match (&p.why) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recent_builds__previous_build__to_json(p: &iface_recent_builds::PreviousBuild) -> Value {
+    let mut m = Map::new();
+    m.insert("build_num".into(), match (&p.build_num) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("build_time_millis".into(), match (&p.build_time_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_recent_builds__status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -29,19 +83,76 @@ fn iface_recent_builds__get_recent_builds_params__to_json(p: &iface_recent_build
     Value::Object(m)
 }
 
-fn iface_recent_builds__builds__from_json(v: &Value) -> Option<iface_recent_builds::Builds> {
+fn iface_recent_builds__build__from_json(v: &Value) -> Option<iface_recent_builds::Build> {
     let m = v.as_object()?;
-    Some(iface_recent_builds::Builds {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_recent_builds::Build {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        build_time_millis: m.get("build_time_millis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        build_url: m.get("build_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_email: m.get("committer_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_name: m.get("committer_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dont_build: m.get("dont_build").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_recent_builds__lifecycle__from_str)),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| iface_recent_builds__previous_build__from_json(v)),
+        queued_at: m.get("queued_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reponame: m.get("reponame").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        retry_of: m.get("retry_of").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_time: m.get("stop_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vcs_url: m.get("vcs_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        why: m.get("why").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_recent_builds__get_recent_builds__ok(body: String) -> Result<iface_recent_builds::Builds, crate::runtime::DispatchError> {
+fn iface_recent_builds__previous_build__from_json(v: &Value) -> Option<iface_recent_builds::PreviousBuild> {
+    let m = v.as_object()?;
+    Some(iface_recent_builds::PreviousBuild {
+        build_num: m.get("build_num").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        build_time_millis: m.get("build_time_millis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_recent_builds__status__from_str)),
+    })
+}
+
+fn iface_recent_builds__lifecycle__from_str(s: &str) -> Option<iface_recent_builds::Lifecycle> {
+    match s {
+        "queued" => Some(iface_recent_builds::Lifecycle::Queued),
+        "scheduled" => Some(iface_recent_builds::Lifecycle::Scheduled),
+        "not_run" => Some(iface_recent_builds::Lifecycle::NotRun),
+        "not_running" => Some(iface_recent_builds::Lifecycle::NotRunning),
+        "running" => Some(iface_recent_builds::Lifecycle::Running),
+        "finished" => Some(iface_recent_builds::Lifecycle::Finished),
+        _ => None,
+    }
+}
+
+fn iface_recent_builds__status__from_str(s: &str) -> Option<iface_recent_builds::Status> {
+    match s {
+        "retried" => Some(iface_recent_builds::Status::Retried),
+        "canceled" => Some(iface_recent_builds::Status::Canceled),
+        "infrastructure_fail" => Some(iface_recent_builds::Status::InfrastructureFail),
+        "timedout" => Some(iface_recent_builds::Status::Timedout),
+        "not_run" => Some(iface_recent_builds::Status::NotRun),
+        "running" => Some(iface_recent_builds::Status::Running),
+        "failed" => Some(iface_recent_builds::Status::Failed),
+        "queued" => Some(iface_recent_builds::Status::Queued),
+        "scheduled" => Some(iface_recent_builds::Status::Scheduled),
+        "not_running" => Some(iface_recent_builds::Status::NotRunning),
+        "no_tests" => Some(iface_recent_builds::Status::NoTests),
+        "fixed" => Some(iface_recent_builds::Status::Fixed),
+        "success" => Some(iface_recent_builds::Status::Success),
+        _ => None,
+    }
+}
+
+fn iface_recent_builds__get_recent_builds__ok(body: String) -> Result<Vec<iface_recent_builds::Build>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recent_builds__builds__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recent_builds__build__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -55,7 +166,7 @@ fn iface_recent_builds__get_recent_builds__err(e: crate::runtime::DispatchError)
 }
 
 impl iface_recent_builds::Guest for crate::Component {
-    fn get_recent_builds(params: iface_recent_builds::GetRecentBuildsParams) -> Result<iface_recent_builds::Builds, String> {
+    fn get_recent_builds(params: iface_recent_builds::GetRecentBuildsParams) -> Result<Vec<iface_recent_builds::Build>, String> {
         let json = iface_recent_builds__get_recent_builds_params__to_json(&params);
         match dispatch(&OP_RECENT_BUILDS_GET_RECENT_BUILDS, json).and_then(iface_recent_builds__get_recent_builds__ok) {
             Ok(v) => Ok(v),

@@ -17,7 +17,7 @@ const OP_BUNDLE_PRODUCTS_OPTIONS_OPTION_ID_BUNDLE_PRODUCT_OPTION_MANAGEMENT_V1_S
 
 fn iface_bundle_products_options_option_id__bundle_data_option_interface__to_json(p: &iface_bundle_products_options_option_id::BundleDataOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_bundle_products_options_option_id__bundle_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("product_links".into(), match (&p.product_links) { Some(v) => Value::Array((v).iter().map(|v| iface_bundle_products_options_option_id__bundle_data_link_interface__to_json(v)).collect()), None => Value::Null });
@@ -28,16 +28,17 @@ fn iface_bundle_products_options_option_id__bundle_data_option_interface__to_jso
     Value::Object(m)
 }
 
-fn iface_bundle_products_options_option_id__bundle_data_option_extension_interface__to_json(p: &iface_bundle_products_options_option_id::BundleDataOptionExtensionInterface) -> Value {
+fn iface_bundle_products_options_option_id__bundle_data_option_extension_interface_entry__to_json(p: &iface_bundle_products_options_option_id::BundleDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_bundle_products_options_option_id__bundle_data_link_interface__to_json(p: &iface_bundle_products_options_option_id::BundleDataLinkInterface) -> Value {
     let mut m = Map::new();
     m.insert("can_change_quantity".into(), match (&p.can_change_quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_bundle_products_options_option_id__bundle_data_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_default".into(), Value::Bool(*(&p.is_default)));
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -49,9 +50,10 @@ fn iface_bundle_products_options_option_id__bundle_data_link_interface__to_json(
     Value::Object(m)
 }
 
-fn iface_bundle_products_options_option_id__bundle_data_link_extension_interface__to_json(p: &iface_bundle_products_options_option_id::BundleDataLinkExtensionInterface) -> Value {
+fn iface_bundle_products_options_option_id__bundle_data_link_extension_interface_entry__to_json(p: &iface_bundle_products_options_option_id::BundleDataLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

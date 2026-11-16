@@ -6,9 +6,24 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `HubAuth` | `Authorization: Bearer <secret>` |
-package autostamp:docker@0.5.0;
+package autostamp:docker@0.6.0;
 
 interface discovery {
+  enum dataset-type {
+    pulls,
+  }
+
+  enum timespan-type {
+    months,
+    weeks,
+  }
+
+  enum dataview-type {
+    raw,
+    summary,
+    repo-summary,
+  }
+
   record namespace-data {
     namespaces: option<list<string>>
   }
@@ -23,21 +38,6 @@ interface discovery {
     name: option<dataset-type>,
     timespans: option<list<timespan-type>>,
     views: option<list<dataview-type>>
-  }
-
-  record dataset-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record timespan-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record dataview-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Get namespaces and repos
@@ -60,16 +60,6 @@ interface namespaces {
 
   record year-model {
     year: option<s32>
-  }
-
-  record timespan-data {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record timespan-model {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record response-data {
@@ -102,7 +92,7 @@ interface namespaces {
     /// Type of timespan to fetch data for
     timespantype: string
   }
-  get-namespace-timespans: func(params: get-namespace-timespans-params) -> result<timespan-data, string>;
+  get-namespace-timespans: func(params: get-namespace-timespans-params) -> result<string, string>;
 
   /// Get namespace metadata for timespan
   record get-namespace-timespan-metadata-params {
@@ -115,7 +105,7 @@ interface namespaces {
     /// Timespan to fetch data for
     timespan: string
   }
-  get-namespace-timespan-metadata: func(params: get-namespace-timespan-metadata-params) -> result<timespan-model, get-namespace-timespan-metadata-error>;
+  get-namespace-timespan-metadata: func(params: get-namespace-timespan-metadata-params) -> result<string, get-namespace-timespan-metadata-error>;
 
   /// Get namespace data for timespan
   record get-namespace-data-by-timespan-params {

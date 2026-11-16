@@ -49,24 +49,26 @@ fn iface_messaging__schedule_api_triggered_canvases_body_audience_and_item_custo
     Value::Object(m)
 }
 
-fn iface_messaging__schedule_api_triggered_canvases_body_canvas_entry_properties__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyCanvasEntryProperties) -> Value {
+fn iface_messaging__schedule_api_triggered_canvases_body_canvas_entry_properties_entry__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyCanvasEntryPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_messaging__schedule_api_triggered_canvases_body_recipients_item__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyRecipientsItem) -> Value {
     let mut m = Map::new();
-    m.insert("canvas_entry_properties".into(), match (&p.canvas_entry_properties) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_recipients_item_canvas_entry_properties__to_json(v), None => Value::Null });
+    m.insert("canvas_entry_properties".into(), match (&p.canvas_entry_properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("external_user_id".into(), match (&p.external_user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("trigger_properties".into(), match (&p.trigger_properties) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user_alias".into(), match (&p.user_alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messaging__schedule_api_triggered_canvases_body_recipients_item_canvas_entry_properties__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyRecipientsItemCanvasEntryProperties) -> Value {
+fn iface_messaging__schedule_api_triggered_canvases_body_recipients_item_canvas_entry_properties_entry__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyRecipientsItemCanvasEntryPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -82,7 +84,7 @@ fn iface_messaging__schedule_api_triggered_canvases_params__to_json(p: &iface_me
     let mut m = Map::new();
     m.insert("audience".into(), match (&p.audience) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_audience__to_json(v), None => Value::Null });
     m.insert("broadcast".into(), match (&p.broadcast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("canvas_entry_properties".into(), match (&p.canvas_entry_properties) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_canvas_entry_properties__to_json(v), None => Value::Null });
+    m.insert("canvas_entry_properties".into(), match (&p.canvas_entry_properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("canvas_id".into(), match (&p.canvas_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recipients".into(), match (&p.recipients) { Some(v) => Value::Array((v).iter().map(|v| iface_messaging__schedule_api_triggered_canvases_body_recipients_item__to_json(v)).collect()), None => Value::Null });
     m.insert("schedule".into(), match (&p.schedule) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_schedule__to_json(v), None => Value::Null });

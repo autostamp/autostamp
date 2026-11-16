@@ -123,8 +123,8 @@ fn iface_issue_search__search_results__to_json(p: &iface_issue_search::SearchRes
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("issues".into(), match (&p.issues) { Some(v) => Value::Array((v).iter().map(|v| iface_issue_search__issue_bean__to_json(v)).collect()), None => Value::Null });
     m.insert("maxResults".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("names".into(), match (&p.names) { Some(v) => iface_issue_search__search_results_names__to_json(v), None => Value::Null });
-    m.insert("schema".into(), match (&p.schema) { Some(v) => iface_issue_search__search_results_schema__to_json(v), None => Value::Null });
+    m.insert("names".into(), match (&p.names) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("schema".into(), match (&p.schema) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_issue_search__json_type_bean__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("startAt".into(), match (&p.start_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("warningMessages".into(), match (&p.warning_messages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -136,18 +136,18 @@ fn iface_issue_search__issue_bean__to_json(p: &iface_issue_search::IssueBean) ->
     m.insert("changelog".into(), match (&p.changelog) { Some(v) => iface_issue_search__page_of_changelogs__to_json(v), None => Value::Null });
     m.insert("editmeta".into(), match (&p.editmeta) { Some(v) => iface_issue_search__issue_update_metadata__to_json(v), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_issue_search__issue_bean_fields__to_json(v), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("fieldsToInclude".into(), match (&p.fields_to_include) { Some(v) => iface_issue_search__included_fields__to_json(v), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("names".into(), match (&p.names) { Some(v) => iface_issue_search__issue_bean_names__to_json(v), None => Value::Null });
+    m.insert("names".into(), match (&p.names) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("operations".into(), match (&p.operations) { Some(v) => iface_issue_search__operations__to_json(v), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_issue_search__issue_bean_properties__to_json(v), None => Value::Null });
-    m.insert("renderedFields".into(), match (&p.rendered_fields) { Some(v) => iface_issue_search__issue_bean_rendered_fields__to_json(v), None => Value::Null });
-    m.insert("schema".into(), match (&p.schema) { Some(v) => iface_issue_search__issue_bean_schema__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("renderedFields".into(), match (&p.rendered_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("schema".into(), match (&p.schema) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_issue_search__json_type_bean__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("transitions".into(), match (&p.transitions) { Some(v) => Value::Array((v).iter().map(|v| iface_issue_search__issue_transition__to_json(v)).collect()), None => Value::Null });
-    m.insert("versionedRepresentations".into(), match (&p.versioned_representations) { Some(v) => iface_issue_search__issue_bean_versioned_representations__to_json(v), None => Value::Null });
+    m.insert("versionedRepresentations".into(), match (&p.versioned_representations) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -204,7 +204,7 @@ fn iface_issue_search__history_metadata__to_json(p: &iface_issue_search::History
     m.insert("descriptionKey".into(), match (&p.description_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emailDescription".into(), match (&p.email_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emailDescriptionKey".into(), match (&p.email_description_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extraData".into(), match (&p.extra_data) { Some(v) => iface_issue_search__history_metadata_extra_data__to_json(v), None => Value::Null });
+    m.insert("extraData".into(), match (&p.extra_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("generator".into(), match (&p.generator) { Some(v) => iface_issue_search__history_metadata_participant__to_json(v), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -221,9 +221,10 @@ fn iface_issue_search__history_metadata_participant__to_json(p: &iface_issue_sea
     Value::Object(m)
 }
 
-fn iface_issue_search__history_metadata_extra_data__to_json(p: &iface_issue_search::HistoryMetadataExtraData) -> Value {
+fn iface_issue_search__history_metadata_extra_data_entry__to_json(p: &iface_issue_search::HistoryMetadataExtraDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -240,19 +241,61 @@ fn iface_issue_search__change_details__to_json(p: &iface_issue_search::ChangeDet
 
 fn iface_issue_search__issue_update_metadata__to_json(p: &iface_issue_search::IssueUpdateMetadata) -> Value {
     let mut m = Map::new();
-    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_issue_search__issue_update_metadata_fields__to_json(v), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_issue_search__field_metadata__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_update_metadata_fields__to_json(p: &iface_issue_search::IssueUpdateMetadataFields) -> Value {
+fn iface_issue_search__field_metadata__to_json(p: &iface_issue_search::FieldMetadata) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("allowedValues".into(), match (&p.allowed_values) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("autoCompleteUrl".into(), match (&p.auto_complete_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("configuration".into(), match (&p.configuration) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("defaultValue".into(), match (&p.default_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hasDefaultValue".into(), match (&p.has_default_value) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("operations".into(), Value::Array((&p.operations).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("required".into(), Value::Bool(*(&p.required)));
+    m.insert("schema".into(), iface_issue_search__json_type_bean__to_json(&p.schema));
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_bean_fields__to_json(p: &iface_issue_search::IssueBeanFields) -> Value {
+fn iface_issue_search__field_metadata_configuration_entry__to_json(p: &iface_issue_search::FieldMetadataConfigurationEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_search__json_type_bean__to_json(p: &iface_issue_search::JsonTypeBean) -> Value {
+    let mut m = Map::new();
+    m.insert("configuration".into(), match (&p.configuration) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("custom".into(), match (&p.custom) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("customId".into(), match (&p.custom_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("system".into(), match (&p.system) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_search__json_type_bean_configuration_entry__to_json(p: &iface_issue_search::JsonTypeBeanConfigurationEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_search__issue_update_metadata_fields_entry__to_json(p: &iface_issue_search::IssueUpdateMetadataFieldsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_issue_search__field_metadata__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_issue_search__issue_bean_fields_entry__to_json(p: &iface_issue_search::IssueBeanFieldsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -264,9 +307,10 @@ fn iface_issue_search__included_fields__to_json(p: &iface_issue_search::Included
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_bean_names__to_json(p: &iface_issue_search::IssueBeanNames) -> Value {
+fn iface_issue_search__issue_bean_names_entry__to_json(p: &iface_issue_search::IssueBeanNamesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -299,28 +343,31 @@ fn iface_issue_search__simple_link__to_json(p: &iface_issue_search::SimpleLink) 
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_bean_properties__to_json(p: &iface_issue_search::IssueBeanProperties) -> Value {
+fn iface_issue_search__issue_bean_properties_entry__to_json(p: &iface_issue_search::IssueBeanPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_bean_rendered_fields__to_json(p: &iface_issue_search::IssueBeanRenderedFields) -> Value {
+fn iface_issue_search__issue_bean_rendered_fields_entry__to_json(p: &iface_issue_search::IssueBeanRenderedFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_bean_schema__to_json(p: &iface_issue_search::IssueBeanSchema) -> Value {
+fn iface_issue_search__issue_bean_schema_entry__to_json(p: &iface_issue_search::IssueBeanSchemaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_issue_search__json_type_bean__to_json(&p.value));
     Value::Object(m)
 }
 
 fn iface_issue_search__issue_transition__to_json(p: &iface_issue_search::IssueTransition) -> Value {
     let mut m = Map::new();
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_issue_search__issue_transition_fields__to_json(v), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_issue_search__field_metadata__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("hasScreen".into(), match (&p.has_screen) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isAvailable".into(), match (&p.is_available) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -333,9 +380,10 @@ fn iface_issue_search__issue_transition__to_json(p: &iface_issue_search::IssueTr
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_transition_fields__to_json(p: &iface_issue_search::IssueTransitionFields) -> Value {
+fn iface_issue_search__issue_transition_fields_entry__to_json(p: &iface_issue_search::IssueTransitionFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_issue_search__field_metadata__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -360,21 +408,31 @@ fn iface_issue_search__status_category__to_json(p: &iface_issue_search::StatusCa
     Value::Object(m)
 }
 
-fn iface_issue_search__issue_bean_versioned_representations__to_json(p: &iface_issue_search::IssueBeanVersionedRepresentations) -> Value {
+fn iface_issue_search__issue_bean_versioned_representations_value_entry__to_json(p: &iface_issue_search::IssueBeanVersionedRepresentationsValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_issue_search__search_results_names__to_json(p: &iface_issue_search::SearchResultsNames) -> Value {
+fn iface_issue_search__issue_bean_versioned_representations_entry__to_json(p: &iface_issue_search::IssueBeanVersionedRepresentationsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_issue_search__search_results_schema__to_json(p: &iface_issue_search::SearchResultsSchema) -> Value {
+fn iface_issue_search__search_results_names_entry__to_json(p: &iface_issue_search::SearchResultsNamesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_search__search_results_schema_entry__to_json(p: &iface_issue_search::SearchResultsSchemaEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_issue_search__json_type_bean__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -473,8 +531,8 @@ fn iface_issue_search__search_results__from_json(v: &Value) -> Option<iface_issu
         expand: m.get("expand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         issues: m.get("issues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_issue_search__issue_bean__from_json(x)).collect())),
         max_results: m.get("maxResults").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        names: m.get("names").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__search_results_names__from_json(v)),
-        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__search_results_schema__from_json(v)),
+        names: m.get("names").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::SearchResultsNamesEntry { key: k.clone(), value: val })).collect())),
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_issue_search__json_type_bean__from_json(x)).map(|val| iface_issue_search::SearchResultsSchemaEntry { key: k.clone(), value: val })).collect())),
         start_at: m.get("startAt").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         warning_messages: m.get("warningMessages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -487,18 +545,18 @@ fn iface_issue_search__issue_bean__from_json(v: &Value) -> Option<iface_issue_se
         changelog: m.get("changelog").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__page_of_changelogs__from_json(v)),
         editmeta: m.get("editmeta").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_update_metadata__from_json(v)),
         expand: m.get("expand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_bean_fields__from_json(v)),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::IssueBeanFieldsEntry { key: k.clone(), value: val })).collect())),
         fields_to_include: m.get("fieldsToInclude").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__included_fields__from_json(v)),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        names: m.get("names").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_bean_names__from_json(v)),
+        names: m.get("names").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::IssueBeanNamesEntry { key: k.clone(), value: val })).collect())),
         operations: m.get("operations").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__operations__from_json(v)),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_bean_properties__from_json(v)),
-        rendered_fields: m.get("renderedFields").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_bean_rendered_fields__from_json(v)),
-        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_bean_schema__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::IssueBeanPropertiesEntry { key: k.clone(), value: val })).collect())),
+        rendered_fields: m.get("renderedFields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::IssueBeanRenderedFieldsEntry { key: k.clone(), value: val })).collect())),
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_issue_search__json_type_bean__from_json(x)).map(|val| iface_issue_search::IssueBeanSchemaEntry { key: k.clone(), value: val })).collect())),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         transitions: m.get("transitions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_issue_search__issue_transition__from_json(x)).collect())),
-        versioned_representations: m.get("versionedRepresentations").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_bean_versioned_representations__from_json(v)),
+        versioned_representations: m.get("versionedRepresentations").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::IssueBeanVersionedRepresentationsValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_issue_search::IssueBeanVersionedRepresentationsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -560,7 +618,7 @@ fn iface_issue_search__history_metadata__from_json(v: &Value) -> Option<iface_is
         description_key: m.get("descriptionKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         email_description: m.get("emailDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         email_description_key: m.get("emailDescriptionKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extra_data: m.get("extraData").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__history_metadata_extra_data__from_json(v)),
+        extra_data: m.get("extraData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::HistoryMetadataExtraDataEntry { key: k.clone(), value: val })).collect())),
         generator: m.get("generator").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__history_metadata_participant__from_json(v)),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -578,10 +636,11 @@ fn iface_issue_search__history_metadata_participant__from_json(v: &Value) -> Opt
     })
 }
 
-fn iface_issue_search__history_metadata_extra_data__from_json(v: &Value) -> Option<iface_issue_search::HistoryMetadataExtraData> {
+fn iface_issue_search__history_metadata_extra_data_entry__from_json(v: &Value) -> Option<iface_issue_search::HistoryMetadataExtraDataEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::HistoryMetadataExtraData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::HistoryMetadataExtraDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -600,21 +659,67 @@ fn iface_issue_search__change_details__from_json(v: &Value) -> Option<iface_issu
 fn iface_issue_search__issue_update_metadata__from_json(v: &Value) -> Option<iface_issue_search::IssueUpdateMetadata> {
     let m = v.as_object()?;
     Some(iface_issue_search::IssueUpdateMetadata {
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_update_metadata_fields__from_json(v)),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_issue_search__field_metadata__from_json(x)).map(|val| iface_issue_search::IssueUpdateMetadataFieldsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_issue_search__issue_update_metadata_fields__from_json(v: &Value) -> Option<iface_issue_search::IssueUpdateMetadataFields> {
+fn iface_issue_search__field_metadata__from_json(v: &Value) -> Option<iface_issue_search::FieldMetadata> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueUpdateMetadataFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::FieldMetadata {
+        allowed_values: m.get("allowedValues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        auto_complete_url: m.get("autoCompleteUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        configuration: m.get("configuration").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::FieldMetadataConfigurationEntry { key: k.clone(), value: val })).collect())),
+        default_value: m.get("defaultValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_default_value: m.get("hasDefaultValue").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        operations: m.get("operations").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        required: m.get("required").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        schema: match m.get("schema").and_then(|v| iface_issue_search__json_type_bean__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_issue_search__issue_bean_fields__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanFields> {
+fn iface_issue_search__field_metadata_configuration_entry__from_json(v: &Value) -> Option<iface_issue_search::FieldMetadataConfigurationEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueBeanFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::FieldMetadataConfigurationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_issue_search__json_type_bean__from_json(v: &Value) -> Option<iface_issue_search::JsonTypeBean> {
+    let m = v.as_object()?;
+    Some(iface_issue_search::JsonTypeBean {
+        configuration: m.get("configuration").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::JsonTypeBeanConfigurationEntry { key: k.clone(), value: val })).collect())),
+        custom: m.get("custom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        custom_id: m.get("customId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        system: m.get("system").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_issue_search__json_type_bean_configuration_entry__from_json(v: &Value) -> Option<iface_issue_search::JsonTypeBeanConfigurationEntry> {
+    let m = v.as_object()?;
+    Some(iface_issue_search::JsonTypeBeanConfigurationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_issue_search__issue_update_metadata_fields_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueUpdateMetadataFieldsEntry> {
+    let m = v.as_object()?;
+    Some(iface_issue_search::IssueUpdateMetadataFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_issue_search__field_metadata__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_issue_search__issue_bean_fields_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanFieldsEntry> {
+    let m = v.as_object()?;
+    Some(iface_issue_search::IssueBeanFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -627,10 +732,11 @@ fn iface_issue_search__included_fields__from_json(v: &Value) -> Option<iface_iss
     })
 }
 
-fn iface_issue_search__issue_bean_names__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanNames> {
+fn iface_issue_search__issue_bean_names_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanNamesEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueBeanNames {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueBeanNamesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -666,24 +772,27 @@ fn iface_issue_search__simple_link__from_json(v: &Value) -> Option<iface_issue_s
     })
 }
 
-fn iface_issue_search__issue_bean_properties__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanProperties> {
+fn iface_issue_search__issue_bean_properties_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueBeanProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueBeanPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_issue_search__issue_bean_rendered_fields__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanRenderedFields> {
+fn iface_issue_search__issue_bean_rendered_fields_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanRenderedFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueBeanRenderedFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueBeanRenderedFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_issue_search__issue_bean_schema__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanSchema> {
+fn iface_issue_search__issue_bean_schema_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanSchemaEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueBeanSchema {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueBeanSchemaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_issue_search__json_type_bean__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -691,7 +800,7 @@ fn iface_issue_search__issue_transition__from_json(v: &Value) -> Option<iface_is
     let m = v.as_object()?;
     Some(iface_issue_search::IssueTransition {
         expand: m.get("expand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_issue_search__issue_transition_fields__from_json(v)),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_issue_search__field_metadata__from_json(x)).map(|val| iface_issue_search::IssueTransitionFieldsEntry { key: k.clone(), value: val })).collect())),
         has_screen: m.get("hasScreen").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_available: m.get("isAvailable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -704,10 +813,11 @@ fn iface_issue_search__issue_transition__from_json(v: &Value) -> Option<iface_is
     })
 }
 
-fn iface_issue_search__issue_transition_fields__from_json(v: &Value) -> Option<iface_issue_search::IssueTransitionFields> {
+fn iface_issue_search__issue_transition_fields_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueTransitionFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueTransitionFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueTransitionFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_issue_search__field_metadata__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -734,24 +844,35 @@ fn iface_issue_search__status_category__from_json(v: &Value) -> Option<iface_iss
     })
 }
 
-fn iface_issue_search__issue_bean_versioned_representations__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanVersionedRepresentations> {
+fn iface_issue_search__issue_bean_versioned_representations_value_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanVersionedRepresentationsValueEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::IssueBeanVersionedRepresentations {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueBeanVersionedRepresentationsValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_issue_search__search_results_names__from_json(v: &Value) -> Option<iface_issue_search::SearchResultsNames> {
+fn iface_issue_search__issue_bean_versioned_representations_entry__from_json(v: &Value) -> Option<iface_issue_search::IssueBeanVersionedRepresentationsEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::SearchResultsNames {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::IssueBeanVersionedRepresentationsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_search::IssueBeanVersionedRepresentationsValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_issue_search__search_results_schema__from_json(v: &Value) -> Option<iface_issue_search::SearchResultsSchema> {
+fn iface_issue_search__search_results_names_entry__from_json(v: &Value) -> Option<iface_issue_search::SearchResultsNamesEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_search::SearchResultsSchema {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_search::SearchResultsNamesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_issue_search__search_results_schema_entry__from_json(v: &Value) -> Option<iface_issue_search::SearchResultsSchemaEntry> {
+    let m = v.as_object()?;
+    Some(iface_issue_search::SearchResultsSchemaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_issue_search__json_type_bean__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 

@@ -1,4 +1,4 @@
-package autostamp:stormglass@0.5.0;
+package autostamp:stormglass@0.6.0;
 
 interface forecast {
   record forecast {

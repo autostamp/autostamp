@@ -133,9 +133,10 @@ fn iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__t
     }
 }
 
-fn iface_integrations__list_op_response__to_json(p: &iface_integrations::ListOpResponse) -> Value {
+fn iface_integrations__list_op_response_entry__to_json(p: &iface_integrations::ListOpResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -325,10 +326,11 @@ fn iface_integrations__get_existing_integration_by_type_params__to_json(p: &ifac
     Value::Object(m)
 }
 
-fn iface_integrations__list_op_response__from_json(v: &Value) -> Option<iface_integrations::ListOpResponse> {
+fn iface_integrations__list_op_response_entry__from_json(v: &Value) -> Option<iface_integrations::ListOpResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_integrations::ListOpResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_integrations::ListOpResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -431,12 +433,12 @@ fn iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__f
     }
 }
 
-fn iface_integrations__list_op__ok(body: String) -> Result<iface_integrations::ListOpResponse, crate::runtime::DispatchError> {
+fn iface_integrations__list_op__ok(body: String) -> Result<Vec<iface_integrations::ListOpResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_integrations__list_op_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_integrations::ListOpResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -570,7 +572,7 @@ fn iface_integrations__get_existing_integration_by_type__err(e: crate::runtime::
 }
 
 impl iface_integrations::Guest for crate::Component {
-    fn list_op(params: iface_integrations::ListOpParams) -> Result<iface_integrations::ListOpResponse, String> {
+    fn list_op(params: iface_integrations::ListOpParams) -> Result<Vec<iface_integrations::ListOpResponseEntry>, String> {
         let json = iface_integrations__list_op_params__to_json(&params);
         match dispatch(&OP_INTEGRATIONS_LIST_OP, json).and_then(iface_integrations__list_op__ok) {
             Ok(v) => Ok(v),

@@ -70,37 +70,31 @@ const OP_ADMIN_EMOJI_RENAME: OpSpec = OpSpec {
 
 fn iface_admin_emoji__add_response__to_json(p: &iface_admin_emoji::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_emoji__defs_ok_true__to_json(p: &iface_admin_emoji::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_emoji__add_alias_response__to_json(p: &iface_admin_emoji::AddAliasResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_emoji__list_op_response__to_json(p: &iface_admin_emoji::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_emoji__remove_response__to_json(p: &iface_admin_emoji::RemoveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_emoji__rename_response__to_json(p: &iface_admin_emoji::RenameResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -146,42 +140,35 @@ fn iface_admin_emoji__rename_params__to_json(p: &iface_admin_emoji::RenameParams
 fn iface_admin_emoji__add_response__from_json(v: &Value) -> Option<iface_admin_emoji::AddResponse> {
     let m = v.as_object()?;
     Some(iface_admin_emoji::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_emoji__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_emoji::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_emoji::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_emoji__add_alias_response__from_json(v: &Value) -> Option<iface_admin_emoji::AddAliasResponse> {
     let m = v.as_object()?;
     Some(iface_admin_emoji::AddAliasResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_emoji__list_op_response__from_json(v: &Value) -> Option<iface_admin_emoji::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_admin_emoji::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_emoji__remove_response__from_json(v: &Value) -> Option<iface_admin_emoji::RemoveResponse> {
     let m = v.as_object()?;
     Some(iface_admin_emoji::RemoveResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_emoji__rename_response__from_json(v: &Value) -> Option<iface_admin_emoji::RenameResponse> {
     let m = v.as_object()?;
     Some(iface_admin_emoji::RenameResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

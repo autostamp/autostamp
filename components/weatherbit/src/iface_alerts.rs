@@ -27,7 +27,7 @@ fn iface_alerts__weather_alert__to_json(p: &iface_alerts::WeatherAlert) -> Value
 
 fn iface_alerts__weather_alert_group__to_json(p: &iface_alerts::WeatherAlertGroup) -> Value {
     let mut m = Map::new();
-    m.insert("alerts".into(), match (&p.alerts) { Some(v) => Value::Array((v).iter().map(|v| iface_alerts__alert_region_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("alerts".into(), match (&p.alerts) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("effective_local".into(), match (&p.effective_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("effective_utc".into(), match (&p.effective_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -36,12 +36,6 @@ fn iface_alerts__weather_alert_group__to_json(p: &iface_alerts::WeatherAlertGrou
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_alerts__alert_region_group__to_json(p: &iface_alerts::AlertRegionGroup) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -65,7 +59,7 @@ fn iface_alerts__weather_alert__from_json(v: &Value) -> Option<iface_alerts::Wea
 fn iface_alerts__weather_alert_group__from_json(v: &Value) -> Option<iface_alerts::WeatherAlertGroup> {
     let m = v.as_object()?;
     Some(iface_alerts::WeatherAlertGroup {
-        alerts: m.get("alerts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_alerts__alert_region_group__from_json(x)).collect())),
+        alerts: m.get("alerts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         effective_local: m.get("effective_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         effective_utc: m.get("effective_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -74,13 +68,6 @@ fn iface_alerts__weather_alert_group__from_json(v: &Value) -> Option<iface_alert
         severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_alerts__alert_region_group__from_json(v: &Value) -> Option<iface_alerts::AlertRegionGroup> {
-    let m = v.as_object()?;
-    Some(iface_alerts::AlertRegionGroup {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

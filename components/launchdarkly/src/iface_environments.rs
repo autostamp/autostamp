@@ -80,7 +80,7 @@ fn iface_environments__environment_approval_settings_service_kind_enum__to_str(e
 
 fn iface_environments__environment__to_json(p: &iface_environments::Environment) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_environments__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_environments__links__to_json(v), None => Value::Null });
     m.insert("apiKey".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("approvalSettings".into(), match (&p.approval_settings) { Some(v) => iface_environments__environment_approval_settings__to_json(v), None => Value::Null });
@@ -94,12 +94,6 @@ fn iface_environments__environment__to_json(p: &iface_environments::Environment)
     m.insert("requireComments".into(), match (&p.require_comments) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("secureMode".into(), match (&p.secure_mode) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_environments__id__to_json(p: &iface_environments::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -174,7 +168,7 @@ fn iface_environments__reset_environment_mobile_key_params__to_json(p: &iface_en
 fn iface_environments__environment__from_json(v: &Value) -> Option<iface_environments::Environment> {
     let m = v.as_object()?;
     Some(iface_environments::Environment {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_environments__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_environments__links__from_json(v)),
         api_key: m.get("apiKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         approval_settings: m.get("approvalSettings").filter(|v| !v.is_null()).and_then(|v| iface_environments__environment_approval_settings__from_json(v)),
@@ -188,13 +182,6 @@ fn iface_environments__environment__from_json(v: &Value) -> Option<iface_environ
         require_comments: m.get("requireComments").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         secure_mode: m.get("secureMode").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-    })
-}
-
-fn iface_environments__id__from_json(v: &Value) -> Option<iface_environments::Id> {
-    let m = v.as_object()?;
-    Some(iface_environments::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

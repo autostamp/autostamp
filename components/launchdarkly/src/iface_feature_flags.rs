@@ -311,12 +311,29 @@ const OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_feature_flags__feature_flag_status_name_enum__to_str(e: &iface_feature_flags::FeatureFlagStatusNameEnum) -> &'static str {
+fn iface_feature_flags__feature_flag_status_for_queried_environment_name_enum__to_str(e: &iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum) -> &'static str {
     match e {
-        iface_feature_flags::FeatureFlagStatusNameEnum::New => "new",
-        iface_feature_flags::FeatureFlagStatusNameEnum::Active => "active",
-        iface_feature_flags::FeatureFlagStatusNameEnum::Inactive => "inactive",
-        iface_feature_flags::FeatureFlagStatusNameEnum::Launched => "launched",
+        iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::New => "new",
+        iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::Active => "active",
+        iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::Inactive => "inactive",
+        iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::Launched => "launched",
+    }
+}
+
+fn iface_feature_flags__role__to_str(e: &iface_feature_flags::Role) -> &'static str {
+    match e {
+        iface_feature_flags::Role::Writer => "writer",
+        iface_feature_flags::Role::Reader => "reader",
+        iface_feature_flags::Role::Admin => "admin",
+        iface_feature_flags::Role::Owner => "owner",
+    }
+}
+
+fn iface_feature_flags__approval_request_review_status__to_str(e: &iface_feature_flags::ApprovalRequestReviewStatus) -> &'static str {
+    match e {
+        iface_feature_flags::ApprovalRequestReviewStatus::Pending => "pending",
+        iface_feature_flags::ApprovalRequestReviewStatus::Approved => "approved",
+        iface_feature_flags::ApprovalRequestReviewStatus::Declined => "declined",
     }
 }
 
@@ -332,7 +349,7 @@ fn iface_feature_flags__approval_request_status_enum__to_str(e: &iface_feature_f
 fn iface_feature_flags__feature_flag_status_across_environments__to_json(p: &iface_feature_flags::FeatureFlagStatusAcrossEnvironments) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__feature_flag_status_links__to_json(v), None => Value::Null });
-    m.insert("environments".into(), match (&p.environments) { Some(v) => iface_feature_flags__feature_flag_status_across_environments_environments__to_json(v), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_feature_flags__feature_flag_status_for_queried_environment__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -351,9 +368,25 @@ fn iface_feature_flags__link__to_json(p: &iface_feature_flags::Link) -> Value {
     Value::Object(m)
 }
 
-fn iface_feature_flags__feature_flag_status_across_environments_environments__to_json(p: &iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironments) -> Value {
+fn iface_feature_flags__feature_flag_status_for_queried_environment__to_json(p: &iface_feature_flags::FeatureFlagStatusForQueriedEnvironment) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("default".into(), match (&p.default) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("lastRequested".into(), match (&p.last_requested) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_feature_flags__feature_flag_status_for_queried_environment_name_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_status_for_queried_environment_default_entry__to_json(p: &iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentDefaultEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_status_across_environments_environments_entry__to_json(p: &iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironmentsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_feature_flags__feature_flag_status_for_queried_environment__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -367,15 +400,16 @@ fn iface_feature_flags__feature_flag_statuses__to_json(p: &iface_feature_flags::
 fn iface_feature_flags__feature_flag_status__to_json(p: &iface_feature_flags::FeatureFlagStatus) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__feature_flag_status_links__to_json(v), None => Value::Null });
-    m.insert("default".into(), match (&p.default) { Some(v) => iface_feature_flags__feature_flag_status_default__to_json(v), None => Value::Null });
+    m.insert("default".into(), match (&p.default) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("lastRequested".into(), match (&p.last_requested) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_feature_flags__feature_flag_status_name_enum__to_str(v).into()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_feature_flags__feature_flag_status_for_queried_environment_name_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_feature_flags__feature_flag_status_default__to_json(p: &iface_feature_flags::FeatureFlagStatusDefault) -> Value {
+fn iface_feature_flags__feature_flag_status_default_entry__to_json(p: &iface_feature_flags::FeatureFlagStatusDefaultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -403,10 +437,10 @@ fn iface_feature_flags__feature_flag__to_json(p: &iface_feature_flags::FeatureFl
     m.insert("archivedDate".into(), match (&p.archived_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("clientSideAvailability".into(), match (&p.client_side_availability) { Some(v) => iface_feature_flags__client_side_availability__to_json(v), None => Value::Null });
     m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("customProperties".into(), match (&p.custom_properties) { Some(v) => iface_feature_flags__feature_flag_custom_properties__to_json(v), None => Value::Null });
+    m.insert("customProperties".into(), match (&p.custom_properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_feature_flags__custom_property__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("defaults".into(), match (&p.defaults) { Some(v) => iface_feature_flags__defaults__to_json(v), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("environments".into(), match (&p.environments) { Some(v) => iface_feature_flags__feature_flag_environments__to_json(v), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_feature_flags__feature_flag_config__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("goalIds".into(), match (&p.goal_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("includeInSnippet".into(), match (&p.include_in_snippet) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -421,36 +455,24 @@ fn iface_feature_flags__feature_flag__to_json(p: &iface_feature_flags::FeatureFl
 
 fn iface_feature_flags__member__to_json(p: &iface_feature_flags::Member) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_feature_flags__member_last_seen_metadata__to_json(v), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
     m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("role".into(), match (&p.role) { Some(v) => iface_feature_flags__role__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_feature_flags__id__to_json(p: &iface_feature_flags::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_feature_flags__role__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_feature_flags__member_last_seen_metadata__to_json(p: &iface_feature_flags::MemberLastSeenMetadata) -> Value {
     let mut m = Map::new();
     m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_feature_flags__role__to_json(p: &iface_feature_flags::Role) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -461,9 +483,17 @@ fn iface_feature_flags__client_side_availability__to_json(p: &iface_feature_flag
     Value::Object(m)
 }
 
-fn iface_feature_flags__feature_flag_custom_properties__to_json(p: &iface_feature_flags::FeatureFlagCustomProperties) -> Value {
+fn iface_feature_flags__custom_property__to_json(p: &iface_feature_flags::CustomProperty) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_custom_properties_entry__to_json(p: &iface_feature_flags::FeatureFlagCustomPropertiesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_feature_flags__custom_property__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -474,9 +504,100 @@ fn iface_feature_flags__defaults__to_json(p: &iface_feature_flags::Defaults) -> 
     Value::Object(m)
 }
 
-fn iface_feature_flags__feature_flag_environments__to_json(p: &iface_feature_flags::FeatureFlagEnvironments) -> Value {
+fn iface_feature_flags__feature_flag_config__to_json(p: &iface_feature_flags::FeatureFlagConfig) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_environmentName".into(), match (&p.environment_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_feature_flags__site__to_json(v), None => Value::Null });
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("fallthrough".into(), match (&p.fallthrough) { Some(v) => iface_feature_flags__fallthrough__to_json(v), None => Value::Null });
+    m.insert("lastModified".into(), match (&p.last_modified) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offVariation".into(), match (&p.off_variation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("prerequisites".into(), match (&p.prerequisites) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__prerequisite__to_json(v)).collect()), None => Value::Null });
+    m.insert("rules".into(), match (&p.rules) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__rule__to_json(v)).collect()), None => Value::Null });
+    m.insert("salt".into(), match (&p.salt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sel".into(), match (&p.sel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("targets".into(), match (&p.targets) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__target__to_json(v)).collect()), None => Value::Null });
+    m.insert("trackEvents".into(), match (&p.track_events) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("trackEventsFallthrough".into(), match (&p.track_events_fallthrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__site__to_json(p: &iface_feature_flags::Site) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__fallthrough__to_json(p: &iface_feature_flags::Fallthrough) -> Value {
+    let mut m = Map::new();
+    m.insert("rollout".into(), match (&p.rollout) { Some(v) => iface_feature_flags__rollout__to_json(v), None => Value::Null });
+    m.insert("variation".into(), match (&p.variation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__rollout__to_json(p: &iface_feature_flags::Rollout) -> Value {
+    let mut m = Map::new();
+    m.insert("bucketBy".into(), match (&p.bucket_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("variations".into(), match (&p.variations) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__weighted_variation__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__weighted_variation__to_json(p: &iface_feature_flags::WeightedVariation) -> Value {
+    let mut m = Map::new();
+    m.insert("variation".into(), match (&p.variation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__prerequisite__to_json(p: &iface_feature_flags::Prerequisite) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("variation".into(), match (&p.variation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__rule__to_json(p: &iface_feature_flags::Rule) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clauses".into(), match (&p.clauses) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__clause__to_json(v)).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rollout".into(), match (&p.rollout) { Some(v) => iface_feature_flags__rollout__to_json(v), None => Value::Null });
+    m.insert("trackEvents".into(), match (&p.track_events) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("variation".into(), match (&p.variation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__clause__to_json(p: &iface_feature_flags::Clause) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("attribute".into(), match (&p.attribute) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("negate".into(), match (&p.negate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("op".into(), match (&p.op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__clause_values_item_entry__to_json(p: &iface_feature_flags::ClauseValuesItemEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__target__to_json(p: &iface_feature_flags::Target) -> Value {
+    let mut m = Map::new();
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("variation".into(), match (&p.variation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_environments_entry__to_json(p: &iface_feature_flags::FeatureFlagEnvironmentsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_feature_flags__feature_flag_config__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -485,13 +606,14 @@ fn iface_feature_flags__variation__to_json(p: &iface_feature_flags::Variation) -
     m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("value".into(), iface_feature_flags__variation_value__to_json(&p.value));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_feature_flags__variation_value__to_json(p: &iface_feature_flags::VariationValue) -> Value {
+fn iface_feature_flags__variation_value_entry__to_json(p: &iface_feature_flags::VariationValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -507,13 +629,6 @@ fn iface_feature_flags__dependent_flags_links__to_json(p: &iface_feature_flags::
     let mut m = Map::new();
     m.insert("parent".into(), match (&p.parent) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
     m.insert("self".into(), match (&p.self_) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_feature_flags__site__to_json(p: &iface_feature_flags::Site) -> Value {
-    let mut m = Map::new();
-    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -604,40 +719,34 @@ fn iface_feature_flags__approval_requests__to_json(p: &iface_feature_flags::Appr
 
 fn iface_feature_flags__approval_request__to_json(p: &iface_feature_flags::ApprovalRequest) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("allReviews".into(), match (&p.all_reviews) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__approval_request_review__to_json(v)).collect()), None => Value::Null });
     m.insert("appliedByMemberID".into(), match (&p.applied_by_member_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("appliedDate".into(), match (&p.applied_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("executionDate".into(), match (&p.execution_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("instructions".into(), match (&p.instructions) { Some(v) => iface_feature_flags__semantic_patch_instruction__to_json(v), None => Value::Null });
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__semantic_patch_instruction_item__to_json(v)).collect()), None => Value::Null });
     m.insert("notifyMemberIds".into(), match (&p.notify_member_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("operatingOnId".into(), match (&p.operating_on_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("requestorId".into(), match (&p.requestor_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("reviewStatus".into(), match (&p.review_status) { Some(v) => iface_feature_flags__approval_request_review_status__to_json(v), None => Value::Null });
+    m.insert("reviewStatus".into(), match (&p.review_status) { Some(v) => Value::String(iface_feature_flags__approval_request_review_status__to_str(v).into()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_feature_flags__approval_request_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_feature_flags__approval_request_review__to_json(p: &iface_feature_flags::ApprovalRequestReview) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("kind".into(), match (&p.kind) { Some(v) => iface_feature_flags__approval_request_review_status__to_json(v), None => Value::Null });
-    m.insert("memberId".into(), match (&p.member_id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String(iface_feature_flags__approval_request_review_status__to_str(v).into()), None => Value::Null });
+    m.insert("memberId".into(), match (&p.member_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_feature_flags__approval_request_review_status__to_json(p: &iface_feature_flags::ApprovalRequestReviewStatus) -> Value {
+fn iface_feature_flags__semantic_patch_instruction_item__to_json(p: &iface_feature_flags::SemanticPatchInstructionItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_feature_flags__semantic_patch_instruction__to_json(p: &iface_feature_flags::SemanticPatchInstruction) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -653,7 +762,13 @@ fn iface_feature_flags__feature_flag_scheduled_change__to_json(p: &iface_feature
     m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("executionDate".into(), match (&p.execution_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("instructions".into(), match (&p.instructions) { Some(v) => iface_feature_flags__semantic_patch_instruction__to_json(v), None => Value::Null });
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__semantic_patch_instruction_item_v2__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__semantic_patch_instruction_item_v2__to_json(p: &iface_feature_flags::SemanticPatchInstructionItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -888,7 +1003,7 @@ fn iface_feature_flags__feature_flag_status_across_environments__from_json(v: &V
     let m = v.as_object()?;
     Some(iface_feature_flags::FeatureFlagStatusAcrossEnvironments {
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_links__from_json(v)),
-        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_across_environments_environments__from_json(v)),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_feature_flags__feature_flag_status_for_queried_environment__from_json(x)).map(|val| iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironmentsEntry { key: k.clone(), value: val })).collect())),
         key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -909,10 +1024,28 @@ fn iface_feature_flags__link__from_json(v: &Value) -> Option<iface_feature_flags
     })
 }
 
-fn iface_feature_flags__feature_flag_status_across_environments_environments__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironments> {
+fn iface_feature_flags__feature_flag_status_for_queried_environment__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusForQueriedEnvironment> {
     let m = v.as_object()?;
-    Some(iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironments {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_feature_flags::FeatureFlagStatusForQueriedEnvironment {
+        default: m.get("default").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentDefaultEntry { key: k.clone(), value: val })).collect())),
+        last_requested: m.get("lastRequested").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__feature_flag_status_for_queried_environment_name_enum__from_str)),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status_for_queried_environment_default_entry__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentDefaultEntry> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentDefaultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status_across_environments_environments_entry__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironmentsEntry> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironmentsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_feature_flags__feature_flag_status_for_queried_environment__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -928,16 +1061,17 @@ fn iface_feature_flags__feature_flag_status__from_json(v: &Value) -> Option<ifac
     let m = v.as_object()?;
     Some(iface_feature_flags::FeatureFlagStatus {
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_links__from_json(v)),
-        default: m.get("default").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_default__from_json(v)),
+        default: m.get("default").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_feature_flags::FeatureFlagStatusDefaultEntry { key: k.clone(), value: val })).collect())),
         last_requested: m.get("lastRequested").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__feature_flag_status_name_enum__from_str)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__feature_flag_status_for_queried_environment_name_enum__from_str)),
     })
 }
 
-fn iface_feature_flags__feature_flag_status_default__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusDefault> {
+fn iface_feature_flags__feature_flag_status_default_entry__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusDefaultEntry> {
     let m = v.as_object()?;
-    Some(iface_feature_flags::FeatureFlagStatusDefault {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_feature_flags::FeatureFlagStatusDefaultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -968,10 +1102,10 @@ fn iface_feature_flags__feature_flag__from_json(v: &Value) -> Option<iface_featu
         archived_date: m.get("archivedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         client_side_availability: m.get("clientSideAvailability").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__client_side_availability__from_json(v)),
         creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        custom_properties: m.get("customProperties").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_custom_properties__from_json(v)),
+        custom_properties: m.get("customProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_feature_flags__custom_property__from_json(x)).map(|val| iface_feature_flags::FeatureFlagCustomPropertiesEntry { key: k.clone(), value: val })).collect())),
         defaults: m.get("defaults").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__defaults__from_json(v)),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_environments__from_json(v)),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_feature_flags__feature_flag_config__from_json(x)).map(|val| iface_feature_flags::FeatureFlagEnvironmentsEntry { key: k.clone(), value: val })).collect())),
         goal_ids: m.get("goalIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         include_in_snippet: m.get("includeInSnippet").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -987,25 +1121,18 @@ fn iface_feature_flags__feature_flag__from_json(v: &Value) -> Option<iface_featu
 fn iface_feature_flags__member__from_json(v: &Value) -> Option<iface_feature_flags::Member> {
     let m = v.as_object()?;
     Some(iface_feature_flags::Member {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__member_last_seen_metadata__from_json(v)),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
         pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__id__from_json(x)).collect())),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__role__from_json(v)),
-    })
-}
-
-fn iface_feature_flags__id__from_json(v: &Value) -> Option<iface_feature_flags::Id> {
-    let m = v.as_object()?;
-    Some(iface_feature_flags::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__role__from_str)),
     })
 }
 
@@ -1013,13 +1140,6 @@ fn iface_feature_flags__member_last_seen_metadata__from_json(v: &Value) -> Optio
     let m = v.as_object()?;
     Some(iface_feature_flags::MemberLastSeenMetadata {
         token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_feature_flags__role__from_json(v: &Value) -> Option<iface_feature_flags::Role> {
-    let m = v.as_object()?;
-    Some(iface_feature_flags::Role {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1031,10 +1151,19 @@ fn iface_feature_flags__client_side_availability__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_feature_flags__feature_flag_custom_properties__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagCustomProperties> {
+fn iface_feature_flags__custom_property__from_json(v: &Value) -> Option<iface_feature_flags::CustomProperty> {
     let m = v.as_object()?;
-    Some(iface_feature_flags::FeatureFlagCustomProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_feature_flags::CustomProperty {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_custom_properties_entry__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagCustomPropertiesEntry> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagCustomPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_feature_flags__custom_property__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -1046,10 +1175,111 @@ fn iface_feature_flags__defaults__from_json(v: &Value) -> Option<iface_feature_f
     })
 }
 
-fn iface_feature_flags__feature_flag_environments__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagEnvironments> {
+fn iface_feature_flags__feature_flag_config__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagConfig> {
     let m = v.as_object()?;
-    Some(iface_feature_flags::FeatureFlagEnvironments {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_feature_flags::FeatureFlagConfig {
+        environment_name: m.get("_environmentName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__site__from_json(v)),
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        fallthrough: m.get("fallthrough").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__fallthrough__from_json(v)),
+        last_modified: m.get("lastModified").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        off_variation: m.get("offVariation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        prerequisites: m.get("prerequisites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__prerequisite__from_json(x)).collect())),
+        rules: m.get("rules").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__rule__from_json(x)).collect())),
+        salt: m.get("salt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sel: m.get("sel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        targets: m.get("targets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__target__from_json(x)).collect())),
+        track_events: m.get("trackEvents").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        track_events_fallthrough: m.get("trackEventsFallthrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_feature_flags__site__from_json(v: &Value) -> Option<iface_feature_flags::Site> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Site {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__fallthrough__from_json(v: &Value) -> Option<iface_feature_flags::Fallthrough> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Fallthrough {
+        rollout: m.get("rollout").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__rollout__from_json(v)),
+        variation: m.get("variation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_feature_flags__rollout__from_json(v: &Value) -> Option<iface_feature_flags::Rollout> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Rollout {
+        bucket_by: m.get("bucketBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        variations: m.get("variations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__weighted_variation__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__weighted_variation__from_json(v: &Value) -> Option<iface_feature_flags::WeightedVariation> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::WeightedVariation {
+        variation: m.get("variation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weight: m.get("weight").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_feature_flags__prerequisite__from_json(v: &Value) -> Option<iface_feature_flags::Prerequisite> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Prerequisite {
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        variation: m.get("variation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_feature_flags__rule__from_json(v: &Value) -> Option<iface_feature_flags::Rule> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Rule {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clauses: m.get("clauses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__clause__from_json(x)).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rollout: m.get("rollout").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__rollout__from_json(v)),
+        track_events: m.get("trackEvents").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        variation: m.get("variation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_feature_flags__clause__from_json(v: &Value) -> Option<iface_feature_flags::Clause> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Clause {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        attribute: m.get("attribute").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        negate: m.get("negate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        op: m.get("op").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_feature_flags::ClauseValuesItemEntry { key: k.clone(), value: val })).collect())).collect())),
+    })
+}
+
+fn iface_feature_flags__clause_values_item_entry__from_json(v: &Value) -> Option<iface_feature_flags::ClauseValuesItemEntry> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ClauseValuesItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__target__from_json(v: &Value) -> Option<iface_feature_flags::Target> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Target {
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        variation: m.get("variation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_feature_flags__feature_flag_environments_entry__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagEnvironmentsEntry> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagEnvironmentsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_feature_flags__feature_flag_config__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -1059,14 +1289,15 @@ fn iface_feature_flags__variation__from_json(v: &Value) -> Option<iface_feature_
         id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        value: match m.get("value").and_then(|v| iface_feature_flags__variation_value__from_json(v)) { Some(x) => x, None => return None },
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_feature_flags::VariationValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_feature_flags__variation_value__from_json(v: &Value) -> Option<iface_feature_flags::VariationValue> {
+fn iface_feature_flags__variation_value_entry__from_json(v: &Value) -> Option<iface_feature_flags::VariationValueEntry> {
     let m = v.as_object()?;
-    Some(iface_feature_flags::VariationValue {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_feature_flags::VariationValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1084,14 +1315,6 @@ fn iface_feature_flags__dependent_flags_links__from_json(v: &Value) -> Option<if
     Some(iface_feature_flags::DependentFlagsLinks {
         parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
-    })
-}
-
-fn iface_feature_flags__site__from_json(v: &Value) -> Option<iface_feature_flags::Site> {
-    let m = v.as_object()?;
-    Some(iface_feature_flags::Site {
-        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1193,18 +1416,18 @@ fn iface_feature_flags__approval_requests__from_json(v: &Value) -> Option<iface_
 fn iface_feature_flags__approval_request__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequest> {
     let m = v.as_object()?;
     Some(iface_feature_flags::ApprovalRequest {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         all_reviews: m.get("allReviews").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__approval_request_review__from_json(x)).collect())),
         applied_by_member_id: m.get("appliedByMemberID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         applied_date: m.get("appliedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         execution_date: m.get("executionDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__semantic_patch_instruction__from_json(v)),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__semantic_patch_instruction_item__from_json(x)).collect())),
         notify_member_ids: m.get("notifyMemberIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         operating_on_id: m.get("operatingOnId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         requestor_id: m.get("requestorId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        review_status: m.get("reviewStatus").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__approval_request_review_status__from_json(v)),
+        review_status: m.get("reviewStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__approval_request_review_status__from_str)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__approval_request_status_enum__from_str)),
     })
 }
@@ -1212,24 +1435,17 @@ fn iface_feature_flags__approval_request__from_json(v: &Value) -> Option<iface_f
 fn iface_feature_flags__approval_request_review__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequestReview> {
     let m = v.as_object()?;
     Some(iface_feature_flags::ApprovalRequestReview {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__approval_request_review_status__from_json(v)),
-        member_id: m.get("memberId").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__approval_request_review_status__from_str)),
+        member_id: m.get("memberId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_feature_flags__approval_request_review_status__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequestReviewStatus> {
+fn iface_feature_flags__semantic_patch_instruction_item__from_json(v: &Value) -> Option<iface_feature_flags::SemanticPatchInstructionItem> {
     let m = v.as_object()?;
-    Some(iface_feature_flags::ApprovalRequestReviewStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_feature_flags__semantic_patch_instruction__from_json(v: &Value) -> Option<iface_feature_flags::SemanticPatchInstruction> {
-    let m = v.as_object()?;
-    Some(iface_feature_flags::SemanticPatchInstruction {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_feature_flags::SemanticPatchInstructionItem {
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1247,7 +1463,14 @@ fn iface_feature_flags__feature_flag_scheduled_change__from_json(v: &Value) -> O
         id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         execution_date: m.get("executionDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__semantic_patch_instruction__from_json(v)),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__semantic_patch_instruction_item_v2__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__semantic_patch_instruction_item_v2__from_json(v: &Value) -> Option<iface_feature_flags::SemanticPatchInstructionItemV2> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::SemanticPatchInstructionItemV2 {
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1274,12 +1497,31 @@ fn iface_feature_flags__scheduled_changes_feature_flag_conflict__from_json(v: &V
     })
 }
 
-fn iface_feature_flags__feature_flag_status_name_enum__from_str(s: &str) -> Option<iface_feature_flags::FeatureFlagStatusNameEnum> {
+fn iface_feature_flags__feature_flag_status_for_queried_environment_name_enum__from_str(s: &str) -> Option<iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum> {
     match s {
-        "new" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::New),
-        "active" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::Active),
-        "inactive" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::Inactive),
-        "launched" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::Launched),
+        "new" => Some(iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::New),
+        "active" => Some(iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::Active),
+        "inactive" => Some(iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::Inactive),
+        "launched" => Some(iface_feature_flags::FeatureFlagStatusForQueriedEnvironmentNameEnum::Launched),
+        _ => None,
+    }
+}
+
+fn iface_feature_flags__role__from_str(s: &str) -> Option<iface_feature_flags::Role> {
+    match s {
+        "writer" => Some(iface_feature_flags::Role::Writer),
+        "reader" => Some(iface_feature_flags::Role::Reader),
+        "admin" => Some(iface_feature_flags::Role::Admin),
+        "owner" => Some(iface_feature_flags::Role::Owner),
+        _ => None,
+    }
+}
+
+fn iface_feature_flags__approval_request_review_status__from_str(s: &str) -> Option<iface_feature_flags::ApprovalRequestReviewStatus> {
+    match s {
+        "pending" => Some(iface_feature_flags::ApprovalRequestReviewStatus::Pending),
+        "approved" => Some(iface_feature_flags::ApprovalRequestReviewStatus::Approved),
+        "declined" => Some(iface_feature_flags::ApprovalRequestReviewStatus::Declined),
         _ => None,
     }
 }

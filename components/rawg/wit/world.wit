@@ -1,4 +1,4 @@
-package autostamp:rawg@0.5.0;
+package autostamp:rawg@0.6.0;
 
 interface creator-roles {
   record list-op-response {
@@ -145,7 +145,7 @@ interface games {
 
   record game {
     added: option<s32>,
-    added-by-status: option<game-added-by-status>,
+    added-by-status: option<list<game-added-by-status-entry>>,
     background-image: option<string>,
     esrb-rating: option<game-esrb-rating>,
     id: option<s32>,
@@ -156,7 +156,7 @@ interface games {
     playtime: option<s32>,
     rating: f64,
     rating-top: option<s32>,
-    ratings: option<game-ratings>,
+    ratings: option<list<game-ratings-entry>>,
     ratings-count: option<s32>,
     released: option<string>,
     reviews-text-count: option<string>,
@@ -166,9 +166,10 @@ interface games {
     updated: option<string>
   }
 
-  record game-added-by-status {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record game-added-by-status-entry {
+    key: string,
+    value: string
   }
 
   record game-esrb-rating {
@@ -194,9 +195,10 @@ interface games {
     recommended: option<string>
   }
 
-  record game-ratings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record game-ratings-entry {
+    key: string,
+    value: string
   }
 
   record additions-list-response {
@@ -270,7 +272,7 @@ interface games {
   record game-single {
     achievements-count: option<s32>,
     added: option<s32>,
-    added-by-status: option<game-single-added-by-status>,
+    added-by-status: option<list<game-single-added-by-status-entry>>,
     additions-count: option<s32>,
     alternative-names: option<list<string>>,
     background-image: option<string>,
@@ -294,9 +296,9 @@ interface games {
     playtime: option<s32>,
     rating: f64,
     rating-top: option<s32>,
-    ratings: option<game-single-ratings>,
+    ratings: option<list<game-single-ratings-entry>>,
     ratings-count: option<s32>,
-    reactions: option<game-single-reactions>,
+    reactions: option<list<game-single-reactions-entry>>,
     reddit-count: option<s32>,
     reddit-description: option<string>,
     reddit-logo: option<string>,
@@ -315,9 +317,10 @@ interface games {
     youtube-count: option<string>
   }
 
-  record game-single-added-by-status {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record game-single-added-by-status-entry {
+    key: string,
+    value: string
   }
 
   record game-single-esrb-rating {
@@ -348,14 +351,16 @@ interface games {
     recommended: option<string>
   }
 
-  record game-single-ratings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record game-single-ratings-entry {
+    key: string,
+    value: string
   }
 
-  record game-single-reactions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record game-single-reactions-entry {
+    key: string,
+    value: string
   }
 
   record parent-achievement {
@@ -367,15 +372,16 @@ interface games {
   }
 
   record movie {
-    data: option<movie-data>,
+    data: option<list<movie-data-entry>>,
     id: option<s32>,
     name: option<string>,
     preview: option<string>
   }
 
-  record movie-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record movie-data-entry {
+    key: string,
+    value: string
   }
 
   record reddit {
@@ -413,13 +419,14 @@ interface games {
     id: option<s32>,
     like-count: option<s32>,
     name: option<string>,
-    thumbnails: option<youtube-thumbnails>,
+    thumbnails: option<list<youtube-thumbnails-entry>>,
     view-count: option<s32>
   }
 
-  record youtube-thumbnails {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record youtube-thumbnails-entry {
+    key: string,
+    value: string
   }
 
   /// Get a list of games.

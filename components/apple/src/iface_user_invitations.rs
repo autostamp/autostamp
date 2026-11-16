@@ -148,6 +148,25 @@ fn iface_user_invitations__get_collection_fields_apps_item_enum__to_str(e: &ifac
     }
 }
 
+fn iface_user_invitations__user_role__to_str(e: &iface_user_invitations::UserRole) -> &'static str {
+    match e {
+        iface_user_invitations::UserRole::Admin => "ADMIN",
+        iface_user_invitations::UserRole::Finance => "FINANCE",
+        iface_user_invitations::UserRole::Technical => "TECHNICAL",
+        iface_user_invitations::UserRole::AccountHolder => "ACCOUNT_HOLDER",
+        iface_user_invitations::UserRole::ReadOnly => "READ_ONLY",
+        iface_user_invitations::UserRole::Sales => "SALES",
+        iface_user_invitations::UserRole::Marketing => "MARKETING",
+        iface_user_invitations::UserRole::AppManager => "APP_MANAGER",
+        iface_user_invitations::UserRole::Developer => "DEVELOPER",
+        iface_user_invitations::UserRole::AccessToReports => "ACCESS_TO_REPORTS",
+        iface_user_invitations::UserRole::CustomerSupport => "CUSTOMER_SUPPORT",
+        iface_user_invitations::UserRole::CreateApps => "CREATE_APPS",
+        iface_user_invitations::UserRole::CloudManagedDeveloperId => "CLOUD_MANAGED_DEVELOPER_ID",
+        iface_user_invitations::UserRole::CloudManagedAppDistribution => "CLOUD_MANAGED_APP_DISTRIBUTION",
+    }
+}
+
 fn iface_user_invitations__user_invitation_relationships_visible_apps_data_item_type_op_enum__to_str(e: &iface_user_invitations::UserInvitationRelationshipsVisibleAppsDataItemTypeOpEnum) -> &'static str {
     match e {
         iface_user_invitations::UserInvitationRelationshipsVisibleAppsDataItemTypeOpEnum::Apps => "apps",
@@ -278,13 +297,7 @@ fn iface_user_invitations__user_invitation_attributes__to_json(p: &iface_user_in
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("provisioningAllowed".into(), match (&p.provisioning_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Array((v).iter().map(|v| iface_user_invitations__user_role__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_user_invitations__user_role__to_json(p: &iface_user_invitations::UserRole) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_user_invitations__user_role__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -703,7 +716,7 @@ fn iface_user_invitations__user_invitation_create_request_data_attributes__to_js
     m.insert("firstName".into(), Value::String((&p.first_name).clone()));
     m.insert("lastName".into(), Value::String((&p.last_name).clone()));
     m.insert("provisioningAllowed".into(), match (&p.provisioning_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("roles".into(), Value::Array((&p.roles).iter().map(|v| iface_user_invitations__user_role__to_json(v)).collect()));
+    m.insert("roles".into(), Value::Array((&p.roles).iter().map(|v| Value::String(iface_user_invitations__user_role__to_str(v).into())).collect()));
     Value::Object(m)
 }
 
@@ -823,14 +836,7 @@ fn iface_user_invitations__user_invitation_attributes__from_json(v: &Value) -> O
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         provisioning_allowed: m.get("provisioningAllowed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_invitations__user_role__from_json(x)).collect())),
-    })
-}
-
-fn iface_user_invitations__user_role__from_json(v: &Value) -> Option<iface_user_invitations::UserRole> {
-    let m = v.as_object()?;
-    Some(iface_user_invitations::UserRole {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_user_invitations__user_role__from_str)).collect())),
     })
 }
 
@@ -1311,6 +1317,26 @@ fn iface_user_invitations__apps_response__from_json(v: &Value) -> Option<iface_u
         links: match m.get("links").and_then(|v| iface_user_invitations__paged_document_links__from_json(v)) { Some(x) => x, None => return None },
         meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_user_invitations__paging_information__from_json(v)),
     })
+}
+
+fn iface_user_invitations__user_role__from_str(s: &str) -> Option<iface_user_invitations::UserRole> {
+    match s {
+        "ADMIN" => Some(iface_user_invitations::UserRole::Admin),
+        "FINANCE" => Some(iface_user_invitations::UserRole::Finance),
+        "TECHNICAL" => Some(iface_user_invitations::UserRole::Technical),
+        "ACCOUNT_HOLDER" => Some(iface_user_invitations::UserRole::AccountHolder),
+        "READ_ONLY" => Some(iface_user_invitations::UserRole::ReadOnly),
+        "SALES" => Some(iface_user_invitations::UserRole::Sales),
+        "MARKETING" => Some(iface_user_invitations::UserRole::Marketing),
+        "APP_MANAGER" => Some(iface_user_invitations::UserRole::AppManager),
+        "DEVELOPER" => Some(iface_user_invitations::UserRole::Developer),
+        "ACCESS_TO_REPORTS" => Some(iface_user_invitations::UserRole::AccessToReports),
+        "CUSTOMER_SUPPORT" => Some(iface_user_invitations::UserRole::CustomerSupport),
+        "CREATE_APPS" => Some(iface_user_invitations::UserRole::CreateApps),
+        "CLOUD_MANAGED_DEVELOPER_ID" => Some(iface_user_invitations::UserRole::CloudManagedDeveloperId),
+        "CLOUD_MANAGED_APP_DISTRIBUTION" => Some(iface_user_invitations::UserRole::CloudManagedAppDistribution),
+        _ => None,
+    }
 }
 
 fn iface_user_invitations__user_invitation_relationships_visible_apps_data_item_type_op_enum__from_str(s: &str) -> Option<iface_user_invitations::UserInvitationRelationshipsVisibleAppsDataItemTypeOpEnum> {

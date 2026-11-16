@@ -6,22 +6,17 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `slackAuth` | `Authorization: Bearer <secret>` |
-package autostamp:slack@0.5.0;
+package autostamp:slack@0.6.0;
 
 interface admin-apps {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record approve-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record restrict-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record approve-params {
@@ -52,12 +47,7 @@ interface admin-apps {
 interface admin-apps-approved {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -77,12 +67,7 @@ interface admin-apps-approved {
 interface admin-apps-requests {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -101,12 +86,7 @@ interface admin-apps-requests {
 interface admin-apps-restricted {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -126,43 +106,33 @@ interface admin-apps-restricted {
 interface admin-conversations {
   /// Schema for successful response of admin.conversations.archive
   record archive-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.convertToPrivate
   record convert-to-private-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.create
   record create-response {
-    channel-id: option<defs-channel-id>,
-    ok: defs-ok-true
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
+    channel-id: option<string>,
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.delete
   record delete-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.disconnectShared
   record disconnect-shared-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.getConversationPrefs
   record get-conversation-prefs-response {
-    ok: defs-ok-true,
+    ok: bool,
     prefs: option<get-conversation-prefs-response-prefs>
   }
 
@@ -183,28 +153,23 @@ interface admin-conversations {
 
   /// Schema for successful response of admin.conversations.getTeams
   record get-teams-response {
-    ok: defs-ok-true,
+    ok: bool,
     response-metadata: option<get-teams-response-response-metadata>,
-    team-ids: list<defs-team>
+    team-ids: list<string>
   }
 
   record get-teams-response-response-metadata {
     next-cursor: string
   }
 
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Schema for successful response of admin.conversations.invite
   record invite-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.rename
   record rename-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.search
@@ -214,10 +179,10 @@ interface admin-conversations {
   }
 
   record objs-channel {
-    accepted-user: option<defs-user-id>,
+    accepted-user: option<string>,
     created: s32,
-    creator: defs-user-id,
-    id: defs-channel-id,
+    creator: string,
+    id: string,
     is-archived: option<bool>,
     is-channel: bool,
     is-frozen: option<bool>,
@@ -232,14 +197,14 @@ interface admin-conversations {
     is-read-only: option<bool>,
     is-shared: bool,
     is-thread-only: option<bool>,
-    last-read: option<defs-ts>,
+    last-read: option<string>,
     latest: option<string>,
-    members: list<defs-user-id>,
+    members: list<string>,
     name: string,
     name-normalized: string,
     num-members: option<s32>,
-    pending-shared: option<list<defs-team>>,
-    previous-names: option<list<defs-channel-name>>,
+    pending-shared: option<list<string>>,
+    previous-names: option<list<string>>,
     priority: option<f64>,
     purpose: objs-channel-purpose,
     topic: objs-channel-topic,
@@ -248,51 +213,31 @@ interface admin-conversations {
     unread-count-display: option<s32>
   }
 
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-ts {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-channel-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-channel-purpose {
-    creator: defs-topic-purpose-creator,
+    creator: string,
     last-set: s32,
     value: string
   }
 
-  record defs-topic-purpose-creator {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-channel-topic {
-    creator: defs-topic-purpose-creator,
+    creator: string,
     last-set: s32,
     value: string
   }
 
   /// Schema for successful response of admin.conversations.setConversationPrefs
   record set-conversation-prefs-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-teams-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of admin.conversations.unarchive
   record unarchive-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record archive-params {
@@ -441,12 +386,7 @@ interface admin-conversations {
 interface admin-conversations-ekm {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-original-connected-channel-info-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-original-connected-channel-info-params {
@@ -468,22 +408,17 @@ interface admin-conversations-ekm {
 interface admin-conversations-restrict-access {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-group-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-groups-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record remove-group-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-group-params {
@@ -524,32 +459,27 @@ interface admin-conversations-restrict-access {
 interface admin-emoji {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-alias-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record rename-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -605,22 +535,17 @@ interface admin-emoji {
 interface admin-invite-requests {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record approve-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record deny-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record approve-params {
@@ -660,12 +585,7 @@ interface admin-invite-requests {
 interface admin-invite-requests-approved {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -685,12 +605,7 @@ interface admin-invite-requests-approved {
 interface admin-invite-requests-denied {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -710,12 +625,7 @@ interface admin-invite-requests-denied {
 interface admin-teams-admins {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -734,17 +644,12 @@ interface admin-teams-admins {
 interface admin-teams {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record create-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record create-params {
@@ -776,12 +681,7 @@ interface admin-teams {
 interface admin-teams-owners {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -800,37 +700,32 @@ interface admin-teams-owners {
 interface admin-teams-settings {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record info-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-default-channels-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-description-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-discoverability-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-icon-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-name-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record info-params {
@@ -895,27 +790,22 @@ interface admin-teams-settings {
 interface admin-usergroups {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-channels-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-teams-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-channels-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record remove-channels-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-channels-params {
@@ -969,47 +859,42 @@ interface admin-usergroups {
 interface admin-users {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record assign-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record invite-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-admin-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-expiration-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-owner-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record set-regular-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record assign-params {
@@ -1121,17 +1006,12 @@ interface admin-users {
 interface admin-users-session {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record invalidate-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record reset-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record invalidate-params {
@@ -1160,12 +1040,7 @@ interface admin-users-session {
 interface api {
   /// Schema for successful response api.test method
   record test-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record test-params {
@@ -1181,12 +1056,7 @@ interface api {
 interface apps-event-authorizations {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -1204,7 +1074,7 @@ interface apps-permissions {
   /// Schema for successful response from apps.permissions.info method
   record info-response {
     info: info-response-info,
-    ok: defs-ok-true
+    ok: bool
   }
 
   record info-response-info {
@@ -1218,7 +1088,7 @@ interface apps-permissions {
 
   record info-response-info-app-home {
     resources: option<objs-resources>,
-    scopes: option<objs-scopes>
+    scopes: option<list<string>>
   }
 
   record objs-resources {
@@ -1227,44 +1097,34 @@ interface apps-permissions {
     wildcard: option<bool>
   }
 
-  record objs-scopes {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record info-response-info-channel {
     resources: option<objs-resources>,
-    scopes: option<objs-scopes>
+    scopes: option<list<string>>
   }
 
   record info-response-info-group {
     resources: option<objs-resources>,
-    scopes: option<objs-scopes>
+    scopes: option<list<string>>
   }
 
   record info-response-info-im {
     resources: option<objs-resources>,
-    scopes: option<objs-scopes>
+    scopes: option<list<string>>
   }
 
   record info-response-info-mpim {
     resources: option<objs-resources>,
-    scopes: option<objs-scopes>
+    scopes: option<list<string>>
   }
 
   record info-response-info-team {
     resources: objs-resources,
-    scopes: objs-scopes
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    scopes: list<string>
   }
 
   /// Schema for successful response from apps.permissions.request method
   record request-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record info-params {
@@ -1288,14 +1148,9 @@ interface apps-permissions {
 interface apps-permissions-resources {
   /// Schema for successful response apps.permissions.resources.list method
   record list-op-response {
-    ok: defs-ok-true,
+    ok: bool,
     resources: list<list-op-response-resources-item>,
     response-metadata: option<list-op-response-response-metadata>
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-op-response-resources-item {
@@ -1322,28 +1177,18 @@ interface apps-permissions-resources {
 interface apps-permissions-scopes {
   /// Schema for successful response api.permissions.scopes.list method
   record list-op-response {
-    ok: defs-ok-true,
+    ok: bool,
     scopes: list-op-response-scopes
   }
 
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record list-op-response-scopes {
-    app-home: option<objs-scopes>,
-    channel: option<objs-scopes>,
-    group: option<objs-scopes>,
-    im: option<objs-scopes>,
-    mpim: option<objs-scopes>,
-    team: option<objs-scopes>,
-    user: option<objs-scopes>
-  }
-
-  record objs-scopes {
-    /// opaque schema; raw JSON
-    value: string
+    app-home: option<list<string>>,
+    channel: option<list<string>>,
+    group: option<list<string>>,
+    im: option<list<string>>,
+    mpim: option<list<string>>,
+    team: option<list<string>>,
+    user: option<list<string>>
   }
 
   record list-op-params {
@@ -1357,17 +1202,12 @@ interface apps-permissions-scopes {
 interface apps-permissions-users {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record request-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record list-op-params {
@@ -1397,12 +1237,7 @@ interface apps-permissions-users {
 interface apps {
   /// Schema for successful response from apps.uninstall method
   record uninstall-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record uninstall-params {
@@ -1420,40 +1255,20 @@ interface apps {
 interface auth {
   /// Schema for successful response from auth.revoke method
   record revoke-response {
-    ok: defs-ok-true,
+    ok: bool,
     revoked: bool
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Schema for successful response auth.test method
   record test-response {
-    bot-id: option<defs-bot-id>,
+    bot-id: option<string>,
     is-enterprise-install: option<bool>,
-    ok: defs-ok-true,
+    ok: bool,
     team: string,
-    team-id: defs-team,
+    team-id: string,
     url: string,
     user: string,
-    user-id: defs-user-id
-  }
-
-  record defs-bot-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
+    user-id: string
   }
 
   record revoke-params {
@@ -1476,43 +1291,23 @@ interface bots {
   /// Schema for successful response from bots.info method
   record info-response {
     bot: info-response-bot,
-    ok: defs-ok-true
+    ok: bool
   }
 
   record info-response-bot {
-    app-id: defs-app-id,
+    app-id: string,
     deleted: bool,
     icons: info-response-bot-icons,
-    id: defs-bot-id,
+    id: string,
     name: string,
     updated: s32,
-    user-id: option<defs-user-id>
-  }
-
-  record defs-app-id {
-    /// opaque schema; raw JSON
-    value: string
+    user-id: option<string>
   }
 
   record info-response-bot-icons {
     image-v36: string,
     image-v48: string,
     image-v72: string
-  }
-
-  record defs-bot-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record info-params {
@@ -1528,27 +1323,22 @@ interface bots {
 interface calls {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record end-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record info-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record update-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -1610,17 +1400,12 @@ interface calls {
 interface calls-participants {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -1648,62 +1433,47 @@ interface calls-participants {
 interface chat {
   /// Schema for successful response of chat.delete method
   record delete-response {
-    channel: defs-channel,
-    ok: defs-ok-true,
-    ts: defs-ts
-  }
-
-  record defs-channel {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-ts {
-    /// opaque schema; raw JSON
-    value: string
+    channel: string,
+    ok: bool,
+    ts: string
   }
 
   /// Schema for successful response from chat.deleteScheduledMessage method
   record delete-scheduled-message-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response chat.getPermalink
   record get-permalink-response {
-    channel: defs-channel,
-    ok: defs-ok-true,
+    channel: string,
+    ok: bool,
     permalink: string
   }
 
   /// Schema for successful response from chat.meMessage method
   record me-message-response {
-    channel: option<defs-channel>,
-    ok: defs-ok-true,
-    ts: option<defs-ts>
+    channel: option<string>,
+    ok: bool,
+    ts: option<string>
   }
 
   /// Schema for successful response from chat.postEphemeral method
   record post-ephemeral-response {
-    message-ts: defs-ts,
-    ok: defs-ok-true
+    message-ts: string,
+    ok: bool
   }
 
   /// Schema for successful response of chat.postMessage method
   record post-message-response {
-    channel: defs-channel,
+    channel: string,
     message: objs-message,
-    ok: defs-ok-true,
-    ts: defs-ts
+    ok: bool,
+    ts: string
   }
 
   record objs-message {
     attachments: option<list<objs-message-attachments-item>>,
-    blocks: option<blocks>,
+    blocks: option<list<blocks-item>>,
     bot-id: option<string>,
     bot-profile: option<objs-bot-profile>,
     client-msg-id: option<string>,
@@ -1712,36 +1482,36 @@ interface chat {
     file: option<objs-file>,
     files: option<list<objs-file>>,
     icons: option<objs-message-icons>,
-    inviter: option<defs-user-id>,
+    inviter: option<string>,
     is-delayed-message: option<bool>,
     is-intro: option<bool>,
     is-starred: option<bool>,
-    last-read: option<defs-ts>,
-    latest-reply: option<defs-ts>,
+    last-read: option<string>,
+    latest-reply: option<string>,
     name: option<string>,
     old-name: option<string>,
-    parent-user-id: option<defs-user-id>,
+    parent-user-id: option<string>,
     permalink: option<string>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     purpose: option<string>,
     reactions: option<list<objs-reaction>>,
     reply-count: option<s32>,
-    reply-users: option<list<defs-user-id>>,
+    reply-users: option<list<string>>,
     reply-users-count: option<s32>,
-    source-team: option<defs-workspace-id>,
+    source-team: option<string>,
     subscribed: option<bool>,
     subtype: option<string>,
-    team: option<defs-workspace-id>,
+    team: option<string>,
     text: string,
-    thread-ts: option<defs-ts>,
+    thread-ts: option<string>,
     topic: option<string>,
-    ts: defs-ts,
+    ts: string,
     type-op: string,
     unread-count: option<s32>,
     upload: option<bool>,
-    user: option<defs-user-id>,
+    user: option<string>,
     user-profile: option<objs-user-profile-short>,
-    user-team: option<defs-workspace-id>,
+    user-team: option<string>,
     username: option<string>
   }
 
@@ -1754,25 +1524,18 @@ interface chat {
     image-width: option<s32>
   }
 
-  /// This is a very loose definition, in the future, we'll populate this with deeper schema in this definition namespace.
-  record blocks {
-    /// opaque schema; raw JSON
-    value: string
+  record blocks-item {
+    type-op: string
   }
 
   record objs-bot-profile {
-    app-id: defs-app-id,
+    app-id: string,
     deleted: bool,
     icons: objs-bot-profile-icons,
-    id: defs-bot-id,
+    id: string,
     name: string,
-    team-id: defs-team,
+    team-id: string,
     updated: s32
-  }
-
-  record defs-app-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-bot-profile-icons {
@@ -1781,33 +1544,18 @@ interface chat {
     image-v72: string
   }
 
-  record defs-bot-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-comment {
     comment: string,
     created: s32,
-    id: defs-comment-id,
+    id: string,
     is-intro: bool,
     is-starred: option<bool>,
     num-stars: option<s32>,
     pinned-info: option<defs-pinned-info>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     reactions: option<list<objs-reaction>>,
     timestamp: s32,
-    user: defs-user-id
-  }
-
-  record defs-comment-id {
-    /// opaque schema; raw JSON
-    value: string
+    user: string
   }
 
   record defs-pinned-info {
@@ -1818,36 +1566,31 @@ interface chat {
   record objs-reaction {
     count: s32,
     name: string,
-    users: list<defs-user-id>
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
+    users: list<string>
   }
 
   record objs-file {
-    channels: option<list<defs-channel-id>>,
+    channels: option<list<string>>,
     comments-count: option<s32>,
     created: option<s32>,
     date-delete: option<s32>,
     display-as-bot: option<bool>,
     editable: option<bool>,
-    editor: option<defs-user-id>,
+    editor: option<string>,
     external-id: option<string>,
     external-type: option<string>,
     external-url: option<string>,
     filetype: option<string>,
-    groups: option<list<defs-group-id>>,
+    groups: option<list<string>>,
     has-rich-preview: option<bool>,
-    id: option<defs-file-id>,
+    id: option<string>,
     image-exif-rotation: option<s32>,
-    ims: option<list<defs-dm-id>>,
+    ims: option<list<string>>,
     is-external: option<bool>,
     is-public: option<bool>,
     is-starred: option<bool>,
     is-tombstoned: option<bool>,
-    last-editor: option<defs-user-id>,
+    last-editor: option<string>,
     mimetype: option<string>,
     mode: option<string>,
     name: option<string>,
@@ -1858,14 +1601,14 @@ interface chat {
     permalink: option<string>,
     permalink-public: option<string>,
     pinned-info: option<defs-pinned-info>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     pretty-type: option<string>,
     preview: option<string>,
     public-url-shared: option<bool>,
     reactions: option<list<objs-reaction>>,
     shares: option<objs-file-shares>,
     size: option<s32>,
-    source-team: option<defs-team>,
+    source-team: option<string>,
     state: option<string>,
     thumb-v1024: option<string>,
     thumb-v1024-h: option<s32>,
@@ -1895,28 +1638,8 @@ interface chat {
     url-private: option<string>,
     url-private-download: option<string>,
     user: option<string>,
-    user-team: option<defs-team>,
+    user-team: option<string>,
     username: option<string>
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-group-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-file-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-dm-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-file-shares {
@@ -1927,11 +1650,6 @@ interface chat {
   record objs-message-icons {
     emoji: option<string>,
     image-v64: option<string>
-  }
-
-  record defs-workspace-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-user-profile-short {
@@ -1945,56 +1663,58 @@ interface chat {
     name: string,
     real-name: string,
     real-name-normalized: option<string>,
-    team: defs-workspace-id
+    team: string
   }
 
   /// Schema for successful response of chat.scheduleMessage method
   record schedule-message-response {
-    channel: defs-channel,
+    channel: string,
     message: schedule-message-response-message,
-    ok: defs-ok-true,
+    ok: bool,
     post-at: string,
     scheduled-message-id: string
   }
 
   record schedule-message-response-message {
-    bot-id: defs-bot-id,
+    bot-id: string,
     bot-profile: option<objs-bot-profile>,
-    team: defs-team,
+    team: string,
     text: string,
     type-op: string,
-    user: defs-user-id,
+    user: string,
     username: option<string>
   }
 
   /// Schema for successful response from chat.unfurl method
   record unfurl-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response of chat.update method
   record update-response {
     channel: string,
     message: update-response-message,
-    ok: defs-ok-true,
+    ok: bool,
     text: string,
     ts: string
   }
 
   record update-response-message {
-    attachments: option<list<update-response-message-attachments-item>>,
-    blocks: option<update-response-message-blocks>,
+    attachments: option<list<list<update-response-message-attachments-item-entry>>>,
+    blocks: option<list<update-response-message-blocks-entry>>,
     text: string
   }
 
-  record update-response-message-attachments-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-message-attachments-item-entry {
+    key: string,
+    value: string
   }
 
-  record update-response-message-blocks {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-message-blocks-entry {
+    key: string,
+    value: string
   }
 
   record delete-params {
@@ -2182,14 +1902,9 @@ interface chat {
 interface chat-scheduled-messages {
   /// Schema for successful response from chat.scheduledMessages.list method
   record list-op-response {
-    ok: defs-ok-true,
+    ok: bool,
     response-metadata: list-op-response-response-metadata,
     scheduled-messages: list<list-op-response-scheduled-messages-item>
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-op-response-response-metadata {
@@ -2197,16 +1912,11 @@ interface chat-scheduled-messages {
   }
 
   record list-op-response-scheduled-messages-item {
-    channel-id: defs-channel-id,
+    channel-id: string,
     date-created: string,
     id: string,
     post-at: string,
     text: option<string>
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-op-params {
@@ -2230,25 +1940,20 @@ interface chat-scheduled-messages {
 interface conversations {
   /// Schema for successful response conversations.archive method
   record archive-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response conversations.close method
   record close-response {
     already-closed: option<bool>,
     no-op: option<bool>,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response conversations.create method
   record create-response {
     channel: objs-conversation,
-    ok: defs-ok-true
+    ok: bool
   }
 
   record objs-conversation {
@@ -2262,13 +1967,13 @@ interface conversations {
     channel-actions-ts: string,
     has-more: bool,
     messages: list<objs-message>,
-    ok: defs-ok-true,
+    ok: bool,
     pin-count: s32
   }
 
   record objs-message {
     attachments: option<list<objs-message-attachments-item>>,
-    blocks: option<blocks>,
+    blocks: option<list<blocks-item>>,
     bot-id: option<string>,
     bot-profile: option<objs-bot-profile>,
     client-msg-id: option<string>,
@@ -2277,36 +1982,36 @@ interface conversations {
     file: option<objs-file>,
     files: option<list<objs-file>>,
     icons: option<objs-message-icons>,
-    inviter: option<defs-user-id>,
+    inviter: option<string>,
     is-delayed-message: option<bool>,
     is-intro: option<bool>,
     is-starred: option<bool>,
-    last-read: option<defs-ts>,
-    latest-reply: option<defs-ts>,
+    last-read: option<string>,
+    latest-reply: option<string>,
     name: option<string>,
     old-name: option<string>,
-    parent-user-id: option<defs-user-id>,
+    parent-user-id: option<string>,
     permalink: option<string>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     purpose: option<string>,
     reactions: option<list<objs-reaction>>,
     reply-count: option<s32>,
-    reply-users: option<list<defs-user-id>>,
+    reply-users: option<list<string>>,
     reply-users-count: option<s32>,
-    source-team: option<defs-workspace-id>,
+    source-team: option<string>,
     subscribed: option<bool>,
     subtype: option<string>,
-    team: option<defs-workspace-id>,
+    team: option<string>,
     text: string,
-    thread-ts: option<defs-ts>,
+    thread-ts: option<string>,
     topic: option<string>,
-    ts: defs-ts,
+    ts: string,
     type-op: string,
     unread-count: option<s32>,
     upload: option<bool>,
-    user: option<defs-user-id>,
+    user: option<string>,
     user-profile: option<objs-user-profile-short>,
-    user-team: option<defs-workspace-id>,
+    user-team: option<string>,
     username: option<string>
   }
 
@@ -2319,25 +2024,18 @@ interface conversations {
     image-width: option<s32>
   }
 
-  /// This is a very loose definition, in the future, we'll populate this with deeper schema in this definition namespace.
-  record blocks {
-    /// opaque schema; raw JSON
-    value: string
+  record blocks-item {
+    type-op: string
   }
 
   record objs-bot-profile {
-    app-id: defs-app-id,
+    app-id: string,
     deleted: bool,
     icons: objs-bot-profile-icons,
-    id: defs-bot-id,
+    id: string,
     name: string,
-    team-id: defs-team,
+    team-id: string,
     updated: s32
-  }
-
-  record defs-app-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-bot-profile-icons {
@@ -2346,33 +2044,18 @@ interface conversations {
     image-v72: string
   }
 
-  record defs-bot-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-comment {
     comment: string,
     created: s32,
-    id: defs-comment-id,
+    id: string,
     is-intro: bool,
     is-starred: option<bool>,
     num-stars: option<s32>,
     pinned-info: option<defs-pinned-info>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     reactions: option<list<objs-reaction>>,
     timestamp: s32,
-    user: defs-user-id
-  }
-
-  record defs-comment-id {
-    /// opaque schema; raw JSON
-    value: string
+    user: string
   }
 
   record defs-pinned-info {
@@ -2380,44 +2063,34 @@ interface conversations {
     data: option<string>
   }
 
-  record defs-channel {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-reaction {
     count: s32,
     name: string,
-    users: list<defs-user-id>
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
+    users: list<string>
   }
 
   record objs-file {
-    channels: option<list<defs-channel-id>>,
+    channels: option<list<string>>,
     comments-count: option<s32>,
     created: option<s32>,
     date-delete: option<s32>,
     display-as-bot: option<bool>,
     editable: option<bool>,
-    editor: option<defs-user-id>,
+    editor: option<string>,
     external-id: option<string>,
     external-type: option<string>,
     external-url: option<string>,
     filetype: option<string>,
-    groups: option<list<defs-group-id>>,
+    groups: option<list<string>>,
     has-rich-preview: option<bool>,
-    id: option<defs-file-id>,
+    id: option<string>,
     image-exif-rotation: option<s32>,
-    ims: option<list<defs-dm-id>>,
+    ims: option<list<string>>,
     is-external: option<bool>,
     is-public: option<bool>,
     is-starred: option<bool>,
     is-tombstoned: option<bool>,
-    last-editor: option<defs-user-id>,
+    last-editor: option<string>,
     mimetype: option<string>,
     mode: option<string>,
     name: option<string>,
@@ -2428,14 +2101,14 @@ interface conversations {
     permalink: option<string>,
     permalink-public: option<string>,
     pinned-info: option<defs-pinned-info>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     pretty-type: option<string>,
     preview: option<string>,
     public-url-shared: option<bool>,
     reactions: option<list<objs-reaction>>,
     shares: option<objs-file-shares>,
     size: option<s32>,
-    source-team: option<defs-team>,
+    source-team: option<string>,
     state: option<string>,
     thumb-v1024: option<string>,
     thumb-v1024-h: option<s32>,
@@ -2465,28 +2138,8 @@ interface conversations {
     url-private: option<string>,
     url-private-download: option<string>,
     user: option<string>,
-    user-team: option<defs-team>,
+    user-team: option<string>,
     username: option<string>
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-group-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-file-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-dm-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-file-shares {
@@ -2497,16 +2150,6 @@ interface conversations {
   record objs-message-icons {
     emoji: option<string>,
     image-v64: option<string>
-  }
-
-  record defs-ts {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-workspace-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-user-profile-short {
@@ -2520,25 +2163,25 @@ interface conversations {
     name: string,
     real-name: string,
     real-name-normalized: option<string>,
-    team: defs-workspace-id
+    team: string
   }
 
   /// Schema for successful response conversations.info
   record info-response {
     channel: objs-conversation,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.invite method
   record invite-response {
     channel: objs-conversation,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.join method
   record join-response {
     channel: objs-conversation,
-    ok: defs-ok-true,
+    ok: bool,
     response-metadata: option<join-response-response-metadata>,
     warning: option<string>
   }
@@ -2549,19 +2192,19 @@ interface conversations {
 
   /// Schema for successful response conversations.kick method
   record kick-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.leave method
   record leave-response {
     not-in-channel: option<bool>,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.list method
   record list-op-response {
     channels: list<objs-conversation>,
-    ok: defs-ok-true,
+    ok: bool,
     response-metadata: option<list-op-response-response-metadata>
   }
 
@@ -2571,13 +2214,13 @@ interface conversations {
 
   /// Schema for successful response conversations.mark method
   record mark-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response conversations.members method
   record members-response {
-    members: list<defs-user-id>,
-    ok: defs-ok-true,
+    members: list<string>,
+    ok: bool,
     response-metadata: members-response-response-metadata
   }
 
@@ -2590,37 +2233,37 @@ interface conversations {
     already-open: option<bool>,
     channel: string,
     no-op: option<bool>,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.rename method
   record rename-response {
     channel: objs-conversation,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.replies method
   record replies-response {
     has-more: option<bool>,
     messages: list<string>,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.setPurpose method
   record set-purpose-response {
     channel: objs-conversation,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.setTopic method
   record set-topic-response {
     channel: objs-conversation,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from conversations.unarchive method
   record unarchive-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record archive-params {
@@ -2826,12 +2469,7 @@ interface conversations {
 interface dialog {
   /// Schema for successful response from dialog.open method
   record open-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record open-params {
@@ -2849,12 +2487,7 @@ interface dialog {
 interface dnd {
   /// Schema for successful response from dnd.endDnd method
   record end-dnd-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response from dnd.endSnooze method
@@ -2862,7 +2495,7 @@ interface dnd {
     dnd-enabled: bool,
     next-dnd-end-ts: s32,
     next-dnd-start-ts: s32,
-    ok: defs-ok-true,
+    ok: bool,
     snooze-enabled: bool
   }
 
@@ -2871,7 +2504,7 @@ interface dnd {
     dnd-enabled: bool,
     next-dnd-end-ts: s32,
     next-dnd-start-ts: s32,
-    ok: defs-ok-true,
+    ok: bool,
     snooze-enabled: option<bool>,
     snooze-endtime: option<s32>,
     snooze-remaining: option<s32>
@@ -2879,7 +2512,7 @@ interface dnd {
 
   /// Schema for successful response from dnd.setSnooze method
   record set-snooze-response {
-    ok: defs-ok-true,
+    ok: bool,
     snooze-enabled: bool,
     snooze-endtime: s32,
     snooze-remaining: s32
@@ -2887,7 +2520,7 @@ interface dnd {
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record team-info-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record end-dnd-params {
@@ -2931,12 +2564,7 @@ interface dnd {
 interface emoji {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record list-op-params {
@@ -2950,12 +2578,7 @@ interface emoji {
 interface files-comments {
   /// Schema for successful response files.comments.delete method
   record delete-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record delete-params {
@@ -2973,57 +2596,42 @@ interface files-comments {
 interface files {
   /// Schema for successful response files.delete method
   record delete-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response from files.info method
   record info-response {
-    comments: objs-comments,
+    comments: list<string>,
     content-html: option<string>,
-    editor: option<defs-user-id>,
+    editor: option<string>,
     file: objs-file,
-    ok: defs-ok-true,
+    ok: bool,
     paging: option<objs-paging>,
     response-metadata: option<objs-response-metadata>
   }
 
-  record objs-comments {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-file {
-    channels: option<list<defs-channel-id>>,
+    channels: option<list<string>>,
     comments-count: option<s32>,
     created: option<s32>,
     date-delete: option<s32>,
     display-as-bot: option<bool>,
     editable: option<bool>,
-    editor: option<defs-user-id>,
+    editor: option<string>,
     external-id: option<string>,
     external-type: option<string>,
     external-url: option<string>,
     filetype: option<string>,
-    groups: option<list<defs-group-id>>,
+    groups: option<list<string>>,
     has-rich-preview: option<bool>,
-    id: option<defs-file-id>,
+    id: option<string>,
     image-exif-rotation: option<s32>,
-    ims: option<list<defs-dm-id>>,
+    ims: option<list<string>>,
     is-external: option<bool>,
     is-public: option<bool>,
     is-starred: option<bool>,
     is-tombstoned: option<bool>,
-    last-editor: option<defs-user-id>,
+    last-editor: option<string>,
     mimetype: option<string>,
     mode: option<string>,
     name: option<string>,
@@ -3034,14 +2642,14 @@ interface files {
     permalink: option<string>,
     permalink-public: option<string>,
     pinned-info: option<defs-pinned-info>,
-    pinned-to: option<list<defs-channel>>,
+    pinned-to: option<list<string>>,
     pretty-type: option<string>,
     preview: option<string>,
     public-url-shared: option<bool>,
     reactions: option<list<objs-reaction>>,
     shares: option<objs-file-shares>,
     size: option<s32>,
-    source-team: option<defs-team>,
+    source-team: option<string>,
     state: option<string>,
     thumb-v1024: option<string>,
     thumb-v1024-h: option<s32>,
@@ -3071,28 +2679,8 @@ interface files {
     url-private: option<string>,
     url-private-download: option<string>,
     user: option<string>,
-    user-team: option<defs-team>,
+    user-team: option<string>,
     username: option<string>
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-group-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-file-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-dm-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record defs-pinned-info {
@@ -3100,25 +2688,15 @@ interface files {
     data: option<string>
   }
 
-  record defs-channel {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-reaction {
     count: s32,
     name: string,
-    users: list<defs-user-id>
+    users: list<string>
   }
 
   record objs-file-shares {
     private: option<string>,
     public: option<string>
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-paging {
@@ -3138,26 +2716,26 @@ interface files {
   /// Schema for successful response from files.list method
   record list-op-response {
     files: list<objs-file>,
-    ok: defs-ok-true,
+    ok: bool,
     paging: objs-paging
   }
 
   /// Schema for successful response from files.revokePublicURL method
   record revoke-public-url-response {
     file: objs-file,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from files.sharedPublicURL method
   record shared-public-url-response {
     file: objs-file,
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response files.upload method
   record upload-response {
     file: objs-file,
-    ok: defs-ok-true
+    ok: bool
   }
 
   record delete-params {
@@ -3245,37 +2823,32 @@ interface files {
 interface files-remote {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record info-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record list-op-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record share-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record update-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -3371,24 +2944,15 @@ interface migration {
   record exchange-response {
     enterprise-id: string,
     invalid-user-ids: option<list<string>>,
-    ok: defs-ok-true,
-    team-id: defs-team,
-    user-id-map: option<exchange-response-user-id-map>
+    ok: bool,
+    team-id: string,
+    user-id-map: option<list<exchange-response-user-id-map-entry>>
   }
 
-  record defs-ok-true {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record exchange-response-user-id-map-entry {
+    key: string,
     value: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record exchange-response-user-id-map {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record exchange-params {
@@ -3408,17 +2972,12 @@ interface migration {
 interface oauth {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record access-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record token-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record access-params {
@@ -3454,12 +3013,7 @@ interface oauth {
 interface oauth-v2 {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record access-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record access-params {
@@ -3479,17 +3033,12 @@ interface oauth-v2 {
 interface pins {
   /// Schema for successful response from pins.add method
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response from pins.remove method
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -3525,18 +3074,13 @@ interface pins {
 interface reactions {
   /// Schema for successful response from reactions.add method
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response from reactions.list method
   record list-op-response {
     items: list<string>,
-    ok: defs-ok-true,
+    ok: bool,
     paging: option<objs-paging>,
     response-metadata: option<objs-response-metadata>
   }
@@ -3557,7 +3101,7 @@ interface reactions {
 
   /// Schema for successful response from reactions.remove method
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -3625,54 +3169,39 @@ interface reactions {
 interface reminders {
   /// Schema for successful response from reminders.add method
   record add-response {
-    ok: defs-ok-true,
+    ok: bool,
     reminder: objs-reminder
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-reminder {
     complete-ts: option<s32>,
-    creator: defs-user-id,
-    id: defs-reminder-id,
+    creator: string,
+    id: string,
     recurring: bool,
     text: string,
     time: option<s32>,
-    user: defs-user-id
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-reminder-id {
-    /// opaque schema; raw JSON
-    value: string
+    user: string
   }
 
   /// Schema for successful response from reminders.complete method
   record complete-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from reminders.delete method
   record delete-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from reminders.info method
   record info-response {
-    ok: defs-ok-true,
+    ok: bool,
     reminder: objs-reminder
   }
 
   /// Schema for successful response from reminders.list method
   record list-op-response {
-    ok: defs-ok-true,
+    ok: bool,
     reminders: list<objs-reminder>
   }
 
@@ -3723,36 +3252,21 @@ interface reminders {
 interface rtm {
   /// Schema for successful response from rtm.connect method
   record connect-response {
-    ok: defs-ok-true,
+    ok: bool,
     self: connect-response-self,
     team: connect-response-team,
     url: string
   }
 
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record connect-response-self {
-    id: defs-user-id,
+    id: string,
     name: string
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record connect-response-team {
     domain: string,
-    id: defs-team,
+    id: string,
     name: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record connect-params {
@@ -3770,12 +3284,7 @@ interface rtm {
 interface search {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record messages-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   record messages-params {
@@ -3800,18 +3309,13 @@ interface search {
 interface stars {
   /// Schema for successful response from stars.add method
   record add-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// Schema for successful response from stars.list method
   record list-op-response {
     items: list<string>,
-    ok: defs-ok-true,
+    ok: bool,
     paging: option<objs-paging>
   }
 
@@ -3826,7 +3330,7 @@ interface stars {
 
   /// Schema for successful response from stars.remove method
   record remove-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record add-params {
@@ -3883,7 +3387,7 @@ interface team {
   /// Schema for successful response from team.accessLogs method
   record access-logs-response {
     logins: list<access-logs-response-logins-item>,
-    ok: defs-ok-true,
+    ok: bool,
     paging: objs-paging
   }
 
@@ -3896,18 +3400,8 @@ interface team {
     isp: string,
     region: string,
     user-agent: string,
-    user-id: defs-user-id,
+    user-id: string,
     username: string
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-paging {
@@ -3921,12 +3415,12 @@ interface team {
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record billable-info-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from team.info method
   record info-response {
-    ok: defs-ok-true,
+    ok: bool,
     team: objs-team
   }
 
@@ -3940,12 +3434,12 @@ interface team {
     discoverable: option<string>,
     domain: string,
     email-domain: string,
-    enterprise-id: option<defs-enterprise-id>,
-    enterprise-name: option<defs-enterprise-name>,
+    enterprise-id: option<string>,
+    enterprise-name: option<string>,
     external-org-migrations: option<objs-external-org-migrations>,
     has-compliance-export: option<bool>,
     icon: objs-icon,
-    id: defs-workspace-id,
+    id: string,
     is-assigned: option<bool>,
     is-enterprise: option<s32>,
     is-over-storage-limit: option<bool>,
@@ -3960,16 +3454,6 @@ interface team {
     plan: option<objs-team-plan-enum>,
     primary-owner: option<objs-primary-owner>,
     sso-provider: option<objs-team-sso-provider>
-  }
-
-  record defs-enterprise-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-enterprise-name {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-external-org-migrations {
@@ -3993,11 +3477,6 @@ interface team {
     image-default: option<bool>
   }
 
-  record defs-workspace-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record objs-primary-owner {
     email: string,
     id: string
@@ -4012,32 +3491,22 @@ interface team {
   /// Schema for successful response from team.integrationLogs method
   record integration-logs-response {
     logs: list<integration-logs-response-logs-item>,
-    ok: defs-ok-true,
+    ok: bool,
     paging: objs-paging
   }
 
   record integration-logs-response-logs-item {
-    admin-app-id: option<defs-app-id>,
-    app-id: defs-app-id,
+    admin-app-id: option<string>,
+    app-id: string,
     app-type: string,
     change-type: string,
-    channel: option<defs-channel>,
+    channel: option<string>,
     date: string,
     scope: string,
     service-id: option<string>,
     service-type: option<string>,
-    user-id: defs-user-id,
+    user-id: string,
     user-name: string
-  }
-
-  record defs-app-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-channel {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record access-logs-params {
@@ -4096,13 +3565,8 @@ interface team-profile {
 
   /// Schema for successful response from team.profile.get method
   record get-response {
-    ok: defs-ok-true,
+    ok: bool,
     profile: get-response-profile
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get-response-profile {
@@ -4134,20 +3598,15 @@ interface team-profile {
 interface usergroups {
   /// Schema for successful response from usergroups.create method
   record create-response {
-    ok: defs-ok-true,
+    ok: bool,
     usergroup: objs-subteam
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-subteam {
     auto-provision: bool,
     auto-type: string,
     channel-count: option<s32>,
-    created-by: defs-user-id,
+    created-by: string,
     date-create: s32,
     date-delete: s32,
     date-update: s32,
@@ -4155,69 +3614,44 @@ interface usergroups {
     description: string,
     enterprise-subteam-id: string,
     handle: string,
-    id: defs-subteam-id,
+    id: string,
     is-external: bool,
     is-subteam: bool,
     is-usergroup: bool,
     name: string,
     prefs: objs-subteam-prefs,
-    team-id: defs-team,
-    updated-by: defs-user-id,
+    team-id: string,
+    updated-by: string,
     user-count: option<s32>,
-    users: option<list<defs-user-id>>
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-subteam-id {
-    /// opaque schema; raw JSON
-    value: string
+    users: option<list<string>>
   }
 
   record objs-subteam-prefs {
-    channels: list<defs-channel-id>,
-    groups: list<defs-group-id>
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-group-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
+    channels: list<string>,
+    groups: list<string>
   }
 
   /// Schema for successful response from usergroups.disable method
   record disable-response {
-    ok: defs-ok-true,
+    ok: bool,
     usergroup: objs-subteam
   }
 
   /// Schema for successful response from usergroups.enable method
   record enable-response {
-    ok: defs-ok-true,
+    ok: bool,
     usergroup: objs-subteam
   }
 
   /// Schema for successful response from usergroups.list method
   record list-op-response {
-    ok: defs-ok-true,
+    ok: bool,
     usergroups: list<objs-subteam>
   }
 
   /// Schema for successful response from usergroups.update method
   record update-response {
-    ok: defs-ok-true,
+    ok: bool,
     usergroup: objs-subteam
   }
 
@@ -4292,23 +3726,13 @@ interface usergroups {
 interface usergroups-users {
   /// Schema for successful response from usergroups.users.list method
   record list-op-response {
-    ok: defs-ok-true,
-    users: list<defs-user-id>
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-user-id {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool,
+    users: list<string>
   }
 
   /// Schema for successful response from usergroups.users.update method
   record update-response {
-    ok: defs-ok-true,
+    ok: bool,
     usergroup: objs-subteam
   }
 
@@ -4316,7 +3740,7 @@ interface usergroups-users {
     auto-provision: bool,
     auto-type: string,
     channel-count: option<s32>,
-    created-by: defs-user-id,
+    created-by: string,
     date-create: s32,
     date-delete: s32,
     date-update: s32,
@@ -4324,41 +3748,21 @@ interface usergroups-users {
     description: string,
     enterprise-subteam-id: string,
     handle: string,
-    id: defs-subteam-id,
+    id: string,
     is-external: bool,
     is-subteam: bool,
     is-usergroup: bool,
     name: string,
     prefs: objs-subteam-prefs,
-    team-id: defs-team,
-    updated-by: defs-user-id,
+    team-id: string,
+    updated-by: string,
     user-count: option<s32>,
-    users: option<list<defs-user-id>>
-  }
-
-  record defs-subteam-id {
-    /// opaque schema; raw JSON
-    value: string
+    users: option<list<string>>
   }
 
   record objs-subteam-prefs {
-    channels: list<defs-channel-id>,
-    groups: list<defs-group-id>
-  }
-
-  record defs-channel-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-group-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-team {
-    /// opaque schema; raw JSON
-    value: string
+    channels: list<string>,
+    groups: list<string>
   }
 
   record list-op-params {
@@ -4389,7 +3793,7 @@ interface users {
   /// Schema for successful response from users.conversations method. Returned conversation objects do not include `num_members` or `is_member`
   record conversations-response {
     channels: list<objs-conversation>,
-    ok: defs-ok-true,
+    ok: bool,
     response-metadata: option<conversations-response-response-metadata>
   }
 
@@ -4398,18 +3802,13 @@ interface users {
     data: option<string>
   }
 
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record conversations-response-response-metadata {
     next-cursor: string
   }
 
   /// Schema for successful response from users.deletePhoto method
   record delete-photo-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Generated from users.getPresence with shasum e7251aec575d8863f9e0eb38663ae9dc26655f65
@@ -4418,14 +3817,14 @@ interface users {
     connection-count: option<s32>,
     last-activity: option<s32>,
     manual-away: option<bool>,
-    ok: defs-ok-true,
+    ok: bool,
     online: option<bool>,
     presence: string
   }
 
   /// Schema for successful response from users.info method
   record info-response {
-    ok: defs-ok-true,
+    ok: bool,
     user: objs-user
   }
 
@@ -4438,7 +3837,7 @@ interface users {
   record list-op-response {
     cache-ts: s32,
     members: list<objs-user>,
-    ok: defs-ok-true,
+    ok: bool,
     response-metadata: option<objs-response-metadata>
   }
 
@@ -4449,18 +3848,18 @@ interface users {
 
   /// Schema for successful response from users.lookupByEmail method
   record lookup-by-email-response {
-    ok: defs-ok-true,
+    ok: bool,
     user: objs-user
   }
 
   /// Schema for successful response from users.setActive method
   record set-active-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// Schema for successful response from users.setPhoto method
   record set-photo-response {
-    ok: defs-ok-true,
+    ok: bool,
     profile: set-photo-response-profile
   }
 
@@ -4478,7 +3877,7 @@ interface users {
 
   /// Schema for successful response from users.setPresence method
   record set-presence-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record conversations-params {
@@ -4580,20 +3979,15 @@ interface users {
 interface users-profile {
   /// Schema for successful response from users.profile.get method
   record get-response {
-    ok: defs-ok-true,
+    ok: bool,
     profile: objs-user-profile
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record objs-user-profile {
     always-active: option<bool>,
-    api-app-id: option<defs-optional-app-id>,
+    api-app-id: option<string>,
     avatar-hash: string,
-    bot-id: option<defs-bot-id>,
+    bot-id: option<string>,
     display-name: string,
     display-name-normalized: string,
     email: option<string>,
@@ -4629,32 +4023,17 @@ interface users-profile {
     status-expiration: option<s32>,
     status-text: string,
     status-text-canonical: option<string>,
-    team: option<defs-workspace-id>,
+    team: option<string>,
     title: string,
     updated: option<s32>,
     user-id: option<string>,
     username: option<string>
   }
 
-  record defs-optional-app-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-bot-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record defs-workspace-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Schema for successful response from users.profile.set method
   record set-response {
     email-pending: option<string>,
-    ok: defs-ok-true,
+    ok: bool,
     profile: objs-user-profile,
     username: string
   }
@@ -4688,27 +4067,22 @@ interface users-profile {
 interface views {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record open-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record publish-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record push-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record update-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record open-params {
@@ -4762,22 +4136,17 @@ interface views {
 interface workflows {
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record step-completed-response {
-    ok: defs-ok-true
-  }
-
-  record defs-ok-true {
-    /// opaque schema; raw JSON
-    value: string
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record step-failed-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
   record update-step-response {
-    ok: defs-ok-true
+    ok: bool
   }
 
   record step-completed-params {

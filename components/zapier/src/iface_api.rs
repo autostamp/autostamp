@@ -70,39 +70,43 @@ fn iface_api__execute_response_status_enum__to_str(e: &iface_api::ExecuteRespons
 fn iface_api__execute_response__to_json(p: &iface_api::ExecuteResponse) -> Value {
     let mut m = Map::new();
     m.insert("action_used".into(), Value::String((&p.action_used).clone()));
-    m.insert("additional_results".into(), Value::Array((&p.additional_results).iter().map(|v| iface_api__execute_response_additional_results_item__to_json(v)).collect()));
+    m.insert("additional_results".into(), Value::Array((&p.additional_results).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("assistant_hint".into(), match (&p.assistant_hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("input_params".into(), iface_api__execute_response_input_params__to_json(&p.input_params));
-    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_api__execute_response_result_op__to_json(v), None => Value::Null });
-    m.insert("result_field_labels".into(), match (&p.result_field_labels) { Some(v) => iface_api__execute_response_result_field_labels__to_json(v), None => Value::Null });
+    m.insert("input_params".into(), Value::Object((&p.input_params).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
+    m.insert("result".into(), match (&p.result_op) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("result_field_labels".into(), match (&p.result_field_labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("review_url".into(), Value::String((&p.review_url).clone()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api__execute_response_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_api__execute_response_additional_results_item__to_json(p: &iface_api::ExecuteResponseAdditionalResultsItem) -> Value {
+fn iface_api__execute_response_additional_results_item_entry__to_json(p: &iface_api::ExecuteResponseAdditionalResultsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_api__execute_response_input_params__to_json(p: &iface_api::ExecuteResponseInputParams) -> Value {
+fn iface_api__execute_response_input_params_entry__to_json(p: &iface_api::ExecuteResponseInputParamsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_api__execute_response_result_op__to_json(p: &iface_api::ExecuteResponseResultOp) -> Value {
+fn iface_api__execute_response_result_op_entry__to_json(p: &iface_api::ExecuteResponseResultOpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_api__execute_response_result_field_labels__to_json(p: &iface_api::ExecuteResponseResultFieldLabels) -> Value {
+fn iface_api__execute_response_result_field_labels_entry__to_json(p: &iface_api::ExecuteResponseResultFieldLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -118,13 +122,14 @@ fn iface_api__exposed_action_schema__to_json(p: &iface_api::ExposedActionSchema)
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("operation_id".into(), Value::String((&p.operation_id).clone()));
-    m.insert("params".into(), iface_api__exposed_action_schema_params__to_json(&p.params));
+    m.insert("params".into(), Value::Object((&p.params).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_api__exposed_action_schema_params__to_json(p: &iface_api::ExposedActionSchemaParams) -> Value {
+fn iface_api__exposed_action_schema_params_entry__to_json(p: &iface_api::ExposedActionSchemaParamsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -146,43 +151,47 @@ fn iface_api__execute_response__from_json(v: &Value) -> Option<iface_api::Execut
     let m = v.as_object()?;
     Some(iface_api::ExecuteResponse {
         action_used: m.get("action_used").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        additional_results: m.get("additional_results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__execute_response_additional_results_item__from_json(x)).collect())).unwrap_or_default(),
+        additional_results: m.get("additional_results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_api::ExecuteResponseAdditionalResultsItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
         assistant_hint: m.get("assistant_hint").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         error: m.get("error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        input_params: match m.get("input_params").and_then(|v| iface_api__execute_response_input_params__from_json(v)) { Some(x) => x, None => return None },
-        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_api__execute_response_result_op__from_json(v)),
-        result_field_labels: m.get("result_field_labels").filter(|v| !v.is_null()).and_then(|v| iface_api__execute_response_result_field_labels__from_json(v)),
+        input_params: m.get("input_params").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_api::ExecuteResponseInputParamsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_api::ExecuteResponseResultOpEntry { key: k.clone(), value: val })).collect())),
+        result_field_labels: m.get("result_field_labels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_api::ExecuteResponseResultFieldLabelsEntry { key: k.clone(), value: val })).collect())),
         review_url: m.get("review_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api__execute_response_status_enum__from_str)),
     })
 }
 
-fn iface_api__execute_response_additional_results_item__from_json(v: &Value) -> Option<iface_api::ExecuteResponseAdditionalResultsItem> {
+fn iface_api__execute_response_additional_results_item_entry__from_json(v: &Value) -> Option<iface_api::ExecuteResponseAdditionalResultsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_api::ExecuteResponseAdditionalResultsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_api::ExecuteResponseAdditionalResultsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_api__execute_response_input_params__from_json(v: &Value) -> Option<iface_api::ExecuteResponseInputParams> {
+fn iface_api__execute_response_input_params_entry__from_json(v: &Value) -> Option<iface_api::ExecuteResponseInputParamsEntry> {
     let m = v.as_object()?;
-    Some(iface_api::ExecuteResponseInputParams {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_api::ExecuteResponseInputParamsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_api__execute_response_result_op__from_json(v: &Value) -> Option<iface_api::ExecuteResponseResultOp> {
+fn iface_api__execute_response_result_op_entry__from_json(v: &Value) -> Option<iface_api::ExecuteResponseResultOpEntry> {
     let m = v.as_object()?;
-    Some(iface_api::ExecuteResponseResultOp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_api::ExecuteResponseResultOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_api__execute_response_result_field_labels__from_json(v: &Value) -> Option<iface_api::ExecuteResponseResultFieldLabels> {
+fn iface_api__execute_response_result_field_labels_entry__from_json(v: &Value) -> Option<iface_api::ExecuteResponseResultFieldLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_api::ExecuteResponseResultFieldLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_api::ExecuteResponseResultFieldLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -200,14 +209,15 @@ fn iface_api__exposed_action_schema__from_json(v: &Value) -> Option<iface_api::E
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         operation_id: m.get("operation_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        params: match m.get("params").and_then(|v| iface_api__exposed_action_schema_params__from_json(v)) { Some(x) => x, None => return None },
+        params: m.get("params").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_api::ExposedActionSchemaParamsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_api__exposed_action_schema_params__from_json(v: &Value) -> Option<iface_api::ExposedActionSchemaParams> {
+fn iface_api__exposed_action_schema_params_entry__from_json(v: &Value) -> Option<iface_api::ExposedActionSchemaParamsEntry> {
     let m = v.as_object()?;
-    Some(iface_api::ExposedActionSchemaParams {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_api::ExposedActionSchemaParamsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

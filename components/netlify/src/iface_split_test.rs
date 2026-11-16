@@ -70,22 +70,10 @@ const OP_SPLIT_TEST_DISABLE_SPLIT_TEST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_split_test__split_tests__to_json(p: &iface_split_test::SplitTests) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_split_test__setup_branch_tests__to_json(p: &iface_split_test::SetupBranchTests) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
 fn iface_split_test__split_test__to_json(p: &iface_split_test::SplitTest) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("branches".into(), match (&p.branches) { Some(v) => Value::Array((v).iter().map(|v| iface_split_test__split_test_branches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("branches".into(), match (&p.branches) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -96,9 +84,17 @@ fn iface_split_test__split_test__to_json(p: &iface_split_test::SplitTest) -> Val
     Value::Object(m)
 }
 
-fn iface_split_test__split_test_branches_item__to_json(p: &iface_split_test::SplitTestBranchesItem) -> Value {
+fn iface_split_test__split_test_branches_item_entry__to_json(p: &iface_split_test::SplitTestBranchesItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_split_test__setup_branch_tests_entry__to_json(p: &iface_split_test::SetupBranchTestsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -111,7 +107,7 @@ fn iface_split_test__get_split_tests_params__to_json(p: &iface_split_test::GetSp
 fn iface_split_test__create_split_test_params__to_json(p: &iface_split_test::CreateSplitTestParams) -> Value {
     let mut m = Map::new();
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
-    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__setup_branch_tests__to_json(v), None => Value::Null });
+    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -126,7 +122,7 @@ fn iface_split_test__update_split_test_params__to_json(p: &iface_split_test::Upd
     let mut m = Map::new();
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("split_test_id".into(), Value::String((&p.split_test_id).clone()));
-    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__setup_branch_tests__to_json(v), None => Value::Null });
+    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -144,18 +140,11 @@ fn iface_split_test__disable_split_test_params__to_json(p: &iface_split_test::Di
     Value::Object(m)
 }
 
-fn iface_split_test__split_tests__from_json(v: &Value) -> Option<iface_split_test::SplitTests> {
-    let m = v.as_object()?;
-    Some(iface_split_test::SplitTests {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_split_test__split_test__from_json(v: &Value) -> Option<iface_split_test::SplitTest> {
     let m = v.as_object()?;
     Some(iface_split_test::SplitTest {
         active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        branches: m.get("branches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_split_test__split_test_branches_item__from_json(x)).collect())),
+        branches: m.get("branches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_split_test::SplitTestBranchesItemEntry { key: k.clone(), value: val })).collect())).collect())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -166,19 +155,20 @@ fn iface_split_test__split_test__from_json(v: &Value) -> Option<iface_split_test
     })
 }
 
-fn iface_split_test__split_test_branches_item__from_json(v: &Value) -> Option<iface_split_test::SplitTestBranchesItem> {
+fn iface_split_test__split_test_branches_item_entry__from_json(v: &Value) -> Option<iface_split_test::SplitTestBranchesItemEntry> {
     let m = v.as_object()?;
-    Some(iface_split_test::SplitTestBranchesItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_split_test::SplitTestBranchesItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_split_test__get_split_tests__ok(body: String) -> Result<iface_split_test::SplitTests, crate::runtime::DispatchError> {
+fn iface_split_test__get_split_tests__ok(body: String) -> Result<Vec<iface_split_test::SplitTest>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_split_test__split_tests__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_split_test__split_test__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -268,7 +258,7 @@ fn iface_split_test__disable_split_test__err(e: crate::runtime::DispatchError) -
 }
 
 impl iface_split_test::Guest for crate::Component {
-    fn get_split_tests(params: iface_split_test::GetSplitTestsParams) -> Result<iface_split_test::SplitTests, String> {
+    fn get_split_tests(params: iface_split_test::GetSplitTestsParams) -> Result<Vec<iface_split_test::SplitTest>, String> {
         let json = iface_split_test__get_split_tests_params__to_json(&params);
         match dispatch(&OP_SPLIT_TEST_GET_SPLIT_TESTS, json).and_then(iface_split_test__get_split_tests__ok) {
             Ok(v) => Ok(v),

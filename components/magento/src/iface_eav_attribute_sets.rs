@@ -21,14 +21,15 @@ fn iface_eav_attribute_sets__eav_data_attribute_set_interface__to_json(p: &iface
     m.insert("attribute_set_id".into(), match (&p.attribute_set_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("attribute_set_name".into(), Value::String((&p.attribute_set_name).clone()));
     m.insert("entity_type_id".into(), match (&p.entity_type_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_eav_attribute_sets__eav_data_attribute_set_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("sort_order".into(), Value::Number(serde_json::Number::from(*(&p.sort_order))));
     Value::Object(m)
 }
 
-fn iface_eav_attribute_sets__eav_data_attribute_set_extension_interface__to_json(p: &iface_eav_attribute_sets::EavDataAttributeSetExtensionInterface) -> Value {
+fn iface_eav_attribute_sets__eav_data_attribute_set_extension_interface_entry__to_json(p: &iface_eav_attribute_sets::EavDataAttributeSetExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -46,15 +47,16 @@ fn iface_eav_attribute_sets__eav_data_attribute_set_interface__from_json(v: &Val
         attribute_set_id: m.get("attribute_set_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         attribute_set_name: m.get("attribute_set_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_type_id: m.get("entity_type_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_eav_attribute_sets__eav_data_attribute_set_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_eav_attribute_sets::EavDataAttributeSetExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         sort_order: m.get("sort_order").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_eav_attribute_sets__eav_data_attribute_set_extension_interface__from_json(v: &Value) -> Option<iface_eav_attribute_sets::EavDataAttributeSetExtensionInterface> {
+fn iface_eav_attribute_sets__eav_data_attribute_set_extension_interface_entry__from_json(v: &Value) -> Option<iface_eav_attribute_sets::EavDataAttributeSetExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_eav_attribute_sets::EavDataAttributeSetExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_eav_attribute_sets::EavDataAttributeSetExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

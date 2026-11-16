@@ -881,7 +881,7 @@ fn iface_treasury__credit_reversal__to_json(p: &iface_treasury::CreditReversal) 
     m.insert("hosted_regulatory_receipt_url".into(), match (&p.hosted_regulatory_receipt_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_treasury__credit_reversal_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("network".into(), Value::String(iface_treasury__credit_reversal_network_enum__to_str(&p.network).into()));
     m.insert("object".into(), Value::String(iface_treasury__credit_reversal_object_enum__to_str(&p.object).into()));
     m.insert("received_credit".into(), Value::String((&p.received_credit).clone()));
@@ -891,9 +891,10 @@ fn iface_treasury__credit_reversal__to_json(p: &iface_treasury::CreditReversal) 
     Value::Object(m)
 }
 
-fn iface_treasury__credit_reversal_metadata__to_json(p: &iface_treasury::CreditReversalMetadata) -> Value {
+fn iface_treasury__credit_reversal_metadata_entry__to_json(p: &iface_treasury::CreditReversalMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -903,9 +904,10 @@ fn iface_treasury__received_credits_resource_status_transitions__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_credit_reversals_body_metadata__to_json(p: &iface_treasury::PostTreasuryCreditReversalsBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_credit_reversals_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryCreditReversalsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -928,7 +930,7 @@ fn iface_treasury__debit_reversal__to_json(p: &iface_treasury::DebitReversal) ->
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("linked_flows".into(), match (&p.linked_flows) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_treasury__debit_reversal_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("network".into(), Value::String(iface_treasury__debit_reversal_network_enum__to_str(&p.network).into()));
     m.insert("object".into(), Value::String(iface_treasury__debit_reversal_object_enum__to_str(&p.object).into()));
     m.insert("received_debit".into(), Value::String((&p.received_debit).clone()));
@@ -938,9 +940,10 @@ fn iface_treasury__debit_reversal__to_json(p: &iface_treasury::DebitReversal) ->
     Value::Object(m)
 }
 
-fn iface_treasury__debit_reversal_metadata__to_json(p: &iface_treasury::DebitReversalMetadata) -> Value {
+fn iface_treasury__debit_reversal_metadata_entry__to_json(p: &iface_treasury::DebitReversalMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -950,9 +953,10 @@ fn iface_treasury__received_debits_resource_status_transitions__to_json(p: &ifac
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_debit_reversals_body_metadata__to_json(p: &iface_treasury::PostTreasuryDebitReversalsBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_debit_reversals_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryDebitReversalsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -975,7 +979,7 @@ fn iface_treasury__financial_account__to_json(p: &iface_treasury::FinancialAccou
     m.insert("financial_addresses".into(), Value::Array((&p.financial_addresses).iter().map(|v| iface_treasury__financial_accounts_resource_financial_address__to_json(v)).collect()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__financial_account_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_treasury__financial_account_object_enum__to_str(&p.object).into()));
     m.insert("pending_features".into(), match (&p.pending_features) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_treasury__financial_account_active_features_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("platform_restrictions".into(), match (&p.platform_restrictions) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -988,27 +992,30 @@ fn iface_treasury__financial_account__to_json(p: &iface_treasury::FinancialAccou
 
 fn iface_treasury__financial_accounts_resource_balance__to_json(p: &iface_treasury::FinancialAccountsResourceBalance) -> Value {
     let mut m = Map::new();
-    m.insert("cash".into(), iface_treasury__financial_accounts_resource_balance_cash__to_json(&p.cash));
-    m.insert("inbound_pending".into(), iface_treasury__financial_accounts_resource_balance_inbound_pending__to_json(&p.inbound_pending));
-    m.insert("outbound_pending".into(), iface_treasury__financial_accounts_resource_balance_outbound_pending__to_json(&p.outbound_pending));
+    m.insert("cash".into(), Value::Object((&p.cash).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()));
+    m.insert("inbound_pending".into(), Value::Object((&p.inbound_pending).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()));
+    m.insert("outbound_pending".into(), Value::Object((&p.outbound_pending).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()));
     Value::Object(m)
 }
 
-fn iface_treasury__financial_accounts_resource_balance_cash__to_json(p: &iface_treasury::FinancialAccountsResourceBalanceCash) -> Value {
+fn iface_treasury__financial_accounts_resource_balance_cash_entry__to_json(p: &iface_treasury::FinancialAccountsResourceBalanceCashEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
-fn iface_treasury__financial_accounts_resource_balance_inbound_pending__to_json(p: &iface_treasury::FinancialAccountsResourceBalanceInboundPending) -> Value {
+fn iface_treasury__financial_accounts_resource_balance_inbound_pending_entry__to_json(p: &iface_treasury::FinancialAccountsResourceBalanceInboundPendingEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
-fn iface_treasury__financial_accounts_resource_balance_outbound_pending__to_json(p: &iface_treasury::FinancialAccountsResourceBalanceOutboundPending) -> Value {
+fn iface_treasury__financial_accounts_resource_balance_outbound_pending_entry__to_json(p: &iface_treasury::FinancialAccountsResourceBalanceOutboundPendingEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
@@ -1093,9 +1100,10 @@ fn iface_treasury__financial_accounts_resource_aba_record__to_json(p: &iface_tre
     Value::Object(m)
 }
 
-fn iface_treasury__financial_account_metadata__to_json(p: &iface_treasury::FinancialAccountMetadata) -> Value {
+fn iface_treasury__financial_account_metadata_entry__to_json(p: &iface_treasury::FinancialAccountMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1197,9 +1205,10 @@ fn iface_treasury__post_treasury_financial_accounts_body_features_outbound_trans
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_financial_accounts_body_metadata__to_json(p: &iface_treasury::PostTreasuryFinancialAccountsBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_financial_accounts_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryFinancialAccountsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1302,9 +1311,10 @@ fn iface_treasury__post_treasury_financial_accounts_financial_account_body_featu
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_financial_accounts_financial_account_body_metadata__to_json(p: &iface_treasury::PostTreasuryFinancialAccountsFinancialAccountBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_financial_accounts_financial_account_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryFinancialAccountsFinancialAccountBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1417,7 +1427,7 @@ fn iface_treasury__inbound_transfer__to_json(p: &iface_treasury::InboundTransfer
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("linked_flows".into(), iface_treasury__inbound_transfers_resource_inbound_transfer_resource_linked_flows__to_json(&p.linked_flows));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_treasury__inbound_transfer_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_treasury__inbound_transfer_object_enum__to_str(&p.object).into()));
     m.insert("origin_payment_method".into(), Value::String((&p.origin_payment_method).clone()));
     m.insert("origin_payment_method_details".into(), match (&p.origin_payment_method_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1435,9 +1445,10 @@ fn iface_treasury__inbound_transfers_resource_inbound_transfer_resource_linked_f
     Value::Object(m)
 }
 
-fn iface_treasury__inbound_transfer_metadata__to_json(p: &iface_treasury::InboundTransferMetadata) -> Value {
+fn iface_treasury__inbound_transfer_metadata_entry__to_json(p: &iface_treasury::InboundTransferMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1449,9 +1460,10 @@ fn iface_treasury__inbound_transfers_resource_inbound_transfer_resource_status_t
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_inbound_transfers_body_metadata__to_json(p: &iface_treasury::PostTreasuryInboundTransfersBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_inbound_transfers_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryInboundTransfersBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1480,7 +1492,7 @@ fn iface_treasury__outbound_payment__to_json(p: &iface_treasury::OutboundPayment
     m.insert("hosted_regulatory_receipt_url".into(), match (&p.hosted_regulatory_receipt_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_treasury__outbound_payment_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_treasury__outbound_payment_object_enum__to_str(&p.object).into()));
     m.insert("returned_details".into(), match (&p.returned_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("statement_descriptor".into(), Value::String((&p.statement_descriptor).clone()));
@@ -1490,9 +1502,10 @@ fn iface_treasury__outbound_payment__to_json(p: &iface_treasury::OutboundPayment
     Value::Object(m)
 }
 
-fn iface_treasury__outbound_payment_metadata__to_json(p: &iface_treasury::OutboundPaymentMetadata) -> Value {
+fn iface_treasury__outbound_payment_metadata_entry__to_json(p: &iface_treasury::OutboundPaymentMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1509,7 +1522,7 @@ fn iface_treasury__post_treasury_outbound_payments_body_destination_payment_meth
     let mut m = Map::new();
     m.insert("billing_details".into(), match (&p.billing_details) { Some(v) => iface_treasury__post_treasury_outbound_payments_body_destination_payment_method_data_billing_details__to_json(v), None => Value::Null });
     m.insert("financial_account".into(), match (&p.financial_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_outbound_payments_body_destination_payment_method_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), Value::String(iface_treasury__post_treasury_outbound_payments_body_destination_payment_method_data_type_op_enum__to_str(&p.type_op).into()));
     m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_treasury__post_treasury_outbound_payments_body_destination_payment_method_data_us_bank_account__to_json(v), None => Value::Null });
     Value::Object(m)
@@ -1524,9 +1537,10 @@ fn iface_treasury__post_treasury_outbound_payments_body_destination_payment_meth
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_outbound_payments_body_destination_payment_method_data_metadata__to_json(p: &iface_treasury::PostTreasuryOutboundPaymentsBodyDestinationPaymentMethodDataMetadata) -> Value {
+fn iface_treasury__post_treasury_outbound_payments_body_destination_payment_method_data_metadata_entry__to_json(p: &iface_treasury::PostTreasuryOutboundPaymentsBodyDestinationPaymentMethodDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1553,9 +1567,10 @@ fn iface_treasury__post_treasury_outbound_payments_body_end_user_details__to_jso
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_outbound_payments_body_metadata__to_json(p: &iface_treasury::PostTreasuryOutboundPaymentsBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_outbound_payments_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryOutboundPaymentsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1582,7 +1597,7 @@ fn iface_treasury__outbound_transfer__to_json(p: &iface_treasury::OutboundTransf
     m.insert("hosted_regulatory_receipt_url".into(), match (&p.hosted_regulatory_receipt_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_treasury__outbound_transfer_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_treasury__outbound_transfer_object_enum__to_str(&p.object).into()));
     m.insert("returned_details".into(), match (&p.returned_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("statement_descriptor".into(), Value::String((&p.statement_descriptor).clone()));
@@ -1631,9 +1646,10 @@ fn iface_treasury__outbound_transfers_payment_method_details_us_bank_account__to
     Value::Object(m)
 }
 
-fn iface_treasury__outbound_transfer_metadata__to_json(p: &iface_treasury::OutboundTransferMetadata) -> Value {
+fn iface_treasury__outbound_transfer_metadata_entry__to_json(p: &iface_treasury::OutboundTransferMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1652,9 +1668,10 @@ fn iface_treasury__post_treasury_outbound_transfers_body_destination_payment_met
     Value::Object(m)
 }
 
-fn iface_treasury__post_treasury_outbound_transfers_body_metadata__to_json(p: &iface_treasury::PostTreasuryOutboundTransfersBodyMetadata) -> Value {
+fn iface_treasury__post_treasury_outbound_transfers_body_metadata_entry__to_json(p: &iface_treasury::PostTreasuryOutboundTransfersBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1860,7 +1877,7 @@ fn iface_treasury__get_treasury_credit_reversals_params__to_json(p: &iface_treas
 fn iface_treasury__post_treasury_credit_reversals_params__to_json(p: &iface_treasury::PostTreasuryCreditReversalsParams) -> Value {
     let mut m = Map::new();
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_credit_reversals_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("received_credit".into(), Value::String((&p.received_credit).clone()));
     Value::Object(m)
 }
@@ -1890,7 +1907,7 @@ fn iface_treasury__get_treasury_debit_reversals_params__to_json(p: &iface_treasu
 fn iface_treasury__post_treasury_debit_reversals_params__to_json(p: &iface_treasury::PostTreasuryDebitReversalsParams) -> Value {
     let mut m = Map::new();
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_debit_reversals_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("received_debit".into(), Value::String((&p.received_debit).clone()));
     Value::Object(m)
 }
@@ -1918,7 +1935,7 @@ fn iface_treasury__post_treasury_financial_accounts_params__to_json(p: &iface_tr
     let mut m = Map::new();
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("features".into(), match (&p.features) { Some(v) => iface_treasury__post_treasury_financial_accounts_body_features__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_financial_accounts_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("platform_restrictions".into(), match (&p.platform_restrictions) { Some(v) => iface_treasury__post_treasury_financial_accounts_body_platform_restrictions__to_json(v), None => Value::Null });
     m.insert("supported_currencies".into(), Value::Array((&p.supported_currencies).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
@@ -1937,7 +1954,7 @@ fn iface_treasury__post_treasury_financial_accounts_financial_account_params__to
     m.insert("financial_account".into(), Value::String((&p.financial_account).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("features".into(), match (&p.features) { Some(v) => iface_treasury__post_treasury_financial_accounts_financial_account_body_features__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_financial_accounts_financial_account_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("platform_restrictions".into(), match (&p.platform_restrictions) { Some(v) => iface_treasury__post_treasury_financial_accounts_financial_account_body_platform_restrictions__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -1983,7 +2000,7 @@ fn iface_treasury__post_treasury_inbound_transfers_params__to_json(p: &iface_tre
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("financial_account".into(), Value::String((&p.financial_account).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_inbound_transfers_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("origin_payment_method".into(), Value::String((&p.origin_payment_method).clone()));
     m.insert("statement_descriptor".into(), match (&p.statement_descriptor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2029,7 +2046,7 @@ fn iface_treasury__post_treasury_outbound_payments_params__to_json(p: &iface_tre
     m.insert("end_user_details".into(), match (&p.end_user_details) { Some(v) => iface_treasury__post_treasury_outbound_payments_body_end_user_details__to_json(v), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("financial_account".into(), Value::String((&p.financial_account).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_outbound_payments_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("statement_descriptor".into(), match (&p.statement_descriptor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -2070,7 +2087,7 @@ fn iface_treasury__post_treasury_outbound_transfers_params__to_json(p: &iface_tr
     m.insert("destination_payment_method_options".into(), match (&p.destination_payment_method_options) { Some(v) => iface_treasury__post_treasury_outbound_transfers_body_destination_payment_method_options__to_json(v), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("financial_account".into(), Value::String((&p.financial_account).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_treasury__post_treasury_outbound_transfers_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("statement_descriptor".into(), match (&p.statement_descriptor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -2197,7 +2214,7 @@ fn iface_treasury__credit_reversal__from_json(v: &Value) -> Option<iface_treasur
         hosted_regulatory_receipt_url: m.get("hosted_regulatory_receipt_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_treasury__credit_reversal_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_treasury::CreditReversalMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         network: match m.get("network").and_then(|v| (v).as_str().and_then(iface_treasury__credit_reversal_network_enum__from_str)) { Some(x) => x, None => return None },
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_treasury__credit_reversal_object_enum__from_str)) { Some(x) => x, None => return None },
         received_credit: m.get("received_credit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2207,10 +2224,11 @@ fn iface_treasury__credit_reversal__from_json(v: &Value) -> Option<iface_treasur
     })
 }
 
-fn iface_treasury__credit_reversal_metadata__from_json(v: &Value) -> Option<iface_treasury::CreditReversalMetadata> {
+fn iface_treasury__credit_reversal_metadata_entry__from_json(v: &Value) -> Option<iface_treasury::CreditReversalMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::CreditReversalMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::CreditReversalMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2242,7 +2260,7 @@ fn iface_treasury__debit_reversal__from_json(v: &Value) -> Option<iface_treasury
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         linked_flows: m.get("linked_flows").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_treasury__debit_reversal_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_treasury::DebitReversalMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         network: match m.get("network").and_then(|v| (v).as_str().and_then(iface_treasury__debit_reversal_network_enum__from_str)) { Some(x) => x, None => return None },
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_treasury__debit_reversal_object_enum__from_str)) { Some(x) => x, None => return None },
         received_debit: m.get("received_debit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2252,10 +2270,11 @@ fn iface_treasury__debit_reversal__from_json(v: &Value) -> Option<iface_treasury
     })
 }
 
-fn iface_treasury__debit_reversal_metadata__from_json(v: &Value) -> Option<iface_treasury::DebitReversalMetadata> {
+fn iface_treasury__debit_reversal_metadata_entry__from_json(v: &Value) -> Option<iface_treasury::DebitReversalMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::DebitReversalMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::DebitReversalMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2287,7 +2306,7 @@ fn iface_treasury__financial_account__from_json(v: &Value) -> Option<iface_treas
         financial_addresses: m.get("financial_addresses").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_treasury__financial_accounts_resource_financial_address__from_json(x)).collect())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_treasury__financial_account_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_treasury::FinancialAccountMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_treasury__financial_account_object_enum__from_str)) { Some(x) => x, None => return None },
         pending_features: m.get("pending_features").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_treasury__financial_account_active_features_item_enum__from_str)).collect())),
         platform_restrictions: m.get("platform_restrictions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2301,30 +2320,33 @@ fn iface_treasury__financial_account__from_json(v: &Value) -> Option<iface_treas
 fn iface_treasury__financial_accounts_resource_balance__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalance> {
     let m = v.as_object()?;
     Some(iface_treasury::FinancialAccountsResourceBalance {
-        cash: match m.get("cash").and_then(|v| iface_treasury__financial_accounts_resource_balance_cash__from_json(v)) { Some(x) => x, None => return None },
-        inbound_pending: match m.get("inbound_pending").and_then(|v| iface_treasury__financial_accounts_resource_balance_inbound_pending__from_json(v)) { Some(x) => x, None => return None },
-        outbound_pending: match m.get("outbound_pending").and_then(|v| iface_treasury__financial_accounts_resource_balance_outbound_pending__from_json(v)) { Some(x) => x, None => return None },
+        cash: m.get("cash").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_treasury::FinancialAccountsResourceBalanceCashEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+        inbound_pending: m.get("inbound_pending").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_treasury::FinancialAccountsResourceBalanceInboundPendingEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+        outbound_pending: m.get("outbound_pending").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_treasury::FinancialAccountsResourceBalanceOutboundPendingEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_treasury__financial_accounts_resource_balance_cash__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalanceCash> {
+fn iface_treasury__financial_accounts_resource_balance_cash_entry__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalanceCashEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::FinancialAccountsResourceBalanceCash {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::FinancialAccountsResourceBalanceCashEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_treasury__financial_accounts_resource_balance_inbound_pending__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalanceInboundPending> {
+fn iface_treasury__financial_accounts_resource_balance_inbound_pending_entry__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalanceInboundPendingEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::FinancialAccountsResourceBalanceInboundPending {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::FinancialAccountsResourceBalanceInboundPendingEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_treasury__financial_accounts_resource_balance_outbound_pending__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalanceOutboundPending> {
+fn iface_treasury__financial_accounts_resource_balance_outbound_pending_entry__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountsResourceBalanceOutboundPendingEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::FinancialAccountsResourceBalanceOutboundPending {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::FinancialAccountsResourceBalanceOutboundPendingEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
@@ -2419,10 +2441,11 @@ fn iface_treasury__financial_accounts_resource_aba_record__from_json(v: &Value) 
     })
 }
 
-fn iface_treasury__financial_account_metadata__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountMetadata> {
+fn iface_treasury__financial_account_metadata_entry__from_json(v: &Value) -> Option<iface_treasury::FinancialAccountMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::FinancialAccountMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::FinancialAccountMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2457,7 +2480,7 @@ fn iface_treasury__inbound_transfer__from_json(v: &Value) -> Option<iface_treasu
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         linked_flows: match m.get("linked_flows").and_then(|v| iface_treasury__inbound_transfers_resource_inbound_transfer_resource_linked_flows__from_json(v)) { Some(x) => x, None => return None },
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_treasury__inbound_transfer_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_treasury::InboundTransferMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_treasury__inbound_transfer_object_enum__from_str)) { Some(x) => x, None => return None },
         origin_payment_method: m.get("origin_payment_method").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         origin_payment_method_details: m.get("origin_payment_method_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2476,10 +2499,11 @@ fn iface_treasury__inbound_transfers_resource_inbound_transfer_resource_linked_f
     })
 }
 
-fn iface_treasury__inbound_transfer_metadata__from_json(v: &Value) -> Option<iface_treasury::InboundTransferMetadata> {
+fn iface_treasury__inbound_transfer_metadata_entry__from_json(v: &Value) -> Option<iface_treasury::InboundTransferMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::InboundTransferMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::InboundTransferMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2519,7 +2543,7 @@ fn iface_treasury__outbound_payment__from_json(v: &Value) -> Option<iface_treasu
         hosted_regulatory_receipt_url: m.get("hosted_regulatory_receipt_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_treasury__outbound_payment_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_treasury::OutboundPaymentMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_treasury__outbound_payment_object_enum__from_str)) { Some(x) => x, None => return None },
         returned_details: m.get("returned_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         statement_descriptor: m.get("statement_descriptor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2529,10 +2553,11 @@ fn iface_treasury__outbound_payment__from_json(v: &Value) -> Option<iface_treasu
     })
 }
 
-fn iface_treasury__outbound_payment_metadata__from_json(v: &Value) -> Option<iface_treasury::OutboundPaymentMetadata> {
+fn iface_treasury__outbound_payment_metadata_entry__from_json(v: &Value) -> Option<iface_treasury::OutboundPaymentMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::OutboundPaymentMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::OutboundPaymentMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2571,7 +2596,7 @@ fn iface_treasury__outbound_transfer__from_json(v: &Value) -> Option<iface_treas
         hosted_regulatory_receipt_url: m.get("hosted_regulatory_receipt_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_treasury__outbound_transfer_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_treasury::OutboundTransferMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_treasury__outbound_transfer_object_enum__from_str)) { Some(x) => x, None => return None },
         returned_details: m.get("returned_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         statement_descriptor: m.get("statement_descriptor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2624,10 +2649,11 @@ fn iface_treasury__outbound_transfers_payment_method_details_us_bank_account__fr
     })
 }
 
-fn iface_treasury__outbound_transfer_metadata__from_json(v: &Value) -> Option<iface_treasury::OutboundTransferMetadata> {
+fn iface_treasury__outbound_transfer_metadata_entry__from_json(v: &Value) -> Option<iface_treasury::OutboundTransferMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_treasury::OutboundTransferMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_treasury::OutboundTransferMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

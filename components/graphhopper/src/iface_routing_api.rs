@@ -87,6 +87,20 @@ const OP_ROUTING_API_GET_ROUTE_INFO: OpSpec = OpSpec {
     ],
 };
 
+fn iface_routing_api__vehicle_profile_id__to_str(e: &iface_routing_api::VehicleProfileId) -> &'static str {
+    match e {
+        iface_routing_api::VehicleProfileId::Car => "car",
+        iface_routing_api::VehicleProfileId::Bike => "bike",
+        iface_routing_api::VehicleProfileId::Foot => "foot",
+        iface_routing_api::VehicleProfileId::Hike => "hike",
+        iface_routing_api::VehicleProfileId::Mtb => "mtb",
+        iface_routing_api::VehicleProfileId::Racingbike => "racingbike",
+        iface_routing_api::VehicleProfileId::Scooter => "scooter",
+        iface_routing_api::VehicleProfileId::Truck => "truck",
+        iface_routing_api::VehicleProfileId::SmallTruck => "small_truck",
+    }
+}
+
 fn iface_routing_api__get_route_curbside_item_enum__to_str(e: &iface_routing_api::GetRouteCurbsideItemEnum) -> &'static str {
     match e {
         iface_routing_api::GetRouteCurbsideItemEnum::Any => "any",
@@ -100,12 +114,6 @@ fn iface_routing_api__get_route_algorithm_enum__to_str(e: &iface_routing_api::Ge
         iface_routing_api::GetRouteAlgorithmEnum::RoundTrip => "round_trip",
         iface_routing_api::GetRouteAlgorithmEnum::AlternativeRoute => "alternative_route",
     }
-}
-
-fn iface_routing_api__vehicle_profile_id__to_json(p: &iface_routing_api::VehicleProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
 }
 
 fn iface_routing_api__route_response__to_json(p: &iface_routing_api::RouteResponse) -> Value {
@@ -127,7 +135,7 @@ fn iface_routing_api__route_response_path__to_json(p: &iface_routing_api::RouteR
     m.insert("ascend".into(), match (&p.ascend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     m.insert("descend".into(), match (&p.descend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("details".into(), match (&p.details) { Some(v) => iface_routing_api__route_response_path_details__to_json(v), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_routing_api__route_response_path_instructions_item__to_json(v)).collect()), None => Value::Null });
     m.insert("points".into(), match (&p.points) { Some(v) => iface_routing_api__route_response_path_points__to_json(v), None => Value::Null });
@@ -138,9 +146,10 @@ fn iface_routing_api__route_response_path__to_json(p: &iface_routing_api::RouteR
     Value::Object(m)
 }
 
-fn iface_routing_api__route_response_path_details__to_json(p: &iface_routing_api::RouteResponsePathDetails) -> Value {
+fn iface_routing_api__route_response_path_details_entry__to_json(p: &iface_routing_api::RouteResponsePathDetailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -178,14 +187,15 @@ fn iface_routing_api__route_request_vehicle__to_json(p: &iface_routing_api::Rout
 fn iface_routing_api__info_response__to_json(p: &iface_routing_api::InfoResponse) -> Value {
     let mut m = Map::new();
     m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("features".into(), match (&p.features) { Some(v) => iface_routing_api__info_response_features__to_json(v), None => Value::Null });
+    m.insert("features".into(), match (&p.features) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_routing_api__info_response_features__to_json(p: &iface_routing_api::InfoResponseFeatures) -> Value {
+fn iface_routing_api__info_response_features_entry__to_json(p: &iface_routing_api::InfoResponseFeaturesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -194,7 +204,7 @@ fn iface_routing_api__get_route_params__to_json(p: &iface_routing_api::GetRouteP
     m.insert("point".into(), Value::Array((&p.point).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("point_hint".into(), match (&p.point_hint) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("snap_prevention".into(), match (&p.snap_prevention) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_routing_api__vehicle_profile_id__to_json(v), None => Value::Null });
+    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => Value::String(iface_routing_api__vehicle_profile_id__to_str(v).into()), None => Value::Null });
     m.insert("curbside".into(), match (&p.curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_routing_api__get_route_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("turn_costs".into(), match (&p.turn_costs) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -274,7 +284,7 @@ fn iface_routing_api__route_response_path__from_json(v: &Value) -> Option<iface_
         ascend: m.get("ascend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         bbox: m.get("bbox").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
         descend: m.get("descend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__route_response_path_details__from_json(v)),
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_routing_api::RouteResponsePathDetailsEntry { key: k.clone(), value: val })).collect())),
         distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_routing_api__route_response_path_instructions_item__from_json(x)).collect())),
         points: m.get("points").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__route_response_path_points__from_json(v)),
@@ -285,10 +295,11 @@ fn iface_routing_api__route_response_path__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_routing_api__route_response_path_details__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePathDetails> {
+fn iface_routing_api__route_response_path_details_entry__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePathDetailsEntry> {
     let m = v.as_object()?;
-    Some(iface_routing_api::RouteResponsePathDetails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_routing_api::RouteResponsePathDetailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -324,15 +335,16 @@ fn iface_routing_api__info_response__from_json(v: &Value) -> Option<iface_routin
     let m = v.as_object()?;
     Some(iface_routing_api::InfoResponse {
         bbox: m.get("bbox").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__info_response_features__from_json(v)),
+        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_routing_api::InfoResponseFeaturesEntry { key: k.clone(), value: val })).collect())),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_routing_api__info_response_features__from_json(v: &Value) -> Option<iface_routing_api::InfoResponseFeatures> {
+fn iface_routing_api__info_response_features_entry__from_json(v: &Value) -> Option<iface_routing_api::InfoResponseFeaturesEntry> {
     let m = v.as_object()?;
-    Some(iface_routing_api::InfoResponseFeatures {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_routing_api::InfoResponseFeaturesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

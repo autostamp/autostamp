@@ -149,27 +149,274 @@ fn iface_posts__get_posts_ids_suggested_edits_sort_enum__to_str(e: &iface_posts:
     }
 }
 
-fn iface_posts__posts__to_json(p: &iface_posts::Posts) -> Value {
+fn iface_posts__posts_item__to_json(p: &iface_posts::PostsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_posts__posts_item_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_posts__posts_item_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_posts__comments__to_json(p: &iface_posts::Comments) -> Value {
+fn iface_posts__posts_item_last_editor__to_json(p: &iface_posts::PostsItemLastEditor) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__posts_item_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_posts__revisions__to_json(p: &iface_posts::Revisions) -> Value {
+fn iface_posts__posts_item_last_editor_badge_counts__to_json(p: &iface_posts::PostsItemLastEditorBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_posts__suggested_edits__to_json(p: &iface_posts::SuggestedEdits) -> Value {
+fn iface_posts__posts_item_owner__to_json(p: &iface_posts::PostsItemOwner) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__posts_item_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__posts_item_owner_badge_counts__to_json(p: &iface_posts::PostsItemOwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__posts_item_v2__to_json(p: &iface_posts::PostsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_posts__posts_item_v2_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_posts__posts_item_v2_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__posts_item_v2_last_editor__to_json(p: &iface_posts::PostsItemV2LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__posts_item_v2_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__posts_item_v2_last_editor_badge_counts__to_json(p: &iface_posts::PostsItemV2LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__posts_item_v2_owner__to_json(p: &iface_posts::PostsItemV2Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__posts_item_v2_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__posts_item_v2_owner_badge_counts__to_json(p: &iface_posts::PostsItemV2OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__comments_item__to_json(p: &iface_posts::CommentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("edited".into(), match (&p.edited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_posts__comments_item_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_to_user".into(), match (&p.reply_to_user) { Some(v) => iface_posts__comments_item_reply_to_user__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__comments_item_owner__to_json(p: &iface_posts::CommentsItemOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__comments_item_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__comments_item_owner_badge_counts__to_json(p: &iface_posts::CommentsItemOwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__comments_item_reply_to_user__to_json(p: &iface_posts::CommentsItemReplyToUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__comments_item_reply_to_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__comments_item_reply_to_user_badge_counts__to_json(p: &iface_posts::CommentsItemReplyToUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__revisions_item__to_json(p: &iface_posts::RevisionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_rollback".into(), match (&p.is_rollback) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_body".into(), match (&p.last_body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_tags".into(), match (&p.last_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("last_title".into(), match (&p.last_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("revision_guid".into(), match (&p.revision_guid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("revision_number".into(), match (&p.revision_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("revision_type".into(), match (&p.revision_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("set_community_wiki".into(), match (&p.set_community_wiki) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_posts__revisions_item_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__revisions_item_user__to_json(p: &iface_posts::RevisionsItemUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__revisions_item_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__revisions_item_user_badge_counts__to_json(p: &iface_posts::RevisionsItemUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__suggested_edits_item__to_json(p: &iface_posts::SuggestedEditsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("approval_date".into(), match (&p.approval_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("proposing_user".into(), match (&p.proposing_user) { Some(v) => iface_posts__suggested_edits_item_proposing_user__to_json(v), None => Value::Null });
+    m.insert("rejection_date".into(), match (&p.rejection_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("suggested_edit_id".into(), match (&p.suggested_edit_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__suggested_edits_item_proposing_user__to_json(p: &iface_posts::SuggestedEditsItemProposingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__suggested_edits_item_proposing_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__suggested_edits_item_proposing_user_badge_counts__to_json(p: &iface_posts::SuggestedEditsItemProposingUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -324,31 +571,295 @@ fn iface_posts__post_posts_id_comments_add_params__to_json(p: &iface_posts::Post
     Value::Object(m)
 }
 
-fn iface_posts__posts__from_json(v: &Value) -> Option<iface_posts::Posts> {
+fn iface_posts__posts_item__from_json(v: &Value) -> Option<iface_posts::PostsItem> {
     let m = v.as_object()?;
-    Some(iface_posts::Posts {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_posts::PostsItem {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_posts__comments__from_json(v: &Value) -> Option<iface_posts::Comments> {
+fn iface_posts__posts_item_last_editor__from_json(v: &Value) -> Option<iface_posts::PostsItemLastEditor> {
     let m = v.as_object()?;
-    Some(iface_posts::Comments {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_posts::PostsItemLastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_posts__revisions__from_json(v: &Value) -> Option<iface_posts::Revisions> {
+fn iface_posts__posts_item_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_posts::PostsItemLastEditorBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_posts::Revisions {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_posts::PostsItemLastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_posts__suggested_edits__from_json(v: &Value) -> Option<iface_posts::SuggestedEdits> {
+fn iface_posts__posts_item_owner__from_json(v: &Value) -> Option<iface_posts::PostsItemOwner> {
     let m = v.as_object()?;
-    Some(iface_posts::SuggestedEdits {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_posts::PostsItemOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__posts_item_owner_badge_counts__from_json(v: &Value) -> Option<iface_posts::PostsItemOwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::PostsItemOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__posts_item_v2__from_json(v: &Value) -> Option<iface_posts::PostsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_posts::PostsItemV2 {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_v2_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_v2_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_posts__posts_item_v2_last_editor__from_json(v: &Value) -> Option<iface_posts::PostsItemV2LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_posts::PostsItemV2LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_v2_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__posts_item_v2_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_posts::PostsItemV2LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::PostsItemV2LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__posts_item_v2_owner__from_json(v: &Value) -> Option<iface_posts::PostsItemV2Owner> {
+    let m = v.as_object()?;
+    Some(iface_posts::PostsItemV2Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__posts_item_v2_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__posts_item_v2_owner_badge_counts__from_json(v: &Value) -> Option<iface_posts::PostsItemV2OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::PostsItemV2OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__comments_item__from_json(v: &Value) -> Option<iface_posts::CommentsItem> {
+    let m = v.as_object()?;
+    Some(iface_posts::CommentsItem {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        edited: m.get("edited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_posts__comments_item_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_user: m.get("reply_to_user").filter(|v| !v.is_null()).and_then(|v| iface_posts__comments_item_reply_to_user__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_posts__comments_item_owner__from_json(v: &Value) -> Option<iface_posts::CommentsItemOwner> {
+    let m = v.as_object()?;
+    Some(iface_posts::CommentsItemOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__comments_item_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__comments_item_owner_badge_counts__from_json(v: &Value) -> Option<iface_posts::CommentsItemOwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::CommentsItemOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__comments_item_reply_to_user__from_json(v: &Value) -> Option<iface_posts::CommentsItemReplyToUser> {
+    let m = v.as_object()?;
+    Some(iface_posts::CommentsItemReplyToUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__comments_item_reply_to_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__comments_item_reply_to_user_badge_counts__from_json(v: &Value) -> Option<iface_posts::CommentsItemReplyToUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::CommentsItemReplyToUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__revisions_item__from_json(v: &Value) -> Option<iface_posts::RevisionsItem> {
+    let m = v.as_object()?;
+    Some(iface_posts::RevisionsItem {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_rollback: m.get("is_rollback").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_body: m.get("last_body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_tags: m.get("last_tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        last_title: m.get("last_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        revision_guid: m.get("revision_guid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        revision_number: m.get("revision_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        revision_type: m.get("revision_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        set_community_wiki: m.get("set_community_wiki").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_posts__revisions_item_user__from_json(v)),
+    })
+}
+
+fn iface_posts__revisions_item_user__from_json(v: &Value) -> Option<iface_posts::RevisionsItemUser> {
+    let m = v.as_object()?;
+    Some(iface_posts::RevisionsItemUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__revisions_item_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__revisions_item_user_badge_counts__from_json(v: &Value) -> Option<iface_posts::RevisionsItemUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::RevisionsItemUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__suggested_edits_item__from_json(v: &Value) -> Option<iface_posts::SuggestedEditsItem> {
+    let m = v.as_object()?;
+    Some(iface_posts::SuggestedEditsItem {
+        approval_date: m.get("approval_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        proposing_user: m.get("proposing_user").filter(|v| !v.is_null()).and_then(|v| iface_posts__suggested_edits_item_proposing_user__from_json(v)),
+        rejection_date: m.get("rejection_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        suggested_edit_id: m.get("suggested_edit_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__suggested_edits_item_proposing_user__from_json(v: &Value) -> Option<iface_posts::SuggestedEditsItemProposingUser> {
+    let m = v.as_object()?;
+    Some(iface_posts::SuggestedEditsItemProposingUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__suggested_edits_item_proposing_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__suggested_edits_item_proposing_user_badge_counts__from_json(v: &Value) -> Option<iface_posts::SuggestedEditsItemProposingUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::SuggestedEditsItemProposingUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -417,12 +928,12 @@ fn iface_posts__created_comment_reply_to_user_badge_counts__from_json(v: &Value)
     })
 }
 
-fn iface_posts__get_posts__ok(body: String) -> Result<iface_posts::Posts, crate::runtime::DispatchError> {
+fn iface_posts__get_posts__ok(body: String) -> Result<Vec<iface_posts::PostsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_posts__posts__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_posts__posts_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -447,12 +958,12 @@ fn iface_posts__get_posts__err(e: crate::runtime::DispatchError) -> iface_posts:
     }
 }
 
-fn iface_posts__get_posts_ids__ok(body: String) -> Result<iface_posts::Posts, crate::runtime::DispatchError> {
+fn iface_posts__get_posts_ids__ok(body: String) -> Result<Vec<iface_posts::PostsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_posts__posts__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_posts__posts_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -477,12 +988,12 @@ fn iface_posts__get_posts_ids__err(e: crate::runtime::DispatchError) -> iface_po
     }
 }
 
-fn iface_posts__get_posts_ids_comments__ok(body: String) -> Result<iface_posts::Comments, crate::runtime::DispatchError> {
+fn iface_posts__get_posts_ids_comments__ok(body: String) -> Result<Vec<iface_posts::CommentsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_posts__comments__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_posts__comments_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -507,12 +1018,12 @@ fn iface_posts__get_posts_ids_comments__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_posts__get_posts_ids_revisions__ok(body: String) -> Result<iface_posts::Revisions, crate::runtime::DispatchError> {
+fn iface_posts__get_posts_ids_revisions__ok(body: String) -> Result<Vec<iface_posts::RevisionsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_posts__revisions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_posts__revisions_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -537,12 +1048,12 @@ fn iface_posts__get_posts_ids_revisions__err(e: crate::runtime::DispatchError) -
     }
 }
 
-fn iface_posts__get_posts_ids_suggested_edits__ok(body: String) -> Result<iface_posts::SuggestedEdits, crate::runtime::DispatchError> {
+fn iface_posts__get_posts_ids_suggested_edits__ok(body: String) -> Result<Vec<iface_posts::SuggestedEditsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_posts__suggested_edits__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_posts__suggested_edits_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -598,35 +1109,35 @@ fn iface_posts__post_posts_id_comments_add__err(e: crate::runtime::DispatchError
 }
 
 impl iface_posts::Guest for crate::Component {
-    fn get_posts(params: iface_posts::GetPostsParams) -> Result<iface_posts::Posts, iface_posts::GetPostsError> {
+    fn get_posts(params: iface_posts::GetPostsParams) -> Result<Vec<iface_posts::PostsItem>, iface_posts::GetPostsError> {
         let json = iface_posts__get_posts_params__to_json(&params);
         match dispatch(&OP_POSTS_GET_POSTS, json).and_then(iface_posts__get_posts__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_posts__get_posts__err(e)),
         }
     }
-    fn get_posts_ids(params: iface_posts::GetPostsIdsParams) -> Result<iface_posts::Posts, iface_posts::GetPostsIdsError> {
+    fn get_posts_ids(params: iface_posts::GetPostsIdsParams) -> Result<Vec<iface_posts::PostsItemV2>, iface_posts::GetPostsIdsError> {
         let json = iface_posts__get_posts_ids_params__to_json(&params);
         match dispatch(&OP_POSTS_GET_POSTS_IDS, json).and_then(iface_posts__get_posts_ids__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_posts__get_posts_ids__err(e)),
         }
     }
-    fn get_posts_ids_comments(params: iface_posts::GetPostsIdsCommentsParams) -> Result<iface_posts::Comments, iface_posts::GetPostsIdsCommentsError> {
+    fn get_posts_ids_comments(params: iface_posts::GetPostsIdsCommentsParams) -> Result<Vec<iface_posts::CommentsItem>, iface_posts::GetPostsIdsCommentsError> {
         let json = iface_posts__get_posts_ids_comments_params__to_json(&params);
         match dispatch(&OP_POSTS_GET_POSTS_IDS_COMMENTS, json).and_then(iface_posts__get_posts_ids_comments__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_posts__get_posts_ids_comments__err(e)),
         }
     }
-    fn get_posts_ids_revisions(params: iface_posts::GetPostsIdsRevisionsParams) -> Result<iface_posts::Revisions, iface_posts::GetPostsIdsRevisionsError> {
+    fn get_posts_ids_revisions(params: iface_posts::GetPostsIdsRevisionsParams) -> Result<Vec<iface_posts::RevisionsItem>, iface_posts::GetPostsIdsRevisionsError> {
         let json = iface_posts__get_posts_ids_revisions_params__to_json(&params);
         match dispatch(&OP_POSTS_GET_POSTS_IDS_REVISIONS, json).and_then(iface_posts__get_posts_ids_revisions__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_posts__get_posts_ids_revisions__err(e)),
         }
     }
-    fn get_posts_ids_suggested_edits(params: iface_posts::GetPostsIdsSuggestedEditsParams) -> Result<iface_posts::SuggestedEdits, iface_posts::GetPostsIdsSuggestedEditsError> {
+    fn get_posts_ids_suggested_edits(params: iface_posts::GetPostsIdsSuggestedEditsParams) -> Result<Vec<iface_posts::SuggestedEditsItem>, iface_posts::GetPostsIdsSuggestedEditsError> {
         let json = iface_posts__get_posts_ids_suggested_edits_params__to_json(&params);
         match dispatch(&OP_POSTS_GET_POSTS_IDS_SUGGESTED_EDITS, json).and_then(iface_posts__get_posts_ids_suggested_edits__ok) {
             Ok(v) => Ok(v),

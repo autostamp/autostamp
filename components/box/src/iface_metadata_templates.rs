@@ -175,7 +175,7 @@ fn iface_metadata_templates__metadata_template__to_json(p: &iface_metadata_templ
 
 fn iface_metadata_templates__put_metadata_templates_id_id_schema_body_item__to_json(p: &iface_metadata_templates::PutMetadataTemplatesIdIdSchemaBodyItem) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_metadata_templates__put_metadata_templates_id_id_schema_body_item_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("enumOptionKey".into(), match (&p.enum_option_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enumOptionKeys".into(), match (&p.enum_option_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("fieldKey".into(), match (&p.field_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -186,9 +186,10 @@ fn iface_metadata_templates__put_metadata_templates_id_id_schema_body_item__to_j
     Value::Object(m)
 }
 
-fn iface_metadata_templates__put_metadata_templates_id_id_schema_body_item_data__to_json(p: &iface_metadata_templates::PutMetadataTemplatesIdIdSchemaBodyItemData) -> Value {
+fn iface_metadata_templates__put_metadata_templates_id_id_schema_body_item_data_entry__to_json(p: &iface_metadata_templates::PutMetadataTemplatesIdIdSchemaBodyItemDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

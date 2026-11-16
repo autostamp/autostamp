@@ -99,15 +99,16 @@ fn iface_content__get_content_by_id_response__to_json(p: &iface_content::GetCont
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__get_content_by_id_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__content_item_public_contract__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__get_content_by_id_response_message_data__to_json(p: &iface_content::GetContentByIdResponseMessageData) -> Value {
+fn iface_content__get_content_by_id_response_message_data_entry__to_json(p: &iface_content::GetContentByIdResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -124,7 +125,7 @@ fn iface_content__content_item_public_contract__to_json(p: &iface_content::Conte
     m.insert("hasAgeGate".into(), match (&p.has_age_gate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("minimumAge".into(), match (&p.minimum_age) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("modifyDate".into(), match (&p.modify_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_content__content_item_public_contract_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("ratingImagePath".into(), match (&p.rating_image_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("representations".into(), match (&p.representations) { Some(v) => Value::Array((v).iter().map(|v| iface_content__content_representation__to_json(v)).collect()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -194,9 +195,17 @@ fn iface_content__comment_summary__to_json(p: &iface_content::CommentSummary) ->
     Value::Object(m)
 }
 
-fn iface_content__content_item_public_contract_properties__to_json(p: &iface_content::ContentItemPublicContractProperties) -> Value {
+fn iface_content__content_item_public_contract_properties_value_entry__to_json(p: &iface_content::ContentItemPublicContractPropertiesValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_content__content_item_public_contract_properties_entry__to_json(p: &iface_content::ContentItemPublicContractPropertiesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -214,15 +223,16 @@ fn iface_content__get_content_by_tag_and_type_response__to_json(p: &iface_conten
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__get_content_by_tag_and_type_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__content_item_public_contract__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__get_content_by_tag_and_type_response_message_data__to_json(p: &iface_content::GetContentByTagAndTypeResponseMessageData) -> Value {
+fn iface_content__get_content_by_tag_and_type_response_message_data_entry__to_json(p: &iface_content::GetContentByTagAndTypeResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -232,15 +242,16 @@ fn iface_content__get_content_type_response__to_json(p: &iface_content::GetConte
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__get_content_type_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__models_content_type_description__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__get_content_type_response_message_data__to_json(p: &iface_content::GetContentTypeResponseMessageData) -> Value {
+fn iface_content__get_content_type_response_message_data_entry__to_json(p: &iface_content::GetContentTypeResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -264,7 +275,7 @@ fn iface_content__models_content_type_description__to_json(p: &iface_content::Mo
     m.insert("showInContentEditor".into(), match (&p.show_in_content_editor) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("suppressCmsPath".into(), match (&p.suppress_cms_path) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("tagMetadata".into(), match (&p.tag_metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_content__models_tag_metadata_definition__to_json(v)).collect()), None => Value::Null });
-    m.insert("tagMetadataItems".into(), match (&p.tag_metadata_items) { Some(v) => iface_content__models_content_type_description_tag_metadata_items__to_json(v), None => Value::Null });
+    m.insert("tagMetadataItems".into(), match (&p.tag_metadata_items) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_content__models_tag_metadata_item__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("typeOf".into(), match (&p.type_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("usageExamples".into(), match (&p.usage_examples) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
@@ -283,7 +294,7 @@ fn iface_content__models_content_preview__to_json(p: &iface_content::ModelsConte
 
 fn iface_content__models_content_type_property__to_json(p: &iface_content::ModelsContentTypeProperty) -> Value {
     let mut m = Map::new();
-    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_content__models_content_type_property_attributes__to_json(v), None => Value::Null });
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("bindToProperty".into(), match (&p.bind_to_property) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("boundRegex".into(), match (&p.bound_regex) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("childProperties".into(), match (&p.child_properties) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -313,7 +324,7 @@ fn iface_content__models_content_type_property__to_json(p: &iface_content::Model
     m.insert("propertySection".into(), match (&p.property_section) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("readableName".into(), match (&p.readable_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("regexp".into(), match (&p.regexp) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("representationSelection".into(), match (&p.representation_selection) { Some(v) => iface_content__models_content_type_property_representation_selection__to_json(v), None => Value::Null });
+    m.insert("representationSelection".into(), match (&p.representation_selection) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("representationValidationString".into(), match (&p.representation_validation_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("required".into(), match (&p.required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("rootPropertyName".into(), match (&p.root_property_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -328,9 +339,10 @@ fn iface_content__models_content_type_property__to_json(p: &iface_content::Model
     Value::Object(m)
 }
 
-fn iface_content__models_content_type_property_attributes__to_json(p: &iface_content::ModelsContentTypePropertyAttributes) -> Value {
+fn iface_content__models_content_type_property_attributes_entry__to_json(p: &iface_content::ModelsContentTypePropertyAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -342,9 +354,10 @@ fn iface_content__models_content_type_default_value__to_json(p: &iface_content::
     Value::Object(m)
 }
 
-fn iface_content__models_content_type_property_representation_selection__to_json(p: &iface_content::ModelsContentTypePropertyRepresentationSelection) -> Value {
+fn iface_content__models_content_type_property_representation_selection_entry__to_json(p: &iface_content::ModelsContentTypePropertyRepresentationSelectionEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -377,9 +390,10 @@ fn iface_content__models_tag_metadata_item__to_json(p: &iface_content::ModelsTag
     Value::Object(m)
 }
 
-fn iface_content__models_content_type_description_tag_metadata_items__to_json(p: &iface_content::ModelsContentTypeDescriptionTagMetadataItems) -> Value {
+fn iface_content__models_content_type_description_tag_metadata_items_entry__to_json(p: &iface_content::ModelsContentTypeDescriptionTagMetadataItemsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_content__models_tag_metadata_item__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -389,15 +403,16 @@ fn iface_content__rss_news_articles_response__to_json(p: &iface_content::RssNews
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__rss_news_articles_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__news_article_rss_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__rss_news_articles_response_message_data__to_json(p: &iface_content::RssNewsArticlesResponseMessageData) -> Value {
+fn iface_content__rss_news_articles_response_message_data_entry__to_json(p: &iface_content::RssNewsArticlesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -430,15 +445,16 @@ fn iface_content__search_content_with_text_response__to_json(p: &iface_content::
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__search_content_with_text_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__search_result_of_content_item_public_contract__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__search_content_with_text_response_message_data__to_json(p: &iface_content::SearchContentWithTextResponseMessageData) -> Value {
+fn iface_content__search_content_with_text_response_message_data_entry__to_json(p: &iface_content::SearchContentWithTextResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -467,15 +483,16 @@ fn iface_content__search_content_by_tag_and_type_response__to_json(p: &iface_con
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__search_content_by_tag_and_type_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__search_result_of_content_item_public_contract__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__search_content_by_tag_and_type_response_message_data__to_json(p: &iface_content::SearchContentByTagAndTypeResponseMessageData) -> Value {
+fn iface_content__search_content_by_tag_and_type_response_message_data_entry__to_json(p: &iface_content::SearchContentByTagAndTypeResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -485,21 +502,23 @@ fn iface_content__search_help_articles_response__to_json(p: &iface_content::Sear
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_content__search_help_articles_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_content__search_help_articles_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_content__search_help_articles_response_message_data__to_json(p: &iface_content::SearchHelpArticlesResponseMessageData) -> Value {
+fn iface_content__search_help_articles_response_message_data_entry__to_json(p: &iface_content::SearchHelpArticlesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_content__search_help_articles_response_response__to_json(p: &iface_content::SearchHelpArticlesResponseResponse) -> Value {
+fn iface_content__search_help_articles_response_response_entry__to_json(p: &iface_content::SearchHelpArticlesResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -571,16 +590,17 @@ fn iface_content__get_content_by_id_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__get_content_by_id_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::GetContentByIdResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__content_item_public_contract__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__get_content_by_id_response_message_data__from_json(v: &Value) -> Option<iface_content::GetContentByIdResponseMessageData> {
+fn iface_content__get_content_by_id_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::GetContentByIdResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::GetContentByIdResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::GetContentByIdResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -598,7 +618,7 @@ fn iface_content__content_item_public_contract__from_json(v: &Value) -> Option<i
         has_age_gate: m.get("hasAgeGate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         minimum_age: m.get("minimumAge").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         modify_date: m.get("modifyDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_content__content_item_public_contract_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::ContentItemPublicContractPropertiesValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_content::ContentItemPublicContractPropertiesEntry { key: k.clone(), value: val })).collect())),
         rating_image_path: m.get("ratingImagePath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         representations: m.get("representations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_content__content_representation__from_json(x)).collect())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -672,10 +692,19 @@ fn iface_content__comment_summary__from_json(v: &Value) -> Option<iface_content:
     })
 }
 
-fn iface_content__content_item_public_contract_properties__from_json(v: &Value) -> Option<iface_content::ContentItemPublicContractProperties> {
+fn iface_content__content_item_public_contract_properties_value_entry__from_json(v: &Value) -> Option<iface_content::ContentItemPublicContractPropertiesValueEntry> {
     let m = v.as_object()?;
-    Some(iface_content::ContentItemPublicContractProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::ContentItemPublicContractPropertiesValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_content__content_item_public_contract_properties_entry__from_json(v: &Value) -> Option<iface_content::ContentItemPublicContractPropertiesEntry> {
+    let m = v.as_object()?;
+    Some(iface_content::ContentItemPublicContractPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::ContentItemPublicContractPropertiesValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
@@ -695,16 +724,17 @@ fn iface_content__get_content_by_tag_and_type_response__from_json(v: &Value) -> 
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__get_content_by_tag_and_type_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::GetContentByTagAndTypeResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__content_item_public_contract__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__get_content_by_tag_and_type_response_message_data__from_json(v: &Value) -> Option<iface_content::GetContentByTagAndTypeResponseMessageData> {
+fn iface_content__get_content_by_tag_and_type_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::GetContentByTagAndTypeResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::GetContentByTagAndTypeResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::GetContentByTagAndTypeResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -715,16 +745,17 @@ fn iface_content__get_content_type_response__from_json(v: &Value) -> Option<ifac
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__get_content_type_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::GetContentTypeResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__models_content_type_description__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__get_content_type_response_message_data__from_json(v: &Value) -> Option<iface_content::GetContentTypeResponseMessageData> {
+fn iface_content__get_content_type_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::GetContentTypeResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::GetContentTypeResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::GetContentTypeResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -749,7 +780,7 @@ fn iface_content__models_content_type_description__from_json(v: &Value) -> Optio
         show_in_content_editor: m.get("showInContentEditor").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         suppress_cms_path: m.get("suppressCmsPath").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         tag_metadata: m.get("tagMetadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_content__models_tag_metadata_definition__from_json(x)).collect())),
-        tag_metadata_items: m.get("tagMetadataItems").filter(|v| !v.is_null()).and_then(|v| iface_content__models_content_type_description_tag_metadata_items__from_json(v)),
+        tag_metadata_items: m.get("tagMetadataItems").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_content__models_tag_metadata_item__from_json(x)).map(|val| iface_content::ModelsContentTypeDescriptionTagMetadataItemsEntry { key: k.clone(), value: val })).collect())),
         type_of: m.get("typeOf").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         usage_examples: m.get("usageExamples").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
@@ -770,7 +801,7 @@ fn iface_content__models_content_preview__from_json(v: &Value) -> Option<iface_c
 fn iface_content__models_content_type_property__from_json(v: &Value) -> Option<iface_content::ModelsContentTypeProperty> {
     let m = v.as_object()?;
     Some(iface_content::ModelsContentTypeProperty {
-        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_content__models_content_type_property_attributes__from_json(v)),
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::ModelsContentTypePropertyAttributesEntry { key: k.clone(), value: val })).collect())),
         bind_to_property: m.get("bindToProperty").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         bound_regex: m.get("boundRegex").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         child_properties: m.get("childProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -800,7 +831,7 @@ fn iface_content__models_content_type_property__from_json(v: &Value) -> Option<i
         property_section: m.get("propertySection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         readable_name: m.get("readableName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         regexp: m.get("regexp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        representation_selection: m.get("representationSelection").filter(|v| !v.is_null()).and_then(|v| iface_content__models_content_type_property_representation_selection__from_json(v)),
+        representation_selection: m.get("representationSelection").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::ModelsContentTypePropertyRepresentationSelectionEntry { key: k.clone(), value: val })).collect())),
         representation_validation_string: m.get("representationValidationString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         required: m.get("required").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         root_property_name: m.get("rootPropertyName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -815,10 +846,11 @@ fn iface_content__models_content_type_property__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_content__models_content_type_property_attributes__from_json(v: &Value) -> Option<iface_content::ModelsContentTypePropertyAttributes> {
+fn iface_content__models_content_type_property_attributes_entry__from_json(v: &Value) -> Option<iface_content::ModelsContentTypePropertyAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_content::ModelsContentTypePropertyAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::ModelsContentTypePropertyAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -831,10 +863,11 @@ fn iface_content__models_content_type_default_value__from_json(v: &Value) -> Opt
     })
 }
 
-fn iface_content__models_content_type_property_representation_selection__from_json(v: &Value) -> Option<iface_content::ModelsContentTypePropertyRepresentationSelection> {
+fn iface_content__models_content_type_property_representation_selection_entry__from_json(v: &Value) -> Option<iface_content::ModelsContentTypePropertyRepresentationSelectionEntry> {
     let m = v.as_object()?;
-    Some(iface_content::ModelsContentTypePropertyRepresentationSelection {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::ModelsContentTypePropertyRepresentationSelectionEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -870,10 +903,11 @@ fn iface_content__models_tag_metadata_item__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_content__models_content_type_description_tag_metadata_items__from_json(v: &Value) -> Option<iface_content::ModelsContentTypeDescriptionTagMetadataItems> {
+fn iface_content__models_content_type_description_tag_metadata_items_entry__from_json(v: &Value) -> Option<iface_content::ModelsContentTypeDescriptionTagMetadataItemsEntry> {
     let m = v.as_object()?;
-    Some(iface_content::ModelsContentTypeDescriptionTagMetadataItems {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::ModelsContentTypeDescriptionTagMetadataItemsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_content__models_tag_metadata_item__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -884,16 +918,17 @@ fn iface_content__rss_news_articles_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__rss_news_articles_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::RssNewsArticlesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__news_article_rss_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__rss_news_articles_response_message_data__from_json(v: &Value) -> Option<iface_content::RssNewsArticlesResponseMessageData> {
+fn iface_content__rss_news_articles_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::RssNewsArticlesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::RssNewsArticlesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::RssNewsArticlesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -929,16 +964,17 @@ fn iface_content__search_content_with_text_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__search_content_with_text_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::SearchContentWithTextResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__search_result_of_content_item_public_contract__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__search_content_with_text_response_message_data__from_json(v: &Value) -> Option<iface_content::SearchContentWithTextResponseMessageData> {
+fn iface_content__search_content_with_text_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::SearchContentWithTextResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::SearchContentWithTextResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::SearchContentWithTextResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -970,16 +1006,17 @@ fn iface_content__search_content_by_tag_and_type_response__from_json(v: &Value) 
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__search_content_by_tag_and_type_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::SearchContentByTagAndTypeResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__search_result_of_content_item_public_contract__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__search_content_by_tag_and_type_response_message_data__from_json(v: &Value) -> Option<iface_content::SearchContentByTagAndTypeResponseMessageData> {
+fn iface_content__search_content_by_tag_and_type_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::SearchContentByTagAndTypeResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::SearchContentByTagAndTypeResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::SearchContentByTagAndTypeResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -990,23 +1027,25 @@ fn iface_content__search_help_articles_response__from_json(v: &Value) -> Option<
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_content__search_help_articles_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_content__search_help_articles_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::SearchHelpArticlesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_content::SearchHelpArticlesResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_content__search_help_articles_response_message_data__from_json(v: &Value) -> Option<iface_content::SearchHelpArticlesResponseMessageData> {
+fn iface_content__search_help_articles_response_message_data_entry__from_json(v: &Value) -> Option<iface_content::SearchHelpArticlesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_content::SearchHelpArticlesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::SearchHelpArticlesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_content__search_help_articles_response_response__from_json(v: &Value) -> Option<iface_content::SearchHelpArticlesResponseResponse> {
+fn iface_content__search_help_articles_response_response_entry__from_json(v: &Value) -> Option<iface_content::SearchHelpArticlesResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_content::SearchHelpArticlesResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_content::SearchHelpArticlesResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -106,9 +106,10 @@ fn iface_issue_attachments__user_account_type_enum__to_str(e: &iface_issue_attac
     }
 }
 
-fn iface_issue_attachments__get_attachment_content_response__to_json(p: &iface_issue_attachments::GetAttachmentContentResponse) -> Value {
+fn iface_issue_attachments__get_attachment_content_response_entry__to_json(p: &iface_issue_attachments::GetAttachmentContentResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -119,9 +120,10 @@ fn iface_issue_attachments__attachment_settings__to_json(p: &iface_issue_attachm
     Value::Object(m)
 }
 
-fn iface_issue_attachments__get_attachment_thumbnail_response__to_json(p: &iface_issue_attachments::GetAttachmentThumbnailResponse) -> Value {
+fn iface_issue_attachments__get_attachment_thumbnail_response_entry__to_json(p: &iface_issue_attachments::GetAttachmentThumbnailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -133,7 +135,7 @@ fn iface_issue_attachments__attachment_metadata__to_json(p: &iface_issue_attachm
     m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("mimeType".into(), match (&p.mime_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_issue_attachments__attachment_metadata_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -227,9 +229,10 @@ fn iface_issue_attachments__list_wrapper_callback_group_name__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_issue_attachments__attachment_metadata_properties__to_json(p: &iface_issue_attachments::AttachmentMetadataProperties) -> Value {
+fn iface_issue_attachments__attachment_metadata_properties_entry__to_json(p: &iface_issue_attachments::AttachmentMetadataPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -347,10 +350,11 @@ fn iface_issue_attachments__add_attachment_params__to_json(p: &iface_issue_attac
     Value::Object(m)
 }
 
-fn iface_issue_attachments__get_attachment_content_response__from_json(v: &Value) -> Option<iface_issue_attachments::GetAttachmentContentResponse> {
+fn iface_issue_attachments__get_attachment_content_response_entry__from_json(v: &Value) -> Option<iface_issue_attachments::GetAttachmentContentResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_attachments::GetAttachmentContentResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_attachments::GetAttachmentContentResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -362,10 +366,11 @@ fn iface_issue_attachments__attachment_settings__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_issue_attachments__get_attachment_thumbnail_response__from_json(v: &Value) -> Option<iface_issue_attachments::GetAttachmentThumbnailResponse> {
+fn iface_issue_attachments__get_attachment_thumbnail_response_entry__from_json(v: &Value) -> Option<iface_issue_attachments::GetAttachmentThumbnailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_attachments::GetAttachmentThumbnailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_attachments::GetAttachmentThumbnailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -378,7 +383,7 @@ fn iface_issue_attachments__attachment_metadata__from_json(v: &Value) -> Option<
         filename: m.get("filename").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         mime_type: m.get("mimeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_issue_attachments__attachment_metadata_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_attachments::AttachmentMetadataPropertiesEntry { key: k.clone(), value: val })).collect())),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -480,10 +485,11 @@ fn iface_issue_attachments__list_wrapper_callback_group_name__from_json(v: &Valu
     })
 }
 
-fn iface_issue_attachments__attachment_metadata_properties__from_json(v: &Value) -> Option<iface_issue_attachments::AttachmentMetadataProperties> {
+fn iface_issue_attachments__attachment_metadata_properties_entry__from_json(v: &Value) -> Option<iface_issue_attachments::AttachmentMetadataPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_attachments::AttachmentMetadataProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_attachments::AttachmentMetadataPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -569,12 +575,12 @@ fn iface_issue_attachments__user_account_type_enum__from_str(s: &str) -> Option<
     }
 }
 
-fn iface_issue_attachments__get_attachment_content__ok(body: String) -> Result<iface_issue_attachments::GetAttachmentContentResponse, crate::runtime::DispatchError> {
+fn iface_issue_attachments__get_attachment_content__ok(body: String) -> Result<Vec<iface_issue_attachments::GetAttachmentContentResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_issue_attachments__get_attachment_content_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_attachments::GetAttachmentContentResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -616,12 +622,12 @@ fn iface_issue_attachments__get_attachment_meta__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_issue_attachments__get_attachment_thumbnail__ok(body: String) -> Result<iface_issue_attachments::GetAttachmentThumbnailResponse, crate::runtime::DispatchError> {
+fn iface_issue_attachments__get_attachment_thumbnail__ok(body: String) -> Result<Vec<iface_issue_attachments::GetAttachmentThumbnailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_issue_attachments__get_attachment_thumbnail_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_attachments::GetAttachmentThumbnailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -751,7 +757,7 @@ fn iface_issue_attachments__add_attachment__err(e: crate::runtime::DispatchError
 }
 
 impl iface_issue_attachments::Guest for crate::Component {
-    fn get_attachment_content(params: iface_issue_attachments::GetAttachmentContentParams) -> Result<iface_issue_attachments::GetAttachmentContentResponse, iface_issue_attachments::GetAttachmentContentError> {
+    fn get_attachment_content(params: iface_issue_attachments::GetAttachmentContentParams) -> Result<Vec<iface_issue_attachments::GetAttachmentContentResponseEntry>, iface_issue_attachments::GetAttachmentContentError> {
         let json = iface_issue_attachments__get_attachment_content_params__to_json(&params);
         match dispatch(&OP_ISSUE_ATTACHMENTS_GET_ATTACHMENT_CONTENT, json).and_then(iface_issue_attachments__get_attachment_content__ok) {
             Ok(v) => Ok(v),
@@ -764,7 +770,7 @@ impl iface_issue_attachments::Guest for crate::Component {
             Err(e) => Err(iface_issue_attachments__get_attachment_meta__err(e)),
         }
     }
-    fn get_attachment_thumbnail(params: iface_issue_attachments::GetAttachmentThumbnailParams) -> Result<iface_issue_attachments::GetAttachmentThumbnailResponse, iface_issue_attachments::GetAttachmentThumbnailError> {
+    fn get_attachment_thumbnail(params: iface_issue_attachments::GetAttachmentThumbnailParams) -> Result<Vec<iface_issue_attachments::GetAttachmentThumbnailResponseEntry>, iface_issue_attachments::GetAttachmentThumbnailError> {
         let json = iface_issue_attachments__get_attachment_thumbnail_params__to_json(&params);
         match dispatch(&OP_ISSUE_ATTACHMENTS_GET_ATTACHMENT_THUMBNAIL, json).and_then(iface_issue_attachments__get_attachment_thumbnail__ok) {
             Ok(v) => Ok(v),

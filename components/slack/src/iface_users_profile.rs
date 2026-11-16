@@ -34,23 +34,17 @@ const OP_USERS_PROFILE_SET: OpSpec = OpSpec {
 
 fn iface_users_profile__get_response__to_json(p: &iface_users_profile::GetResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users_profile__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("profile".into(), iface_users_profile__objs_user_profile__to_json(&p.profile));
-    Value::Object(m)
-}
-
-fn iface_users_profile__defs_ok_true__to_json(p: &iface_users_profile::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_users_profile__objs_user_profile__to_json(p: &iface_users_profile::ObjsUserProfile) -> Value {
     let mut m = Map::new();
     m.insert("always_active".into(), match (&p.always_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("api_app_id".into(), match (&p.api_app_id) { Some(v) => iface_users_profile__defs_optional_app_id__to_json(v), None => Value::Null });
+    m.insert("api_app_id".into(), match (&p.api_app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("avatar_hash".into(), Value::String((&p.avatar_hash).clone()));
-    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => iface_users_profile__defs_bot_id__to_json(v), None => Value::Null });
+    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("display_name".into(), Value::String((&p.display_name).clone()));
     m.insert("display_name_normalized".into(), Value::String((&p.display_name_normalized).clone()));
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -86,7 +80,7 @@ fn iface_users_profile__objs_user_profile__to_json(p: &iface_users_profile::Objs
     m.insert("status_expiration".into(), match (&p.status_expiration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("status_text".into(), Value::String((&p.status_text).clone()));
     m.insert("status_text_canonical".into(), match (&p.status_text_canonical) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("team".into(), match (&p.team) { Some(v) => iface_users_profile__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     m.insert("updated".into(), match (&p.updated) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -94,28 +88,10 @@ fn iface_users_profile__objs_user_profile__to_json(p: &iface_users_profile::Objs
     Value::Object(m)
 }
 
-fn iface_users_profile__defs_optional_app_id__to_json(p: &iface_users_profile::DefsOptionalAppId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_users_profile__defs_bot_id__to_json(p: &iface_users_profile::DefsBotId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_users_profile__defs_workspace_id__to_json(p: &iface_users_profile::DefsWorkspaceId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_users_profile__set_response__to_json(p: &iface_users_profile::SetResponse) -> Value {
     let mut m = Map::new();
     m.insert("email_pending".into(), match (&p.email_pending) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ok".into(), iface_users_profile__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("profile".into(), iface_users_profile__objs_user_profile__to_json(&p.profile));
     m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
@@ -142,15 +118,8 @@ fn iface_users_profile__set_params__to_json(p: &iface_users_profile::SetParams) 
 fn iface_users_profile__get_response__from_json(v: &Value) -> Option<iface_users_profile::GetResponse> {
     let m = v.as_object()?;
     Some(iface_users_profile::GetResponse {
-        ok: match m.get("ok").and_then(|v| iface_users_profile__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         profile: match m.get("profile").and_then(|v| iface_users_profile__objs_user_profile__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_users_profile__defs_ok_true__from_json(v: &Value) -> Option<iface_users_profile::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_users_profile::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -158,9 +127,9 @@ fn iface_users_profile__objs_user_profile__from_json(v: &Value) -> Option<iface_
     let m = v.as_object()?;
     Some(iface_users_profile::ObjsUserProfile {
         always_active: m.get("always_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        api_app_id: m.get("api_app_id").filter(|v| !v.is_null()).and_then(|v| iface_users_profile__defs_optional_app_id__from_json(v)),
+        api_app_id: m.get("api_app_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         avatar_hash: m.get("avatar_hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| iface_users_profile__defs_bot_id__from_json(v)),
+        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         display_name_normalized: m.get("display_name_normalized").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -196,7 +165,7 @@ fn iface_users_profile__objs_user_profile__from_json(v: &Value) -> Option<iface_
         status_expiration: m.get("status_expiration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         status_text: m.get("status_text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         status_text_canonical: m.get("status_text_canonical").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| iface_users_profile__defs_workspace_id__from_json(v)),
+        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -204,32 +173,11 @@ fn iface_users_profile__objs_user_profile__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_users_profile__defs_optional_app_id__from_json(v: &Value) -> Option<iface_users_profile::DefsOptionalAppId> {
-    let m = v.as_object()?;
-    Some(iface_users_profile::DefsOptionalAppId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_users_profile__defs_bot_id__from_json(v: &Value) -> Option<iface_users_profile::DefsBotId> {
-    let m = v.as_object()?;
-    Some(iface_users_profile::DefsBotId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_users_profile__defs_workspace_id__from_json(v: &Value) -> Option<iface_users_profile::DefsWorkspaceId> {
-    let m = v.as_object()?;
-    Some(iface_users_profile::DefsWorkspaceId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_users_profile__set_response__from_json(v: &Value) -> Option<iface_users_profile::SetResponse> {
     let m = v.as_object()?;
     Some(iface_users_profile::SetResponse {
         email_pending: m.get("email_pending").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        ok: match m.get("ok").and_then(|v| iface_users_profile__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         profile: match m.get("profile").and_then(|v| iface_users_profile__objs_user_profile__from_json(v)) { Some(x) => x, None => return None },
         username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })

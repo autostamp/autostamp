@@ -544,7 +544,7 @@ fn iface_payment_links__payment_link__to_json(p: &iface_payment_links::PaymentLi
     m.insert("invoice_creation".into(), match (&p.invoice_creation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => iface_payment_links__payment_link_line_items__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_payment_links__payment_link_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_payment_links__payment_link_object_enum__to_str(&p.object).into()));
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_intent_data".into(), match (&p.payment_intent_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -666,13 +666,13 @@ fn iface_payment_links__coupon__to_json(p: &iface_payment_links::Coupon) -> Valu
     m.insert("applies_to".into(), match (&p.applies_to) { Some(v) => iface_payment_links__coupon_applies_to__to_json(v), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_payment_links__coupon_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_payment_links__coupon_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("duration".into(), Value::String(iface_payment_links__coupon_duration_enum__to_str(&p.duration).into()));
     m.insert("duration_in_months".into(), match (&p.duration_in_months) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payment_links__coupon_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_payment_links__coupon_object_enum__to_str(&p.object).into()));
     m.insert("percent_off".into(), match (&p.percent_off) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -688,15 +688,23 @@ fn iface_payment_links__coupon_applies_to__to_json(p: &iface_payment_links::Coup
     Value::Object(m)
 }
 
-fn iface_payment_links__coupon_currency_options__to_json(p: &iface_payment_links::CouponCurrencyOptions) -> Value {
+fn iface_payment_links__coupon_currency_option__to_json(p: &iface_payment_links::CouponCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount_off".into(), Value::Number(serde_json::Number::from(*(&p.amount_off))));
     Value::Object(m)
 }
 
-fn iface_payment_links__coupon_metadata__to_json(p: &iface_payment_links::CouponMetadata) -> Value {
+fn iface_payment_links__coupon_currency_options_entry__to_json(p: &iface_payment_links::CouponCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_payment_links__coupon_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_payment_links__coupon_metadata_entry__to_json(p: &iface_payment_links::CouponMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -718,7 +726,7 @@ fn iface_payment_links__tax_rate__to_json(p: &iface_payment_links::TaxRate) -> V
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payment_links__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_payment_links__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -726,15 +734,17 @@ fn iface_payment_links__tax_rate__to_json(p: &iface_payment_links::TaxRate) -> V
     Value::Object(m)
 }
 
-fn iface_payment_links__tax_rate_metadata__to_json(p: &iface_payment_links::TaxRateMetadata) -> Value {
+fn iface_payment_links__tax_rate_metadata_entry__to_json(p: &iface_payment_links::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_payment_links__payment_link_metadata__to_json(p: &iface_payment_links::PaymentLinkMetadata) -> Value {
+fn iface_payment_links__payment_link_metadata_entry__to_json(p: &iface_payment_links::PaymentLinkMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -861,9 +871,10 @@ fn iface_payment_links__post_payment_links_body_line_items_item_adjustable_quant
     Value::Object(m)
 }
 
-fn iface_payment_links__post_payment_links_body_metadata__to_json(p: &iface_payment_links::PostPaymentLinksBodyMetadata) -> Value {
+fn iface_payment_links__post_payment_links_body_metadata_entry__to_json(p: &iface_payment_links::PostPaymentLinksBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -979,9 +990,10 @@ fn iface_payment_links__post_payment_links_payment_link_body_line_items_item_adj
     Value::Object(m)
 }
 
-fn iface_payment_links__post_payment_links_payment_link_body_metadata__to_json(p: &iface_payment_links::PostPaymentLinksPaymentLinkBodyMetadata) -> Value {
+fn iface_payment_links__post_payment_links_payment_link_body_metadata_entry__to_json(p: &iface_payment_links::PostPaymentLinksPaymentLinkBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1021,7 +1033,7 @@ fn iface_payment_links__post_payment_links_params__to_json(p: &iface_payment_lin
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("invoice_creation".into(), match (&p.invoice_creation) { Some(v) => iface_payment_links__post_payment_links_body_invoice_creation__to_json(v), None => Value::Null });
     m.insert("line_items".into(), Value::Array((&p.line_items).iter().map(|v| iface_payment_links__post_payment_links_body_line_items_item__to_json(v)).collect()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payment_links__post_payment_links_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_intent_data".into(), match (&p.payment_intent_data) { Some(v) => iface_payment_links__post_payment_links_body_payment_intent_data__to_json(v), None => Value::Null });
     m.insert("payment_method_collection".into(), match (&p.payment_method_collection) { Some(v) => Value::String(iface_payment_links__payment_link_customer_creation_enum__to_str(v).into()), None => Value::Null });
@@ -1058,7 +1070,7 @@ fn iface_payment_links__post_payment_links_payment_link_params__to_json(p: &ifac
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("invoice_creation".into(), match (&p.invoice_creation) { Some(v) => iface_payment_links__post_payment_links_payment_link_body_invoice_creation__to_json(v), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => Value::Array((v).iter().map(|v| iface_payment_links__post_payment_links_payment_link_body_line_items_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payment_links__post_payment_links_payment_link_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("payment_method_collection".into(), match (&p.payment_method_collection) { Some(v) => Value::String(iface_payment_links__payment_link_customer_creation_enum__to_str(v).into()), None => Value::Null });
     m.insert("payment_method_types".into(), match (&p.payment_method_types) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("shipping_address_collection".into(), match (&p.shipping_address_collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1105,7 +1117,7 @@ fn iface_payment_links__payment_link__from_json(v: &Value) -> Option<iface_payme
         invoice_creation: m.get("invoice_creation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         line_items: m.get("line_items").filter(|v| !v.is_null()).and_then(|v| iface_payment_links__payment_link_line_items__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_payment_links__payment_link_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_payment_links::PaymentLinkMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_payment_links__payment_link_object_enum__from_str)) { Some(x) => x, None => return None },
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         payment_intent_data: m.get("payment_intent_data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1239,13 +1251,13 @@ fn iface_payment_links__coupon__from_json(v: &Value) -> Option<iface_payment_lin
         applies_to: m.get("applies_to").filter(|v| !v.is_null()).and_then(|v| iface_payment_links__coupon_applies_to__from_json(v)),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_payment_links__coupon_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_payment_links__coupon_currency_option__from_json(x)).map(|val| iface_payment_links::CouponCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         duration: match m.get("duration").and_then(|v| (v).as_str().and_then(iface_payment_links__coupon_duration_enum__from_str)) { Some(x) => x, None => return None },
         duration_in_months: m.get("duration_in_months").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_payment_links__coupon_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_payment_links::CouponMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_payment_links__coupon_object_enum__from_str)) { Some(x) => x, None => return None },
         percent_off: m.get("percent_off").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -1262,17 +1274,26 @@ fn iface_payment_links__coupon_applies_to__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_payment_links__coupon_currency_options__from_json(v: &Value) -> Option<iface_payment_links::CouponCurrencyOptions> {
+fn iface_payment_links__coupon_currency_option__from_json(v: &Value) -> Option<iface_payment_links::CouponCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_payment_links::CouponCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payment_links::CouponCurrencyOption {
+        amount_off: m.get("amount_off").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_payment_links__coupon_metadata__from_json(v: &Value) -> Option<iface_payment_links::CouponMetadata> {
+fn iface_payment_links__coupon_currency_options_entry__from_json(v: &Value) -> Option<iface_payment_links::CouponCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_payment_links::CouponMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payment_links::CouponCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_payment_links__coupon_currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_payment_links__coupon_metadata_entry__from_json(v: &Value) -> Option<iface_payment_links::CouponMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_payment_links::CouponMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1296,7 +1317,7 @@ fn iface_payment_links__tax_rate__from_json(v: &Value) -> Option<iface_payment_l
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_payment_links__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_payment_links::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_payment_links__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1304,17 +1325,19 @@ fn iface_payment_links__tax_rate__from_json(v: &Value) -> Option<iface_payment_l
     })
 }
 
-fn iface_payment_links__tax_rate_metadata__from_json(v: &Value) -> Option<iface_payment_links::TaxRateMetadata> {
+fn iface_payment_links__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_payment_links::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_payment_links::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payment_links::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_payment_links__payment_link_metadata__from_json(v: &Value) -> Option<iface_payment_links::PaymentLinkMetadata> {
+fn iface_payment_links__payment_link_metadata_entry__from_json(v: &Value) -> Option<iface_payment_links::PaymentLinkMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_payment_links::PaymentLinkMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payment_links::PaymentLinkMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

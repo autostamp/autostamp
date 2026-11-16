@@ -95,40 +95,43 @@ const OP_ORDERS_DELETE_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpe
     ],
 };
 
+fn iface_orders__order_status__to_str(e: &iface_orders::OrderStatus) -> &'static str {
+    match e {
+        iface_orders::OrderStatus::V1 => "-1",
+        iface_orders::OrderStatus::V0 => "0",
+        iface_orders::OrderStatus::V1V2 => "1",
+        iface_orders::OrderStatus::V2 => "2",
+        iface_orders::OrderStatus::V3 => "3",
+        iface_orders::OrderStatus::V4 => "4",
+        iface_orders::OrderStatus::V5 => "5",
+        iface_orders::OrderStatus::V6 => "6",
+        iface_orders::OrderStatus::V7 => "7",
+        iface_orders::OrderStatus::V8 => "8",
+        iface_orders::OrderStatus::V9 => "9",
+        iface_orders::OrderStatus::A => "A",
+        iface_orders::OrderStatus::B => "B",
+        iface_orders::OrderStatus::C => "C",
+        iface_orders::OrderStatus::D => "D",
+        iface_orders::OrderStatus::E => "E",
+    }
+}
+
 fn iface_orders__order_state__to_json(p: &iface_orders::OrderState) -> Value {
     let mut m = Map::new();
     m.insert("ContractId".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("FilledQuantity".into(), match (&p.filled_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("ListingExchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("OutsideRTH".into(), match (&p.outside_rth) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("RemainingQuantity".into(), match (&p.remaining_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Side".into(), match (&p.side) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("Status".into(), match (&p.status) { Some(v) => iface_orders__order_status__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => Value::String(iface_orders__order_status__to_str(v).into()), None => Value::Null });
     m.insert("Ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("TimeInForce".into(), match (&p.time_in_force) { Some(v) => iface_orders__time_in_force__to_json(v), None => Value::Null });
+    m.insert("TimeInForce".into(), match (&p.time_in_force) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("TransactionTime".into(), match (&p.transaction_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_orders__order_type__to_json(p: &iface_orders::OrderType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orders__order_status__to_json(p: &iface_orders::OrderStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orders__time_in_force__to_json(p: &iface_orders::TimeInForce) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -136,10 +139,10 @@ fn iface_orders__put_accounts_account_orders_customer_order_id_response_item__to
     let mut m = Map::new();
     m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("OrderQty".into(), match (&p.order_qty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("Status".into(), match (&p.status) { Some(v) => iface_orders__order_status__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => Value::String(iface_orders__order_status__to_str(v).into()), None => Value::Null });
     m.insert("Symbol".into(), match (&p.symbol) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -149,10 +152,10 @@ fn iface_orders__delete_accounts_account_orders_customer_order_id_response_item_
     let mut m = Map::new();
     m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("OrderQty".into(), match (&p.order_qty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("Status".into(), match (&p.status) { Some(v) => iface_orders__order_status__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => Value::String(iface_orders__order_status__to_str(v).into()), None => Value::Null });
     m.insert("Symbol".into(), match (&p.symbol) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -178,14 +181,14 @@ fn iface_orders__post_accounts_account_orders_params__to_json(p: &iface_orders::
     m.insert("mifid2_decision_maker".into(), match (&p.mifid2_decision_maker) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mifid2_execution_algo".into(), match (&p.mifid2_execution_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mifid2_execution_trader".into(), match (&p.mifid2_execution_trader) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_type".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("order_type".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("order_restrictions".into(), match (&p.order_restrictions) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("outside_rth".into(), match (&p.outside_rth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => iface_orders__time_in_force__to_json(v), None => Value::Null });
+    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
@@ -207,13 +210,13 @@ fn iface_orders__put_accounts_account_orders_customer_order_id_params__to_json(p
     m.insert("mifid2_decision_maker".into(), match (&p.mifid2_decision_maker) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mifid2_execution_algo".into(), match (&p.mifid2_execution_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mifid2_execution_trader".into(), match (&p.mifid2_execution_trader) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_type".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("order_type".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("orig_customer_order_id".into(), match (&p.orig_customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("outside_rth".into(), match (&p.outside_rth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => iface_orders__time_in_force__to_json(v), None => Value::Null });
+    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
@@ -231,37 +234,16 @@ fn iface_orders__order_state__from_json(v: &Value) -> Option<iface_orders::Order
         customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         filled_quantity: m.get("FilledQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         listing_exchange: m.get("ListingExchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_type__from_json(v)),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         outside_rth: m.get("OutsideRTH").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         price: m.get("Price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         remaining_quantity: m.get("RemainingQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_status__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_orders__order_status__from_str)),
         ticker: m.get("Ticker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        time_in_force: m.get("TimeInForce").filter(|v| !v.is_null()).and_then(|v| iface_orders__time_in_force__from_json(v)),
+        time_in_force: m.get("TimeInForce").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         transaction_time: m.get("TransactionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         warning: m.get("Warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_orders__order_type__from_json(v: &Value) -> Option<iface_orders::OrderType> {
-    let m = v.as_object()?;
-    Some(iface_orders::OrderType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_orders__order_status__from_json(v: &Value) -> Option<iface_orders::OrderStatus> {
-    let m = v.as_object()?;
-    Some(iface_orders::OrderStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_orders__time_in_force__from_json(v: &Value) -> Option<iface_orders::TimeInForce> {
-    let m = v.as_object()?;
-    Some(iface_orders::TimeInForce {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -270,10 +252,10 @@ fn iface_orders__put_accounts_account_orders_customer_order_id_response_item__fr
     Some(iface_orders::PutAccountsAccountOrdersCustomerOrderIdResponseItem {
         customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         order_qty: m.get("OrderQty").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_type__from_json(v)),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         price: m.get("Price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_status__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_orders__order_status__from_str)),
         symbol: m.get("Symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         warning: m.get("Warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -284,13 +266,35 @@ fn iface_orders__delete_accounts_account_orders_customer_order_id_response_item_
     Some(iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdResponseItem {
         customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         order_qty: m.get("OrderQty").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_type__from_json(v)),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         price: m.get("Price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_status__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_orders__order_status__from_str)),
         symbol: m.get("Symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         warning: m.get("Warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_orders__order_status__from_str(s: &str) -> Option<iface_orders::OrderStatus> {
+    match s {
+        "-1" => Some(iface_orders::OrderStatus::V1),
+        "0" => Some(iface_orders::OrderStatus::V0),
+        "1" => Some(iface_orders::OrderStatus::V1V2),
+        "2" => Some(iface_orders::OrderStatus::V2),
+        "3" => Some(iface_orders::OrderStatus::V3),
+        "4" => Some(iface_orders::OrderStatus::V4),
+        "5" => Some(iface_orders::OrderStatus::V5),
+        "6" => Some(iface_orders::OrderStatus::V6),
+        "7" => Some(iface_orders::OrderStatus::V7),
+        "8" => Some(iface_orders::OrderStatus::V8),
+        "9" => Some(iface_orders::OrderStatus::V9),
+        "A" => Some(iface_orders::OrderStatus::A),
+        "B" => Some(iface_orders::OrderStatus::B),
+        "C" => Some(iface_orders::OrderStatus::C),
+        "D" => Some(iface_orders::OrderStatus::D),
+        "E" => Some(iface_orders::OrderStatus::E),
+        _ => None,
+    }
 }
 
 fn iface_orders__get_accounts_account_orders__ok(body: String) -> Result<Vec<iface_orders::OrderState>, crate::runtime::DispatchError> {

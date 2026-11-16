@@ -146,7 +146,7 @@ const OP_AUTOSCALING_V2_PATCH_AUTOSCALING_V2_NAMESPACED_HORIZONTAL_POD_AUTOSCALE
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -218,7 +218,7 @@ const OP_AUTOSCALING_V2_PATCH_AUTOSCALING_V2_NAMESPACED_HORIZONTAL_POD_AUTOSCALE
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -332,14 +332,14 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler__to
 
 fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMeta) -> Value {
     let mut m = Map::new();
-    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__to_json(v), None => Value::Null });
-    m.insert("creationTimestamp".into(), match (&p.creation_timestamp) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("creationTimestamp".into(), match (&p.creation_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("deletionGracePeriodSeconds".into(), match (&p.deletion_grace_period_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("deletionTimestamp".into(), match (&p.deletion_timestamp) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("deletionTimestamp".into(), match (&p.deletion_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("finalizers".into(), match (&p.finalizers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("generateName".into(), match (&p.generate_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("generation".into(), match (&p.generation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("labels".into(), match (&p.labels) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__to_json(v), None => Value::Null });
+    m.insert("labels".into(), match (&p.labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("managedFields".into(), match (&p.managed_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__to_json(v)).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -350,21 +350,17 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_js
     Value::Object(m)
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations) -> Value {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations_entry__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1Time) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels) -> Value {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels_entry__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -372,17 +368,18 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_ent
     let mut m = Map::new();
     m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fieldsType".into(), match (&p.fields_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fieldsV1".into(), match (&p.fields_v1) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__to_json(v), None => Value::Null });
+    m.insert("fieldsV1".into(), match (&p.fields_v1) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("manager".into(), match (&p.manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("operation".into(), match (&p.operation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subresource".into(), match (&p.subresource) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time".into(), match (&p.time) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1) -> Value {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1_entry__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -452,15 +449,9 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_container_resource_metric_sou
 fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_target__to_json(p: &iface_autoscaling_v2::IoK8sApiAutoscalingV2MetricTarget) -> Value {
     let mut m = Map::new();
     m.insert("averageUtilization".into(), match (&p.average_utilization) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("averageValue".into(), match (&p.average_value) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(v), None => Value::Null });
+    m.insert("averageValue".into(), match (&p.average_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("value".into(), match (&p.value) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApiResourceQuantity) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -481,7 +472,7 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_identifier__to_json(p:
 fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelector) -> Value {
     let mut m = Map::new();
     m.insert("matchExpressions".into(), match (&p.match_expressions) { Some(v) => Value::Array((v).iter().map(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirement__to_json(v)).collect()), None => Value::Null });
-    m.insert("matchLabels".into(), match (&p.match_labels) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__to_json(v), None => Value::Null });
+    m.insert("matchLabels".into(), match (&p.match_labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -493,9 +484,10 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_req
     Value::Object(m)
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels) -> Value {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels_entry__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -535,14 +527,14 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler_sta
     m.insert("currentMetrics".into(), match (&p.current_metrics) { Some(v) => Value::Array((v).iter().map(|v| iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_status__to_json(v)).collect()), None => Value::Null });
     m.insert("currentReplicas".into(), match (&p.current_replicas) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("desiredReplicas".into(), Value::Number(serde_json::Number::from(*(&p.desired_replicas))));
-    m.insert("lastScaleTime".into(), match (&p.last_scale_time) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastScaleTime".into(), match (&p.last_scale_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("observedGeneration".into(), match (&p.observed_generation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler_condition__to_json(p: &iface_autoscaling_v2::IoK8sApiAutoscalingV2HorizontalPodAutoscalerCondition) -> Value {
     let mut m = Map::new();
-    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
@@ -572,8 +564,8 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_container_resource_metric_sta
 fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_value_status__to_json(p: &iface_autoscaling_v2::IoK8sApiAutoscalingV2MetricValueStatus) -> Value {
     let mut m = Map::new();
     m.insert("averageUtilization".into(), match (&p.average_utilization) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("averageValue".into(), match (&p.average_value) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(v), None => Value::Null });
-    m.insert("value".into(), match (&p.value) { Some(v) => iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(v), None => Value::Null });
+    m.insert("averageValue".into(), match (&p.average_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -654,16 +646,31 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_status_cause__to_j
     Value::Object(m)
 }
 
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1PatchEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v2__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1PatchEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_watch_event__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1WatchEvent) -> Value {
     let mut m = Map::new();
-    m.insert("object".into(), iface_autoscaling_v2__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(&p.object));
+    m.insert("object".into(), Value::Object((&p.object).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtension) -> Value {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_runtime_raw_extension_entry__to_json(p: &iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtensionEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -774,7 +781,7 @@ fn iface_autoscaling_v2__patch_autoscaling_v2_namespaced_horizontal_pod_autoscal
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -830,7 +837,7 @@ fn iface_autoscaling_v2__patch_autoscaling_v2_namespaced_horizontal_pod_autoscal
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -935,14 +942,14 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler__fr
 fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMeta> {
     let m = v.as_object()?;
     Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMeta {
-        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__from_json(v)),
-        creation_timestamp: m.get("creationTimestamp").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry { key: k.clone(), value: val })).collect())),
+        creation_timestamp: m.get("creationTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         deletion_grace_period_seconds: m.get("deletionGracePeriodSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        deletion_timestamp: m.get("deletionTimestamp").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        deletion_timestamp: m.get("deletionTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         finalizers: m.get("finalizers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         generate_name: m.get("generateName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         generation: m.get("generation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        labels: m.get("labels").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__from_json(v)),
+        labels: m.get("labels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry { key: k.clone(), value: val })).collect())),
         managed_fields: m.get("managedFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__from_json(x)).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -953,24 +960,19 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_
     })
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations> {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations_entry__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry> {
     let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1Time> {
-    let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1Time {
+    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels> {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels_entry__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -979,18 +981,19 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_ent
     Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1ManagedFieldsEntry {
         api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         fields_type: m.get("fieldsType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        fields_v1: m.get("fieldsV1").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__from_json(v)),
+        fields_v1: m.get("fieldsV1").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry { key: k.clone(), value: val })).collect())),
         manager: m.get("manager").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         operation: m.get("operation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         subresource: m.get("subresource").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1> {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1_entry__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry> {
     let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1 {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1068,16 +1071,9 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_target__from_json(v: &
     let m = v.as_object()?;
     Some(iface_autoscaling_v2::IoK8sApiAutoscalingV2MetricTarget {
         average_utilization: m.get("averageUtilization").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        average_value: m.get("averageValue").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v)),
+        average_value: m.get("averageValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v)),
-    })
-}
-
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApiResourceQuantity> {
-    let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApiResourceQuantity {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1101,7 +1097,7 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__fr
     let m = v.as_object()?;
     Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelector {
         match_expressions: m.get("matchExpressions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirement__from_json(x)).collect())),
-        match_labels: m.get("matchLabels").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__from_json(v)),
+        match_labels: m.get("matchLabels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -1114,10 +1110,11 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_req
     })
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels> {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels_entry__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1162,7 +1159,7 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler_sta
         current_metrics: m.get("currentMetrics").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_status__from_json(x)).collect())),
         current_replicas: m.get("currentReplicas").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         desired_replicas: m.get("desiredReplicas").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        last_scale_time: m.get("lastScaleTime").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_scale_time: m.get("lastScaleTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         observed_generation: m.get("observedGeneration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
     })
 }
@@ -1170,7 +1167,7 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler_sta
 fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_horizontal_pod_autoscaler_condition__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApiAutoscalingV2HorizontalPodAutoscalerCondition> {
     let m = v.as_object()?;
     Some(iface_autoscaling_v2::IoK8sApiAutoscalingV2HorizontalPodAutoscalerCondition {
-        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -1203,8 +1200,8 @@ fn iface_autoscaling_v2__io_k8s_api_autoscaling_v2_metric_value_status__from_jso
     let m = v.as_object()?;
     Some(iface_autoscaling_v2::IoK8sApiAutoscalingV2MetricValueStatus {
         average_utilization: m.get("averageUtilization").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        average_value: m.get("averageValue").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v)),
-        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v)),
+        average_value: m.get("averageValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1289,15 +1286,16 @@ fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_status_cause__from
 fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_apis_meta_v1_watch_event__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1WatchEvent> {
     let m = v.as_object()?;
     Some(iface_autoscaling_v2::IoK8sApimachineryPkgApisMetaV1WatchEvent {
-        object: match m.get("object").and_then(|v| iface_autoscaling_v2__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v)) { Some(x) => x, None => return None },
+        object: m.get("object").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtensionEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtension> {
+fn iface_autoscaling_v2__io_k8s_apimachinery_pkg_runtime_raw_extension_entry__from_json(v: &Value) -> Option<iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtensionEntry> {
     let m = v.as_object()?;
-    Some(iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtension {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_autoscaling_v2::IoK8sApimachineryPkgRuntimeRawExtensionEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

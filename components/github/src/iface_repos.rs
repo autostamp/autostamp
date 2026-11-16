@@ -2394,6 +2394,19 @@ fn iface_repos__repository_invitation_permissions_enum__to_str(e: &iface_repos::
     }
 }
 
+fn iface_repos__author_association__to_str(e: &iface_repos::AuthorAssociation) -> &'static str {
+    match e {
+        iface_repos::AuthorAssociation::Collaborator => "COLLABORATOR",
+        iface_repos::AuthorAssociation::Contributor => "CONTRIBUTOR",
+        iface_repos::AuthorAssociation::FirstTimer => "FIRST_TIMER",
+        iface_repos::AuthorAssociation::FirstTimeContributor => "FIRST_TIME_CONTRIBUTOR",
+        iface_repos::AuthorAssociation::Mannequin => "MANNEQUIN",
+        iface_repos::AuthorAssociation::Member => "MEMBER",
+        iface_repos::AuthorAssociation::None => "NONE",
+        iface_repos::AuthorAssociation::Owner => "OWNER",
+    }
+}
+
 fn iface_repos__auto_merge_merge_method_enum__to_str(e: &iface_repos::AutoMergeMergeMethodEnum) -> &'static str {
     match e {
         iface_repos::AutoMergeMergeMethodEnum::Merge => "merge",
@@ -2447,6 +2460,13 @@ fn iface_repos__create_deployment_status_body_state_enum__to_str(e: &iface_repos
         iface_repos::CreateDeploymentStatusBodyStateEnum::Queued => "queued",
         iface_repos::CreateDeploymentStatusBodyStateEnum::Pending => "pending",
         iface_repos::CreateDeploymentStatusBodyStateEnum::Success => "success",
+    }
+}
+
+fn iface_repos__deployment_reviewer_type__to_str(e: &iface_repos::DeploymentReviewerType) -> &'static str {
+    match e {
+        iface_repos::DeploymentReviewerType::User => "User",
+        iface_repos::DeploymentReviewerType::Team => "Team",
     }
 }
 
@@ -4179,7 +4199,7 @@ fn iface_repos__nullable_collaborator_permissions__to_json(p: &iface_repos::Null
 
 fn iface_repos__commit_comment__to_json(p: &iface_repos::CommitComment) -> Value {
     let mut m = Map::new();
-    m.insert("author_association".into(), iface_repos__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_repos__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), Value::String((&p.body).clone()));
     m.insert("commit_id".into(), Value::String((&p.commit_id).clone()));
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
@@ -4193,12 +4213,6 @@ fn iface_repos__commit_comment__to_json(p: &iface_repos::CommitComment) -> Value
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("user".into(), iface_repos__nullable_simple_user__to_json(&p.user));
-    Value::Object(m)
-}
-
-fn iface_repos__author_association__to_json(p: &iface_repos::AuthorAssociation) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4238,7 +4252,7 @@ fn iface_repos__pull_request_simple__to_json(p: &iface_repos::PullRequestSimple)
     m.insert("active_lock_reason".into(), match (&p.active_lock_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee".into(), iface_repos__nullable_simple_user__to_json(&p.assignee));
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| iface_repos__simple_user__to_json(v)).collect()), None => Value::Null });
-    m.insert("author_association".into(), iface_repos__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_repos__author_association__to_str(&p.author_association).into()));
     m.insert("auto_merge".into(), iface_repos__auto_merge__to_json(&p.auto_merge));
     m.insert("base".into(), iface_repos__pull_request_simple_base__to_json(&p.base));
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -4671,9 +4685,10 @@ fn iface_repos__deployment_status__to_json(p: &iface_repos::DeploymentStatus) ->
     Value::Object(m)
 }
 
-fn iface_repos__create_dispatch_event_body_client_payload__to_json(p: &iface_repos::CreateDispatchEventBodyClientPayload) -> Value {
+fn iface_repos__create_dispatch_event_body_client_payload_entry__to_json(p: &iface_repos::CreateDispatchEventBodyClientPayloadEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4708,19 +4723,7 @@ fn iface_repos__deployment_branch_policy_settings__to_json(p: &iface_repos::Depl
 fn iface_repos__create_or_update_environment_body_reviewers_item__to_json(p: &iface_repos::CreateOrUpdateEnvironmentBodyReviewersItem) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_repos__deployment_reviewer_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_repos__deployment_reviewer_type__to_json(p: &iface_repos::DeploymentReviewerType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_repos__wait_timer__to_json(p: &iface_repos::WaitTimer) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_repos__deployment_reviewer_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4759,40 +4762,16 @@ fn iface_repos__hook__to_json(p: &iface_repos::Hook) -> Value {
 
 fn iface_repos__hook_config__to_json(p: &iface_repos::HookConfig) -> Value {
     let mut m = Map::new();
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_repos__webhook_config_content_type__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("digest".into(), match (&p.digest) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_repos__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("password".into(), match (&p.password) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("room".into(), match (&p.room) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_repos__webhook_config_secret__to_json(v), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subdomain".into(), match (&p.subdomain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_repos__webhook_config_url__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_repos__webhook_config_content_type__to_json(p: &iface_repos::WebhookConfigContentType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_repos__webhook_config_insecure_ssl__to_json(p: &iface_repos::WebhookConfigInsecureSsl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_repos__webhook_config_secret__to_json(p: &iface_repos::WebhookConfigSecret) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_repos__webhook_config_url__to_json(p: &iface_repos::WebhookConfigUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4806,32 +4785,32 @@ fn iface_repos__hook_response__to_json(p: &iface_repos::HookResponse) -> Value {
 
 fn iface_repos__create_webhook_body_config__to_json(p: &iface_repos::CreateWebhookBodyConfig) -> Value {
     let mut m = Map::new();
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_repos__webhook_config_content_type__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("digest".into(), match (&p.digest) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_repos__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_repos__webhook_config_secret__to_json(v), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_repos__webhook_config_url__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_repos__update_webhook_body_config__to_json(p: &iface_repos::UpdateWebhookBodyConfig) -> Value {
     let mut m = Map::new();
     m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_repos__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_repos__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("room".into(), match (&p.room) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_repos__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), iface_repos__webhook_config_url__to_json(&p.url));
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 fn iface_repos__webhook_config__to_json(p: &iface_repos::WebhookConfig) -> Value {
     let mut m = Map::new();
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_repos__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_repos__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_repos__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_repos__webhook_config_url__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4872,39 +4851,43 @@ fn iface_repos__hook_delivery__to_json(p: &iface_repos::HookDelivery) -> Value {
 
 fn iface_repos__hook_delivery_request__to_json(p: &iface_repos::HookDeliveryRequest) -> Value {
     let mut m = Map::new();
-    m.insert("headers".into(), iface_repos__hook_delivery_request_headers__to_json(&p.headers));
-    m.insert("payload".into(), iface_repos__hook_delivery_request_payload__to_json(&p.payload));
+    m.insert("headers".into(), Value::Object((&p.headers).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
+    m.insert("payload".into(), Value::Object((&p.payload).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_repos__hook_delivery_request_headers__to_json(p: &iface_repos::HookDeliveryRequestHeaders) -> Value {
+fn iface_repos__hook_delivery_request_headers_entry__to_json(p: &iface_repos::HookDeliveryRequestHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_repos__hook_delivery_request_payload__to_json(p: &iface_repos::HookDeliveryRequestPayload) -> Value {
+fn iface_repos__hook_delivery_request_payload_entry__to_json(p: &iface_repos::HookDeliveryRequestPayloadEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_repos__hook_delivery_response__to_json(p: &iface_repos::HookDeliveryResponse) -> Value {
     let mut m = Map::new();
-    m.insert("headers".into(), iface_repos__hook_delivery_response_headers__to_json(&p.headers));
+    m.insert("headers".into(), Value::Object((&p.headers).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("payload".into(), Value::String((&p.payload).clone()));
     Value::Object(m)
 }
 
-fn iface_repos__hook_delivery_response_headers__to_json(p: &iface_repos::HookDeliveryResponseHeaders) -> Value {
+fn iface_repos__hook_delivery_response_headers_entry__to_json(p: &iface_repos::HookDeliveryResponseHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_repos__redeliver_webhook_delivery_response__to_json(p: &iface_repos::RedeliverWebhookDeliveryResponse) -> Value {
+fn iface_repos__redeliver_webhook_delivery_response_entry__to_json(p: &iface_repos::RedeliverWebhookDeliveryResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4922,15 +4905,17 @@ fn iface_repos__deploy_key__to_json(p: &iface_repos::DeployKey) -> Value {
     Value::Object(m)
 }
 
-fn iface_repos__language__to_json(p: &iface_repos::Language) -> Value {
+fn iface_repos__language_entry__to_json(p: &iface_repos::LanguageEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
-fn iface_repos__enable_lfs_for_repo_response__to_json(p: &iface_repos::EnableLfsForRepoResponse) -> Value {
+fn iface_repos__enable_lfs_for_repo_response_entry__to_json(p: &iface_repos::EnableLfsForRepoResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -5166,12 +5151,6 @@ fn iface_repos__release_notes_content__to_json(p: &iface_repos::ReleaseNotesCont
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_repos__code_frequency_stat__to_json(p: &iface_repos::CodeFrequencyStat) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -6055,7 +6034,7 @@ fn iface_repos__create_dispatch_event_params__to_json(p: &iface_repos::CreateDis
     let mut m = Map::new();
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
-    m.insert("client_payload".into(), match (&p.client_payload) { Some(v) => iface_repos__create_dispatch_event_body_client_payload__to_json(v), None => Value::Null });
+    m.insert("client_payload".into(), match (&p.client_payload) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("event_type".into(), Value::String((&p.event_type).clone()));
     Value::Object(m)
 }
@@ -6084,7 +6063,7 @@ fn iface_repos__create_or_update_environment_params__to_json(p: &iface_repos::Cr
     m.insert("environment_name".into(), Value::String((&p.environment_name).clone()));
     m.insert("deployment_branch_policy".into(), match (&p.deployment_branch_policy) { Some(v) => iface_repos__deployment_branch_policy_settings__to_json(v), None => Value::Null });
     m.insert("reviewers".into(), match (&p.reviewers) { Some(v) => Value::Array((v).iter().map(|v| iface_repos__create_or_update_environment_body_reviewers_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("wait_timer".into(), match (&p.wait_timer) { Some(v) => iface_repos__wait_timer__to_json(v), None => Value::Null });
+    m.insert("wait_timer".into(), match (&p.wait_timer) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6225,10 +6204,10 @@ fn iface_repos__update_webhook_config_for_repo_params__to_json(p: &iface_repos::
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_repos__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_repos__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_repos__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_repos__webhook_config_url__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8460,7 +8439,7 @@ fn iface_repos__nullable_collaborator_permissions__from_json(v: &Value) -> Optio
 fn iface_repos__commit_comment__from_json(v: &Value) -> Option<iface_repos::CommitComment> {
     let m = v.as_object()?;
     Some(iface_repos::CommitComment {
-        author_association: match m.get("author_association").and_then(|v| iface_repos__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_repos__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         commit_id: m.get("commit_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -8474,13 +8453,6 @@ fn iface_repos__commit_comment__from_json(v: &Value) -> Option<iface_repos::Comm
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user: match m.get("user").and_then(|v| iface_repos__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_repos__author_association__from_json(v: &Value) -> Option<iface_repos::AuthorAssociation> {
-    let m = v.as_object()?;
-    Some(iface_repos::AuthorAssociation {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -8524,7 +8496,7 @@ fn iface_repos__pull_request_simple__from_json(v: &Value) -> Option<iface_repos:
         active_lock_reason: m.get("active_lock_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         assignee: match m.get("assignee").and_then(|v| iface_repos__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_repos__simple_user__from_json(x)).collect())),
-        author_association: match m.get("author_association").and_then(|v| iface_repos__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_repos__author_association__from_str)) { Some(x) => x, None => return None },
         auto_merge: match m.get("auto_merge").and_then(|v| iface_repos__auto_merge__from_json(v)) { Some(x) => x, None => return None },
         base: match m.get("base").and_then(|v| iface_repos__pull_request_simple_base__from_json(v)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -9026,44 +8998,16 @@ fn iface_repos__hook__from_json(v: &Value) -> Option<iface_repos::Hook> {
 fn iface_repos__hook_config__from_json(v: &Value) -> Option<iface_repos::HookConfig> {
     let m = v.as_object()?;
     Some(iface_repos::HookConfig {
-        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_content_type__from_json(v)),
+        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         digest: m.get("digest").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        insecure_ssl: m.get("insecure_ssl").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_insecure_ssl__from_json(v)),
+        insecure_ssl: m.get("insecure_ssl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         password: m.get("password").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         room: m.get("room").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_secret__from_json(v)),
+        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         subdomain: m.get("subdomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         token: m.get("token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_url__from_json(v)),
-    })
-}
-
-fn iface_repos__webhook_config_content_type__from_json(v: &Value) -> Option<iface_repos::WebhookConfigContentType> {
-    let m = v.as_object()?;
-    Some(iface_repos::WebhookConfigContentType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_repos__webhook_config_insecure_ssl__from_json(v: &Value) -> Option<iface_repos::WebhookConfigInsecureSsl> {
-    let m = v.as_object()?;
-    Some(iface_repos::WebhookConfigInsecureSsl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_repos__webhook_config_secret__from_json(v: &Value) -> Option<iface_repos::WebhookConfigSecret> {
-    let m = v.as_object()?;
-    Some(iface_repos::WebhookConfigSecret {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_repos__webhook_config_url__from_json(v: &Value) -> Option<iface_repos::WebhookConfigUrl> {
-    let m = v.as_object()?;
-    Some(iface_repos::WebhookConfigUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -9079,10 +9023,10 @@ fn iface_repos__hook_response__from_json(v: &Value) -> Option<iface_repos::HookR
 fn iface_repos__webhook_config__from_json(v: &Value) -> Option<iface_repos::WebhookConfig> {
     let m = v.as_object()?;
     Some(iface_repos::WebhookConfig {
-        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_content_type__from_json(v)),
-        insecure_ssl: m.get("insecure_ssl").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_insecure_ssl__from_json(v)),
-        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_secret__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_repos__webhook_config_url__from_json(v)),
+        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        insecure_ssl: m.get("insecure_ssl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -9126,44 +9070,48 @@ fn iface_repos__hook_delivery__from_json(v: &Value) -> Option<iface_repos::HookD
 fn iface_repos__hook_delivery_request__from_json(v: &Value) -> Option<iface_repos::HookDeliveryRequest> {
     let m = v.as_object()?;
     Some(iface_repos::HookDeliveryRequest {
-        headers: match m.get("headers").and_then(|v| iface_repos__hook_delivery_request_headers__from_json(v)) { Some(x) => x, None => return None },
-        payload: match m.get("payload").and_then(|v| iface_repos__hook_delivery_request_payload__from_json(v)) { Some(x) => x, None => return None },
+        headers: m.get("headers").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_repos::HookDeliveryRequestHeadersEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+        payload: m.get("payload").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_repos::HookDeliveryRequestPayloadEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_repos__hook_delivery_request_headers__from_json(v: &Value) -> Option<iface_repos::HookDeliveryRequestHeaders> {
+fn iface_repos__hook_delivery_request_headers_entry__from_json(v: &Value) -> Option<iface_repos::HookDeliveryRequestHeadersEntry> {
     let m = v.as_object()?;
-    Some(iface_repos::HookDeliveryRequestHeaders {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repos::HookDeliveryRequestHeadersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_repos__hook_delivery_request_payload__from_json(v: &Value) -> Option<iface_repos::HookDeliveryRequestPayload> {
+fn iface_repos__hook_delivery_request_payload_entry__from_json(v: &Value) -> Option<iface_repos::HookDeliveryRequestPayloadEntry> {
     let m = v.as_object()?;
-    Some(iface_repos::HookDeliveryRequestPayload {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repos::HookDeliveryRequestPayloadEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_repos__hook_delivery_response__from_json(v: &Value) -> Option<iface_repos::HookDeliveryResponse> {
     let m = v.as_object()?;
     Some(iface_repos::HookDeliveryResponse {
-        headers: match m.get("headers").and_then(|v| iface_repos__hook_delivery_response_headers__from_json(v)) { Some(x) => x, None => return None },
+        headers: m.get("headers").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_repos::HookDeliveryResponseHeadersEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         payload: m.get("payload").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_repos__hook_delivery_response_headers__from_json(v: &Value) -> Option<iface_repos::HookDeliveryResponseHeaders> {
+fn iface_repos__hook_delivery_response_headers_entry__from_json(v: &Value) -> Option<iface_repos::HookDeliveryResponseHeadersEntry> {
     let m = v.as_object()?;
-    Some(iface_repos::HookDeliveryResponseHeaders {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repos::HookDeliveryResponseHeadersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_repos__redeliver_webhook_delivery_response__from_json(v: &Value) -> Option<iface_repos::RedeliverWebhookDeliveryResponse> {
+fn iface_repos__redeliver_webhook_delivery_response_entry__from_json(v: &Value) -> Option<iface_repos::RedeliverWebhookDeliveryResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_repos::RedeliverWebhookDeliveryResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repos::RedeliverWebhookDeliveryResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -9182,17 +9130,19 @@ fn iface_repos__deploy_key__from_json(v: &Value) -> Option<iface_repos::DeployKe
     })
 }
 
-fn iface_repos__language__from_json(v: &Value) -> Option<iface_repos::Language> {
+fn iface_repos__language_entry__from_json(v: &Value) -> Option<iface_repos::LanguageEntry> {
     let m = v.as_object()?;
-    Some(iface_repos::Language {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repos::LanguageEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_repos__enable_lfs_for_repo_response__from_json(v: &Value) -> Option<iface_repos::EnableLfsForRepoResponse> {
+fn iface_repos__enable_lfs_for_repo_response_entry__from_json(v: &Value) -> Option<iface_repos::EnableLfsForRepoResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_repos::EnableLfsForRepoResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repos::EnableLfsForRepoResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -9440,13 +9390,6 @@ fn iface_repos__release_notes_content__from_json(v: &Value) -> Option<iface_repo
     })
 }
 
-fn iface_repos__code_frequency_stat__from_json(v: &Value) -> Option<iface_repos::CodeFrequencyStat> {
-    let m = v.as_object()?;
-    Some(iface_repos::CodeFrequencyStat {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_repos__commit_activity__from_json(v: &Value) -> Option<iface_repos::CommitActivity> {
     let m = v.as_object()?;
     Some(iface_repos::CommitActivity {
@@ -9628,6 +9571,20 @@ fn iface_repos__repository_invitation_permissions_enum__from_str(s: &str) -> Opt
         "admin" => Some(iface_repos::RepositoryInvitationPermissionsEnum::Admin),
         "triage" => Some(iface_repos::RepositoryInvitationPermissionsEnum::Triage),
         "maintain" => Some(iface_repos::RepositoryInvitationPermissionsEnum::Maintain),
+        _ => None,
+    }
+}
+
+fn iface_repos__author_association__from_str(s: &str) -> Option<iface_repos::AuthorAssociation> {
+    match s {
+        "COLLABORATOR" => Some(iface_repos::AuthorAssociation::Collaborator),
+        "CONTRIBUTOR" => Some(iface_repos::AuthorAssociation::Contributor),
+        "FIRST_TIMER" => Some(iface_repos::AuthorAssociation::FirstTimer),
+        "FIRST_TIME_CONTRIBUTOR" => Some(iface_repos::AuthorAssociation::FirstTimeContributor),
+        "MANNEQUIN" => Some(iface_repos::AuthorAssociation::Mannequin),
+        "MEMBER" => Some(iface_repos::AuthorAssociation::Member),
+        "NONE" => Some(iface_repos::AuthorAssociation::None),
+        "OWNER" => Some(iface_repos::AuthorAssociation::Owner),
         _ => None,
     }
 }
@@ -11661,12 +11618,12 @@ fn iface_repos__get_webhook_delivery__err(e: crate::runtime::DispatchError) -> i
     }
 }
 
-fn iface_repos__redeliver_webhook_delivery__ok(body: String) -> Result<iface_repos::RedeliverWebhookDeliveryResponse, crate::runtime::DispatchError> {
+fn iface_repos__redeliver_webhook_delivery__ok(body: String) -> Result<Vec<iface_repos::RedeliverWebhookDeliveryResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_repos__redeliver_webhook_delivery_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_repos::RedeliverWebhookDeliveryResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -11829,12 +11786,12 @@ fn iface_repos__delete_deploy_key__err(e: crate::runtime::DispatchError) -> Stri
     }
 }
 
-fn iface_repos__list_languages__ok(body: String) -> Result<iface_repos::Language, crate::runtime::DispatchError> {
+fn iface_repos__list_languages__ok(body: String) -> Result<Vec<iface_repos::LanguageEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_repos__language__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_repos::LanguageEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -11847,12 +11804,12 @@ fn iface_repos__list_languages__err(e: crate::runtime::DispatchError) -> String 
     }
 }
 
-fn iface_repos__enable_lfs_for_repo__ok(body: String) -> Result<iface_repos::EnableLfsForRepoResponse, crate::runtime::DispatchError> {
+fn iface_repos__enable_lfs_for_repo__ok(body: String) -> Result<Vec<iface_repos::EnableLfsForRepoResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_repos__enable_lfs_for_repo_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_repos::EnableLfsForRepoResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -12408,12 +12365,12 @@ fn iface_repos__upload_release_asset__err(e: crate::runtime::DispatchError) -> i
     }
 }
 
-fn iface_repos__get_code_frequency_stats__ok(body: String) -> Result<Vec<iface_repos::CodeFrequencyStat>, crate::runtime::DispatchError> {
+fn iface_repos__get_code_frequency_stats__ok(body: String) -> Result<Vec<Vec<i32>>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_repos__code_frequency_stat__from_json(x)).collect()) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -12483,12 +12440,12 @@ fn iface_repos__get_participation_stats__err(e: crate::runtime::DispatchError) -
     }
 }
 
-fn iface_repos__get_punch_card_stats__ok(body: String) -> Result<Vec<iface_repos::CodeFrequencyStat>, crate::runtime::DispatchError> {
+fn iface_repos__get_punch_card_stats__ok(body: String) -> Result<Vec<Vec<i32>>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_repos__code_frequency_stat__from_json(x)).collect()) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -13683,7 +13640,7 @@ impl iface_repos::Guest for crate::Component {
             Err(e) => Err(iface_repos__get_webhook_delivery__err(e)),
         }
     }
-    fn redeliver_webhook_delivery(params: iface_repos::RedeliverWebhookDeliveryParams) -> Result<iface_repos::RedeliverWebhookDeliveryResponse, iface_repos::RedeliverWebhookDeliveryError> {
+    fn redeliver_webhook_delivery(params: iface_repos::RedeliverWebhookDeliveryParams) -> Result<Vec<iface_repos::RedeliverWebhookDeliveryResponseEntry>, iface_repos::RedeliverWebhookDeliveryError> {
         let json = iface_repos__redeliver_webhook_delivery_params__to_json(&params);
         match dispatch(&OP_REPOS_REDELIVER_WEBHOOK_DELIVERY, json).and_then(iface_repos__redeliver_webhook_delivery__ok) {
             Ok(v) => Ok(v),
@@ -13753,14 +13710,14 @@ impl iface_repos::Guest for crate::Component {
             Err(e) => Err(iface_repos__delete_deploy_key__err(e)),
         }
     }
-    fn list_languages(params: iface_repos::ListLanguagesParams) -> Result<iface_repos::Language, String> {
+    fn list_languages(params: iface_repos::ListLanguagesParams) -> Result<Vec<iface_repos::LanguageEntry>, String> {
         let json = iface_repos__list_languages_params__to_json(&params);
         match dispatch(&OP_REPOS_LIST_LANGUAGES, json).and_then(iface_repos__list_languages__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_repos__list_languages__err(e)),
         }
     }
-    fn enable_lfs_for_repo(params: iface_repos::EnableLfsForRepoParams) -> Result<iface_repos::EnableLfsForRepoResponse, iface_repos::EnableLfsForRepoError> {
+    fn enable_lfs_for_repo(params: iface_repos::EnableLfsForRepoParams) -> Result<Vec<iface_repos::EnableLfsForRepoResponseEntry>, iface_repos::EnableLfsForRepoError> {
         let json = iface_repos__enable_lfs_for_repo_params__to_json(&params);
         match dispatch(&OP_REPOS_ENABLE_LFS_FOR_REPO, json).and_then(iface_repos__enable_lfs_for_repo__ok) {
             Ok(v) => Ok(v),
@@ -13963,7 +13920,7 @@ impl iface_repos::Guest for crate::Component {
             Err(e) => Err(iface_repos__upload_release_asset__err(e)),
         }
     }
-    fn get_code_frequency_stats(params: iface_repos::GetCodeFrequencyStatsParams) -> Result<Vec<iface_repos::CodeFrequencyStat>, String> {
+    fn get_code_frequency_stats(params: iface_repos::GetCodeFrequencyStatsParams) -> Result<Vec<Vec<i32>>, String> {
         let json = iface_repos__get_code_frequency_stats_params__to_json(&params);
         match dispatch(&OP_REPOS_GET_CODE_FREQUENCY_STATS, json).and_then(iface_repos__get_code_frequency_stats__ok) {
             Ok(v) => Ok(v),
@@ -13991,7 +13948,7 @@ impl iface_repos::Guest for crate::Component {
             Err(e) => Err(iface_repos__get_participation_stats__err(e)),
         }
     }
-    fn get_punch_card_stats(params: iface_repos::GetPunchCardStatsParams) -> Result<Vec<iface_repos::CodeFrequencyStat>, String> {
+    fn get_punch_card_stats(params: iface_repos::GetPunchCardStatsParams) -> Result<Vec<Vec<i32>>, String> {
         let json = iface_repos__get_punch_card_stats_params__to_json(&params);
         match dispatch(&OP_REPOS_GET_PUNCH_CARD_STATS, json).and_then(iface_repos__get_punch_card_stats__ok) {
             Ok(v) => Ok(v),

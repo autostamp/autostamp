@@ -230,7 +230,7 @@ fn iface_ingredients__get_ingredient_information_response__to_json(p: &iface_ing
     m.insert("estimatedCost".into(), iface_ingredients__get_ingredient_information_response_estimated_cost__to_json(&p.estimated_cost));
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
     m.insert("image".into(), Value::String((&p.image).clone()));
-    m.insert("meta".into(), Value::Array((&p.meta).iter().map(|v| iface_ingredients__get_ingredient_information_response_meta_item__to_json(v)).collect()));
+    m.insert("meta".into(), Value::Array((&p.meta).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("nameClean".into(), Value::String((&p.name_clean).clone()));
     m.insert("nutrition".into(), iface_ingredients__get_ingredient_information_response_nutrition__to_json(&p.nutrition));
@@ -251,9 +251,10 @@ fn iface_ingredients__get_ingredient_information_response_estimated_cost__to_jso
     Value::Object(m)
 }
 
-fn iface_ingredients__get_ingredient_information_response_meta_item__to_json(p: &iface_ingredients::GetIngredientInformationResponseMetaItem) -> Value {
+fn iface_ingredients__get_ingredient_information_response_meta_item_entry__to_json(p: &iface_ingredients::GetIngredientInformationResponseMetaItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -306,9 +307,10 @@ fn iface_ingredients__get_ingredient_substitutes_by_id_response__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_ingredients__by_id_image_response__to_json(p: &iface_ingredients::ByIdImageResponse) -> Value {
+fn iface_ingredients__by_id_image_response_entry__to_json(p: &iface_ingredients::ByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -471,7 +473,7 @@ fn iface_ingredients__get_ingredient_information_response__from_json(v: &Value) 
         estimated_cost: match m.get("estimatedCost").and_then(|v| iface_ingredients__get_ingredient_information_response_estimated_cost__from_json(v)) { Some(x) => x, None => return None },
         id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        meta: m.get("meta").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__get_ingredient_information_response_meta_item__from_json(x)).collect())).unwrap_or_default(),
+        meta: m.get("meta").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ingredients::GetIngredientInformationResponseMetaItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name_clean: m.get("nameClean").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         nutrition: match m.get("nutrition").and_then(|v| iface_ingredients__get_ingredient_information_response_nutrition__from_json(v)) { Some(x) => x, None => return None },
@@ -493,10 +495,11 @@ fn iface_ingredients__get_ingredient_information_response_estimated_cost__from_j
     })
 }
 
-fn iface_ingredients__get_ingredient_information_response_meta_item__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseMetaItem> {
+fn iface_ingredients__get_ingredient_information_response_meta_item_entry__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseMetaItemEntry> {
     let m = v.as_object()?;
-    Some(iface_ingredients::GetIngredientInformationResponseMetaItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_ingredients::GetIngredientInformationResponseMetaItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -555,10 +558,11 @@ fn iface_ingredients__get_ingredient_substitutes_by_id_response__from_json(v: &V
     })
 }
 
-fn iface_ingredients__by_id_image_response__from_json(v: &Value) -> Option<iface_ingredients::ByIdImageResponse> {
+fn iface_ingredients__by_id_image_response_entry__from_json(v: &Value) -> Option<iface_ingredients::ByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_ingredients::ByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_ingredients::ByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -739,12 +743,12 @@ fn iface_ingredients__visualize_ingredients__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_ingredients__by_id_image__ok(body: String) -> Result<iface_ingredients::ByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_ingredients__by_id_image__ok(body: String) -> Result<Vec<iface_ingredients::ByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ingredients__by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ingredients::ByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -819,7 +823,7 @@ impl iface_ingredients::Guest for crate::Component {
             Err(e) => Err(iface_ingredients__visualize_ingredients__err(e)),
         }
     }
-    fn by_id_image(params: iface_ingredients::ByIdImageParams) -> Result<iface_ingredients::ByIdImageResponse, iface_ingredients::ByIdImageError> {
+    fn by_id_image(params: iface_ingredients::ByIdImageParams) -> Result<Vec<iface_ingredients::ByIdImageResponseEntry>, iface_ingredients::ByIdImageError> {
         let json = iface_ingredients__by_id_image_params__to_json(&params);
         match dispatch(&OP_INGREDIENTS_BY_ID_IMAGE, json).and_then(iface_ingredients__by_id_image__ok) {
             Ok(v) => Ok(v),

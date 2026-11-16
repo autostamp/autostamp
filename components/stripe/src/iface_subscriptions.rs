@@ -237,17 +237,17 @@ fn iface_subscriptions__price_billing_scheme_enum__to_str(e: &iface_subscription
     }
 }
 
-fn iface_subscriptions__price_object_enum__to_str(e: &iface_subscriptions::PriceObjectEnum) -> &'static str {
+fn iface_subscriptions__currency_option_tax_behavior_enum__to_str(e: &iface_subscriptions::CurrencyOptionTaxBehaviorEnum) -> &'static str {
     match e {
-        iface_subscriptions::PriceObjectEnum::Price => "price",
+        iface_subscriptions::CurrencyOptionTaxBehaviorEnum::Exclusive => "exclusive",
+        iface_subscriptions::CurrencyOptionTaxBehaviorEnum::Inclusive => "inclusive",
+        iface_subscriptions::CurrencyOptionTaxBehaviorEnum::Unspecified => "unspecified",
     }
 }
 
-fn iface_subscriptions__price_tax_behavior_enum__to_str(e: &iface_subscriptions::PriceTaxBehaviorEnum) -> &'static str {
+fn iface_subscriptions__price_object_enum__to_str(e: &iface_subscriptions::PriceObjectEnum) -> &'static str {
     match e {
-        iface_subscriptions::PriceTaxBehaviorEnum::Exclusive => "exclusive",
-        iface_subscriptions::PriceTaxBehaviorEnum::Inclusive => "inclusive",
-        iface_subscriptions::PriceTaxBehaviorEnum::Unspecified => "unspecified",
+        iface_subscriptions::PriceObjectEnum::Price => "price",
     }
 }
 
@@ -415,7 +415,7 @@ fn iface_subscriptions__subscription__to_json(p: &iface_subscriptions::Subscript
     m.insert("items".into(), iface_subscriptions__subscription_items__to_json(&p.items));
     m.insert("latest_invoice".into(), match (&p.latest_invoice) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_subscriptions__subscription_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("next_pending_invoice_item_invoice".into(), match (&p.next_pending_invoice_item_invoice) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("object".into(), Value::String(iface_subscriptions__subscription_object_enum__to_str(&p.object).into()));
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -452,7 +452,7 @@ fn iface_subscriptions__tax_rate__to_json(p: &iface_subscriptions::TaxRate) -> V
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscriptions__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_subscriptions__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -460,9 +460,10 @@ fn iface_subscriptions__tax_rate__to_json(p: &iface_subscriptions::TaxRate) -> V
     Value::Object(m)
 }
 
-fn iface_subscriptions__tax_rate_metadata__to_json(p: &iface_subscriptions::TaxRateMetadata) -> Value {
+fn iface_subscriptions__tax_rate_metadata_entry__to_json(p: &iface_subscriptions::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -480,7 +481,7 @@ fn iface_subscriptions__subscription_item__to_json(p: &iface_subscriptions::Subs
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("metadata".into(), iface_subscriptions__subscription_item_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_subscriptions__subscription_item_object_enum__to_str(&p.object).into()));
     m.insert("price".into(), iface_subscriptions__price__to_json(&p.price));
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -489,9 +490,10 @@ fn iface_subscriptions__subscription_item__to_json(p: &iface_subscriptions::Subs
     Value::Object(m)
 }
 
-fn iface_subscriptions__subscription_item_metadata__to_json(p: &iface_subscriptions::SubscriptionItemMetadata) -> Value {
+fn iface_subscriptions__subscription_item_metadata_entry__to_json(p: &iface_subscriptions::SubscriptionItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -501,17 +503,17 @@ fn iface_subscriptions__price__to_json(p: &iface_subscriptions::Price) -> Value 
     m.insert("billing_scheme".into(), Value::String(iface_subscriptions__price_billing_scheme_enum__to_str(&p.billing_scheme).into()));
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_subscriptions__price_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_subscriptions__currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("lookup_key".into(), match (&p.lookup_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), iface_subscriptions__price_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("nickname".into(), match (&p.nickname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_subscriptions__price_object_enum__to_str(&p.object).into()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), match (&p.recurring) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_subscriptions__price_tier__to_json(v)).collect()), None => Value::Null });
     m.insert("tiers_mode".into(), match (&p.tiers_mode) { Some(v) => Value::String(iface_subscriptions__price_tiers_mode_enum__to_str(v).into()), None => Value::Null });
     m.insert("transform_quantity".into(), match (&p.transform_quantity) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -521,15 +523,13 @@ fn iface_subscriptions__price__to_json(p: &iface_subscriptions::Price) -> Value 
     Value::Object(m)
 }
 
-fn iface_subscriptions__price_currency_options__to_json(p: &iface_subscriptions::PriceCurrencyOptions) -> Value {
+fn iface_subscriptions__currency_option__to_json(p: &iface_subscriptions::CurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_subscriptions__price_metadata__to_json(p: &iface_subscriptions::PriceMetadata) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_subscriptions__price_tier__to_json(v)).collect()), None => Value::Null });
+    m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -543,9 +543,24 @@ fn iface_subscriptions__price_tier__to_json(p: &iface_subscriptions::PriceTier) 
     Value::Object(m)
 }
 
-fn iface_subscriptions__subscription_metadata__to_json(p: &iface_subscriptions::SubscriptionMetadata) -> Value {
+fn iface_subscriptions__price_currency_options_entry__to_json(p: &iface_subscriptions::PriceCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_subscriptions__currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_subscriptions__price_metadata_entry__to_json(p: &iface_subscriptions::PriceMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_subscriptions__subscription_metadata_entry__to_json(p: &iface_subscriptions::SubscriptionMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -562,7 +577,7 @@ fn iface_subscriptions__post_subscriptions_body_add_invoice_items_item_price_dat
     let mut m = Map::new();
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -577,7 +592,7 @@ fn iface_subscriptions__post_subscriptions_body_automatic_tax__to_json(p: &iface
 fn iface_subscriptions__post_subscriptions_body_items_item__to_json(p: &iface_subscriptions::PostSubscriptionsBodyItemsItem) -> Value {
     let mut m = Map::new();
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscriptions__post_subscriptions_body_items_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_data".into(), match (&p.price_data) { Some(v) => iface_subscriptions__post_subscriptions_body_items_item_price_data__to_json(v), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -585,9 +600,10 @@ fn iface_subscriptions__post_subscriptions_body_items_item__to_json(p: &iface_su
     Value::Object(m)
 }
 
-fn iface_subscriptions__post_subscriptions_body_items_item_metadata__to_json(p: &iface_subscriptions::PostSubscriptionsBodyItemsItemMetadata) -> Value {
+fn iface_subscriptions__post_subscriptions_body_items_item_metadata_entry__to_json(p: &iface_subscriptions::PostSubscriptionsBodyItemsItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -596,7 +612,7 @@ fn iface_subscriptions__post_subscriptions_body_items_item_price_data__to_json(p
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), iface_subscriptions__post_subscriptions_body_items_item_price_data_recurring__to_json(&p.recurring));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -671,7 +687,7 @@ fn iface_subscriptions__post_subscriptions_subscription_exposed_id_body_add_invo
     let mut m = Map::new();
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -709,7 +725,7 @@ fn iface_subscriptions__post_subscriptions_subscription_exposed_id_body_items_it
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), iface_subscriptions__post_subscriptions_subscription_exposed_id_body_items_item_price_data_recurring__to_json(&p.recurring));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_subscriptions__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -782,13 +798,13 @@ fn iface_subscriptions__coupon__to_json(p: &iface_subscriptions::Coupon) -> Valu
     m.insert("applies_to".into(), match (&p.applies_to) { Some(v) => iface_subscriptions__coupon_applies_to__to_json(v), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_subscriptions__coupon_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_subscriptions__coupon_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("duration".into(), Value::String(iface_subscriptions__coupon_duration_enum__to_str(&p.duration).into()));
     m.insert("duration_in_months".into(), match (&p.duration_in_months) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscriptions__coupon_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_subscriptions__coupon_object_enum__to_str(&p.object).into()));
     m.insert("percent_off".into(), match (&p.percent_off) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -804,15 +820,23 @@ fn iface_subscriptions__coupon_applies_to__to_json(p: &iface_subscriptions::Coup
     Value::Object(m)
 }
 
-fn iface_subscriptions__coupon_currency_options__to_json(p: &iface_subscriptions::CouponCurrencyOptions) -> Value {
+fn iface_subscriptions__coupon_currency_option__to_json(p: &iface_subscriptions::CouponCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount_off".into(), Value::Number(serde_json::Number::from(*(&p.amount_off))));
     Value::Object(m)
 }
 
-fn iface_subscriptions__coupon_metadata__to_json(p: &iface_subscriptions::CouponMetadata) -> Value {
+fn iface_subscriptions__coupon_currency_options_entry__to_json(p: &iface_subscriptions::CouponCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_subscriptions__coupon_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_subscriptions__coupon_metadata_entry__to_json(p: &iface_subscriptions::CouponMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -992,7 +1016,7 @@ fn iface_subscriptions__subscription__from_json(v: &Value) -> Option<iface_subsc
         items: match m.get("items").and_then(|v| iface_subscriptions__subscription_items__from_json(v)) { Some(x) => x, None => return None },
         latest_invoice: m.get("latest_invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_subscriptions__subscription_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscriptions::SubscriptionMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         next_pending_invoice_item_invoice: m.get("next_pending_invoice_item_invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscriptions__subscription_object_enum__from_str)) { Some(x) => x, None => return None },
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1031,7 +1055,7 @@ fn iface_subscriptions__tax_rate__from_json(v: &Value) -> Option<iface_subscript
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_subscriptions__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscriptions::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscriptions__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1039,10 +1063,11 @@ fn iface_subscriptions__tax_rate__from_json(v: &Value) -> Option<iface_subscript
     })
 }
 
-fn iface_subscriptions__tax_rate_metadata__from_json(v: &Value) -> Option<iface_subscriptions::TaxRateMetadata> {
+fn iface_subscriptions__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_subscriptions::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_subscriptions::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscriptions::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1062,7 +1087,7 @@ fn iface_subscriptions__subscription_item__from_json(v: &Value) -> Option<iface_
         billing_thresholds: m.get("billing_thresholds").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_subscriptions__subscription_item_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscriptions::SubscriptionItemMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscriptions__subscription_item_object_enum__from_str)) { Some(x) => x, None => return None },
         price: match m.get("price").and_then(|v| iface_subscriptions__price__from_json(v)) { Some(x) => x, None => return None },
         quantity: m.get("quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -1071,10 +1096,11 @@ fn iface_subscriptions__subscription_item__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_subscriptions__subscription_item_metadata__from_json(v: &Value) -> Option<iface_subscriptions::SubscriptionItemMetadata> {
+fn iface_subscriptions__subscription_item_metadata_entry__from_json(v: &Value) -> Option<iface_subscriptions::SubscriptionItemMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_subscriptions::SubscriptionItemMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscriptions::SubscriptionItemMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1085,17 +1111,17 @@ fn iface_subscriptions__price__from_json(v: &Value) -> Option<iface_subscription
         billing_scheme: match m.get("billing_scheme").and_then(|v| (v).as_str().and_then(iface_subscriptions__price_billing_scheme_enum__from_str)) { Some(x) => x, None => return None },
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_subscriptions__price_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_subscriptions__currency_option__from_json(x)).map(|val| iface_subscriptions::PriceCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         custom_unit_amount: m.get("custom_unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         lookup_key: m.get("lookup_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: match m.get("metadata").and_then(|v| iface_subscriptions__price_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscriptions::PriceMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         nickname: m.get("nickname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscriptions__price_object_enum__from_str)) { Some(x) => x, None => return None },
         product: m.get("product").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         recurring: m.get("recurring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_subscriptions__price_tax_behavior_enum__from_str)),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_subscriptions__currency_option_tax_behavior_enum__from_str)),
         tiers: m.get("tiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_subscriptions__price_tier__from_json(x)).collect())),
         tiers_mode: m.get("tiers_mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_subscriptions__price_tiers_mode_enum__from_str)),
         transform_quantity: m.get("transform_quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1105,17 +1131,14 @@ fn iface_subscriptions__price__from_json(v: &Value) -> Option<iface_subscription
     })
 }
 
-fn iface_subscriptions__price_currency_options__from_json(v: &Value) -> Option<iface_subscriptions::PriceCurrencyOptions> {
+fn iface_subscriptions__currency_option__from_json(v: &Value) -> Option<iface_subscriptions::CurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_subscriptions::PriceCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_subscriptions__price_metadata__from_json(v: &Value) -> Option<iface_subscriptions::PriceMetadata> {
-    let m = v.as_object()?;
-    Some(iface_subscriptions::PriceMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscriptions::CurrencyOption {
+        custom_unit_amount: m.get("custom_unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_subscriptions__currency_option_tax_behavior_enum__from_str)),
+        tiers: m.get("tiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_subscriptions__price_tier__from_json(x)).collect())),
+        unit_amount: m.get("unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unit_amount_decimal: m.get("unit_amount_decimal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1130,10 +1153,27 @@ fn iface_subscriptions__price_tier__from_json(v: &Value) -> Option<iface_subscri
     })
 }
 
-fn iface_subscriptions__subscription_metadata__from_json(v: &Value) -> Option<iface_subscriptions::SubscriptionMetadata> {
+fn iface_subscriptions__price_currency_options_entry__from_json(v: &Value) -> Option<iface_subscriptions::PriceCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_subscriptions::SubscriptionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscriptions::PriceCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_subscriptions__currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_subscriptions__price_metadata_entry__from_json(v: &Value) -> Option<iface_subscriptions::PriceMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_subscriptions::PriceMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_subscriptions__subscription_metadata_entry__from_json(v: &Value) -> Option<iface_subscriptions::SubscriptionMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_subscriptions::SubscriptionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1173,13 +1213,13 @@ fn iface_subscriptions__coupon__from_json(v: &Value) -> Option<iface_subscriptio
         applies_to: m.get("applies_to").filter(|v| !v.is_null()).and_then(|v| iface_subscriptions__coupon_applies_to__from_json(v)),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_subscriptions__coupon_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_subscriptions__coupon_currency_option__from_json(x)).map(|val| iface_subscriptions::CouponCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         duration: match m.get("duration").and_then(|v| (v).as_str().and_then(iface_subscriptions__coupon_duration_enum__from_str)) { Some(x) => x, None => return None },
         duration_in_months: m.get("duration_in_months").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_subscriptions__coupon_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscriptions::CouponMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscriptions__coupon_object_enum__from_str)) { Some(x) => x, None => return None },
         percent_off: m.get("percent_off").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -1196,17 +1236,26 @@ fn iface_subscriptions__coupon_applies_to__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_subscriptions__coupon_currency_options__from_json(v: &Value) -> Option<iface_subscriptions::CouponCurrencyOptions> {
+fn iface_subscriptions__coupon_currency_option__from_json(v: &Value) -> Option<iface_subscriptions::CouponCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_subscriptions::CouponCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscriptions::CouponCurrencyOption {
+        amount_off: m.get("amount_off").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_subscriptions__coupon_metadata__from_json(v: &Value) -> Option<iface_subscriptions::CouponMetadata> {
+fn iface_subscriptions__coupon_currency_options_entry__from_json(v: &Value) -> Option<iface_subscriptions::CouponCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_subscriptions::CouponMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscriptions::CouponCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_subscriptions__coupon_currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_subscriptions__coupon_metadata_entry__from_json(v: &Value) -> Option<iface_subscriptions::CouponMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_subscriptions::CouponMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1256,18 +1305,18 @@ fn iface_subscriptions__price_billing_scheme_enum__from_str(s: &str) -> Option<i
     }
 }
 
-fn iface_subscriptions__price_object_enum__from_str(s: &str) -> Option<iface_subscriptions::PriceObjectEnum> {
+fn iface_subscriptions__currency_option_tax_behavior_enum__from_str(s: &str) -> Option<iface_subscriptions::CurrencyOptionTaxBehaviorEnum> {
     match s {
-        "price" => Some(iface_subscriptions::PriceObjectEnum::Price),
+        "exclusive" => Some(iface_subscriptions::CurrencyOptionTaxBehaviorEnum::Exclusive),
+        "inclusive" => Some(iface_subscriptions::CurrencyOptionTaxBehaviorEnum::Inclusive),
+        "unspecified" => Some(iface_subscriptions::CurrencyOptionTaxBehaviorEnum::Unspecified),
         _ => None,
     }
 }
 
-fn iface_subscriptions__price_tax_behavior_enum__from_str(s: &str) -> Option<iface_subscriptions::PriceTaxBehaviorEnum> {
+fn iface_subscriptions__price_object_enum__from_str(s: &str) -> Option<iface_subscriptions::PriceObjectEnum> {
     match s {
-        "exclusive" => Some(iface_subscriptions::PriceTaxBehaviorEnum::Exclusive),
-        "inclusive" => Some(iface_subscriptions::PriceTaxBehaviorEnum::Inclusive),
-        "unspecified" => Some(iface_subscriptions::PriceTaxBehaviorEnum::Unspecified),
+        "price" => Some(iface_subscriptions::PriceObjectEnum::Price),
         _ => None,
     }
 }

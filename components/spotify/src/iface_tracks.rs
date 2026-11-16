@@ -267,14 +267,8 @@ fn iface_tracks__section_object__to_json(p: &iface_tracks::SectionObject) -> Val
     m.insert("start".into(), match (&p.start) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("tempo".into(), match (&p.tempo) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("tempo_confidence".into(), match (&p.tempo_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => iface_tracks__time_signature__to_json(v), None => Value::Null });
+    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("time_signature_confidence".into(), match (&p.time_signature_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tracks__time_signature__to_json(p: &iface_tracks::TimeSignature) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -302,10 +296,10 @@ fn iface_tracks__audio_analysis_object_track__to_json(p: &iface_tracks::AudioAna
     m.insert("echoprint_version".into(), match (&p.echoprint_version) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("echoprintstring".into(), match (&p.echoprintstring) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_of_fade_in".into(), match (&p.end_of_fade_in) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("key".into(), match (&p.key) { Some(v) => iface_tracks__key__to_json(v), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("key_confidence".into(), match (&p.key_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("loudness".into(), match (&p.loudness) { Some(v) => iface_tracks__loudness__to_json(v), None => Value::Null });
-    m.insert("mode".into(), match (&p.mode) { Some(v) => iface_tracks__mode__to_json(v), None => Value::Null });
+    m.insert("loudness".into(), match (&p.loudness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("mode_confidence".into(), match (&p.mode_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("num_samples".into(), match (&p.num_samples) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset_seconds".into(), match (&p.offset_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -315,35 +309,11 @@ fn iface_tracks__audio_analysis_object_track__to_json(p: &iface_tracks::AudioAna
     m.insert("start_of_fade_out".into(), match (&p.start_of_fade_out) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("synch_version".into(), match (&p.synch_version) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("synchstring".into(), match (&p.synchstring) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tempo".into(), match (&p.tempo) { Some(v) => iface_tracks__tempo__to_json(v), None => Value::Null });
+    m.insert("tempo".into(), match (&p.tempo) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("tempo_confidence".into(), match (&p.tempo_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => iface_tracks__time_signature__to_json(v), None => Value::Null });
+    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("time_signature_confidence".into(), match (&p.time_signature_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("window_seconds".into(), match (&p.window_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tracks__key__to_json(p: &iface_tracks::Key) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tracks__loudness__to_json(p: &iface_tracks::Loudness) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tracks__mode__to_json(p: &iface_tracks::Mode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tracks__tempo__to_json(p: &iface_tracks::Tempo) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -362,13 +332,13 @@ fn iface_tracks__audio_features_object__to_json(p: &iface_tracks::AudioFeaturesO
     m.insert("energy".into(), match (&p.energy) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("instrumentalness".into(), match (&p.instrumentalness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("key".into(), match (&p.key) { Some(v) => iface_tracks__key__to_json(v), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("liveness".into(), match (&p.liveness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("loudness".into(), match (&p.loudness) { Some(v) => iface_tracks__loudness__to_json(v), None => Value::Null });
-    m.insert("mode".into(), match (&p.mode) { Some(v) => iface_tracks__mode__to_json(v), None => Value::Null });
+    m.insert("loudness".into(), match (&p.loudness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("speechiness".into(), match (&p.speechiness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("tempo".into(), match (&p.tempo) { Some(v) => iface_tracks__tempo__to_json(v), None => Value::Null });
-    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => iface_tracks__time_signature__to_json(v), None => Value::Null });
+    m.insert("tempo".into(), match (&p.tempo) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("track_href".into(), match (&p.track_href) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_tracks__audio_features_object_type_op_enum__to_str(v).into()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -414,7 +384,7 @@ fn iface_tracks__track_object__to_json(p: &iface_tracks::TrackObject) -> Value {
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_local".into(), match (&p.is_local) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_playable".into(), match (&p.is_playable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("linked_from".into(), match (&p.linked_from) { Some(v) => iface_tracks__track_object_linked_from__to_json(v), None => Value::Null });
+    m.insert("linked_from".into(), match (&p.linked_from) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("preview_url".into(), match (&p.preview_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -518,9 +488,10 @@ fn iface_tracks__followers_object__to_json(p: &iface_tracks::FollowersObject) ->
     Value::Object(m)
 }
 
-fn iface_tracks__track_object_linked_from__to_json(p: &iface_tracks::TrackObjectLinkedFrom) -> Value {
+fn iface_tracks__track_object_linked_from_entry__to_json(p: &iface_tracks::TrackObjectLinkedFromEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -696,15 +667,8 @@ fn iface_tracks__section_object__from_json(v: &Value) -> Option<iface_tracks::Se
         start: m.get("start").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         tempo_confidence: m.get("tempo_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| iface_tracks__time_signature__from_json(v)),
+        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         time_signature_confidence: m.get("time_signature_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-    })
-}
-
-fn iface_tracks__time_signature__from_json(v: &Value) -> Option<iface_tracks::TimeSignature> {
-    let m = v.as_object()?;
-    Some(iface_tracks::TimeSignature {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -734,10 +698,10 @@ fn iface_tracks__audio_analysis_object_track__from_json(v: &Value) -> Option<ifa
         echoprint_version: m.get("echoprint_version").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         echoprintstring: m.get("echoprintstring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         end_of_fade_in: m.get("end_of_fade_in").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| iface_tracks__key__from_json(v)),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         key_confidence: m.get("key_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| iface_tracks__loudness__from_json(v)),
-        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| iface_tracks__mode__from_json(v)),
+        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         mode_confidence: m.get("mode_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         num_samples: m.get("num_samples").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         offset_seconds: m.get("offset_seconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -747,39 +711,11 @@ fn iface_tracks__audio_analysis_object_track__from_json(v: &Value) -> Option<ifa
         start_of_fade_out: m.get("start_of_fade_out").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         synch_version: m.get("synch_version").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         synchstring: m.get("synchstring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| iface_tracks__tempo__from_json(v)),
+        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         tempo_confidence: m.get("tempo_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| iface_tracks__time_signature__from_json(v)),
+        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         time_signature_confidence: m.get("time_signature_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         window_seconds: m.get("window_seconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_tracks__key__from_json(v: &Value) -> Option<iface_tracks::Key> {
-    let m = v.as_object()?;
-    Some(iface_tracks::Key {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tracks__loudness__from_json(v: &Value) -> Option<iface_tracks::Loudness> {
-    let m = v.as_object()?;
-    Some(iface_tracks::Loudness {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tracks__mode__from_json(v: &Value) -> Option<iface_tracks::Mode> {
-    let m = v.as_object()?;
-    Some(iface_tracks::Mode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tracks__tempo__from_json(v: &Value) -> Option<iface_tracks::Tempo> {
-    let m = v.as_object()?;
-    Some(iface_tracks::Tempo {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -800,13 +736,13 @@ fn iface_tracks__audio_features_object__from_json(v: &Value) -> Option<iface_tra
         energy: m.get("energy").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         instrumentalness: m.get("instrumentalness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| iface_tracks__key__from_json(v)),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         liveness: m.get("liveness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| iface_tracks__loudness__from_json(v)),
-        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| iface_tracks__mode__from_json(v)),
+        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         speechiness: m.get("speechiness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| iface_tracks__tempo__from_json(v)),
-        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| iface_tracks__time_signature__from_json(v)),
+        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         track_href: m.get("track_href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__audio_features_object_type_op_enum__from_str)),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -856,7 +792,7 @@ fn iface_tracks__track_object__from_json(v: &Value) -> Option<iface_tracks::Trac
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_local: m.get("is_local").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_playable: m.get("is_playable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        linked_from: m.get("linked_from").filter(|v| !v.is_null()).and_then(|v| iface_tracks__track_object_linked_from__from_json(v)),
+        linked_from: m.get("linked_from").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tracks::TrackObjectLinkedFromEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         preview_url: m.get("preview_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -969,10 +905,11 @@ fn iface_tracks__followers_object__from_json(v: &Value) -> Option<iface_tracks::
     })
 }
 
-fn iface_tracks__track_object_linked_from__from_json(v: &Value) -> Option<iface_tracks::TrackObjectLinkedFrom> {
+fn iface_tracks__track_object_linked_from_entry__from_json(v: &Value) -> Option<iface_tracks::TrackObjectLinkedFromEntry> {
     let m = v.as_object()?;
-    Some(iface_tracks::TrackObjectLinkedFrom {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tracks::TrackObjectLinkedFromEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

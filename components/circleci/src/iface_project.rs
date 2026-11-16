@@ -252,10 +252,50 @@ fn iface_project__get_project_username_project_filter_enum__to_str(e: &iface_pro
     }
 }
 
-fn iface_project__post_project_username_project_checkout_key_body_enum__to_str(e: &iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum) -> &'static str {
+fn iface_project__lifecycle__to_str(e: &iface_project::Lifecycle) -> &'static str {
     match e {
-        iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::DeployKey => "deploy-key",
-        iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::GithubUserKey => "github-user-key",
+        iface_project::Lifecycle::Queued => "queued",
+        iface_project::Lifecycle::Scheduled => "scheduled",
+        iface_project::Lifecycle::NotRun => "not_run",
+        iface_project::Lifecycle::NotRunning => "not_running",
+        iface_project::Lifecycle::Running => "running",
+        iface_project::Lifecycle::Finished => "finished",
+    }
+}
+
+fn iface_project__status__to_str(e: &iface_project::Status) -> &'static str {
+    match e {
+        iface_project::Status::Retried => "retried",
+        iface_project::Status::Canceled => "canceled",
+        iface_project::Status::InfrastructureFail => "infrastructure_fail",
+        iface_project::Status::Timedout => "timedout",
+        iface_project::Status::NotRun => "not_run",
+        iface_project::Status::Running => "running",
+        iface_project::Status::Failed => "failed",
+        iface_project::Status::Queued => "queued",
+        iface_project::Status::Scheduled => "scheduled",
+        iface_project::Status::NotRunning => "not_running",
+        iface_project::Status::NoTests => "no_tests",
+        iface_project::Status::Fixed => "fixed",
+        iface_project::Status::Success => "success",
+    }
+}
+
+fn iface_project__outcome__to_str(e: &iface_project::Outcome) -> &'static str {
+    match e {
+        iface_project::Outcome::Canceled => "canceled",
+        iface_project::Outcome::InfrastructureFail => "infrastructure_fail",
+        iface_project::Outcome::Timedout => "timedout",
+        iface_project::Outcome::Failed => "failed",
+        iface_project::Outcome::NoTests => "no_tests",
+        iface_project::Outcome::Success => "success",
+    }
+}
+
+fn iface_project__key_type_op_enum__to_str(e: &iface_project::KeyTypeOpEnum) -> &'static str {
+    match e {
+        iface_project::KeyTypeOpEnum::DeployKey => "deploy-key",
+        iface_project::KeyTypeOpEnum::GithubUserKey => "github-user-key",
     }
 }
 
@@ -271,32 +311,40 @@ fn iface_project__post_project_username_project_ssh_key_content_type_enum__to_st
     }
 }
 
-fn iface_project__builds__to_json(p: &iface_project::Builds) -> Value {
+fn iface_project__build__to_json(p: &iface_project::Build) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_time_millis".into(), match (&p.build_time_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("build_url".into(), match (&p.build_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_email".into(), match (&p.committer_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_name".into(), match (&p.committer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dont_build".into(), match (&p.dont_build) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => Value::String(iface_project__lifecycle__to_str(v).into()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => iface_project__previous_build__to_json(v), None => Value::Null });
+    m.insert("queued_at".into(), match (&p.queued_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reponame".into(), match (&p.reponame) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("retry_of".into(), match (&p.retry_of) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stop_time".into(), match (&p.stop_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vcs_url".into(), match (&p.vcs_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("why".into(), match (&p.why) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_project__build_parameters__to_json(p: &iface_project::BuildParameters) -> Value {
+fn iface_project__previous_build__to_json(p: &iface_project::PreviousBuild) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_num".into(), match (&p.build_num) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("build_time_millis".into(), match (&p.build_time_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_project__status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_project__parallel__to_json(p: &iface_project::Parallel) -> Value {
+fn iface_project__build_parameters_entry__to_json(p: &iface_project::BuildParametersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__revision__to_json(p: &iface_project::Revision) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__tag__to_json(p: &iface_project::Tag) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -305,28 +353,10 @@ fn iface_project__build_summary__to_json(p: &iface_project::BuildSummary) -> Val
     let mut m = Map::new();
     m.insert("added_at".into(), match (&p.added_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_num".into(), match (&p.build_num) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outcome".into(), match (&p.outcome) { Some(v) => iface_project__outcome__to_json(v), None => Value::Null });
+    m.insert("outcome".into(), match (&p.outcome) { Some(v) => Value::String(iface_project__outcome__to_str(v).into()), None => Value::Null });
     m.insert("pushed_at".into(), match (&p.pushed_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_project__status__to_json(v), None => Value::Null });
-    m.insert("vcs_revision".into(), match (&p.vcs_revision) { Some(v) => iface_project__sha1__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__outcome__to_json(p: &iface_project::Outcome) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__status__to_json(p: &iface_project::Status) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__sha1__to_json(p: &iface_project::Sha1) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_project__status__to_str(v).into()), None => Value::Null });
+    m.insert("vcs_revision".into(), match (&p.vcs_revision) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -336,31 +366,19 @@ fn iface_project__delete_project_username_project_build_cache_response__to_json(
     Value::Object(m)
 }
 
-fn iface_project__keys__to_json(p: &iface_project::Keys) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_project__key__to_json(p: &iface_project::Key) -> Value {
     let mut m = Map::new();
     m.insert("fingerprint".into(), match (&p.fingerprint) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("preferred".into(), match (&p.preferred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("public_key".into(), match (&p.public_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_project__post_project_username_project_checkout_key_body_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_project__key_type_op_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_project__delete_project_username_project_checkout_key_fingerprint_response__to_json(p: &iface_project::DeleteProjectUsernameProjectCheckoutKeyFingerprintResponse) -> Value {
     let mut m = Map::new();
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String(iface_project__delete_project_username_project_checkout_key_fingerprint_response_message_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__envvars__to_json(p: &iface_project::Envvars) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -377,46 +395,16 @@ fn iface_project__delete_project_username_project_envvar_name_response__to_json(
     Value::Object(m)
 }
 
-fn iface_project__build__to_json(p: &iface_project::Build) -> Value {
+fn iface_project__build_parameters_entry_v2__to_json(p: &iface_project::BuildParametersEntryV2) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("build_time_millis".into(), match (&p.build_time_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("build_url".into(), match (&p.build_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("committer_email".into(), match (&p.committer_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("committer_name".into(), match (&p.committer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dont_build".into(), match (&p.dont_build) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => iface_project__lifecycle__to_json(v), None => Value::Null });
-    m.insert("previous".into(), match (&p.previous) { Some(v) => iface_project__previous_build__to_json(v), None => Value::Null });
-    m.insert("queued_at".into(), match (&p.queued_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("reponame".into(), match (&p.reponame) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("retry_of".into(), match (&p.retry_of) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stop_time".into(), match (&p.stop_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("vcs_url".into(), match (&p.vcs_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("why".into(), match (&p.why) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__lifecycle__to_json(p: &iface_project::Lifecycle) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__previous_build__to_json(p: &iface_project::PreviousBuild) -> Value {
-    let mut m = Map::new();
-    m.insert("build_num".into(), match (&p.build_num) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("build_time_millis".into(), match (&p.build_time_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_project__status__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_project__build_detail__to_json(p: &iface_project::BuildDetail) -> Value {
     let mut m = Map::new();
-    m.insert("all_commit_details".into(), match (&p.all_commit_details) { Some(v) => iface_project__commit_details__to_json(v), None => Value::Null });
+    m.insert("all_commit_details".into(), match (&p.all_commit_details) { Some(v) => Value::Array((v).iter().map(|v| iface_project__commit_detail__to_json(v)).collect()), None => Value::Null });
     m.insert("compare".into(), match (&p.compare) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("job_name".into(), match (&p.job_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("node".into(), match (&p.node) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -429,9 +417,20 @@ fn iface_project__build_detail__to_json(p: &iface_project::BuildDetail) -> Value
     Value::Object(m)
 }
 
-fn iface_project__commit_details__to_json(p: &iface_project::CommitDetails) -> Value {
+fn iface_project__commit_detail__to_json(p: &iface_project::CommitDetail) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("author_date".into(), match (&p.author_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("author_email".into(), match (&p.author_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("author_login".into(), match (&p.author_login) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("author_name".into(), match (&p.author_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit".into(), match (&p.commit) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit_url".into(), match (&p.commit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_date".into(), match (&p.committer_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_email".into(), match (&p.committer_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_login".into(), match (&p.committer_login) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("committer_name".into(), match (&p.committer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -456,10 +455,10 @@ fn iface_project__user__to_json(p: &iface_project::User) -> Value {
     m.insert("in_beta_program".into(), match (&p.in_beta_program) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("login".into(), match (&p.login) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("organization_prefs".into(), match (&p.organization_prefs) { Some(v) => iface_project__user_organization_prefs__to_json(v), None => Value::Null });
+    m.insert("organization_prefs".into(), match (&p.organization_prefs) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("parallelism".into(), match (&p.parallelism) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("projects".into(), match (&p.projects) { Some(v) => iface_project__user_projects__to_json(v), None => Value::Null });
+    m.insert("projects".into(), match (&p.projects) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("pusher_id".into(), match (&p.pusher_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("selected_email".into(), match (&p.selected_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sign_in_count".into(), match (&p.sign_in_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -467,21 +466,26 @@ fn iface_project__user__to_json(p: &iface_project::User) -> Value {
     Value::Object(m)
 }
 
-fn iface_project__user_organization_prefs__to_json(p: &iface_project::UserOrganizationPrefs) -> Value {
+fn iface_project__user_organization_prefs_entry__to_json(p: &iface_project::UserOrganizationPrefsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__user_projects__to_json(p: &iface_project::UserProjects) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__artifacts__to_json(p: &iface_project::Artifacts) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_project__user_projects_entry__to_json(p: &iface_project::UserProjectsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_project__artifact__to_json(p: &iface_project::Artifact) -> Value {
+    let mut m = Map::new();
+    m.insert("node_index".into(), match (&p.node_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_path".into(), match (&p.pretty_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -497,7 +501,7 @@ fn iface_project__tests_tests_item__to_json(p: &iface_project::TestsTestsItem) -
     m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_project__status__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => Value::String(iface_project__status__to_str(v).into()), None => Value::Null });
     m.insert("run_time".into(), match (&p.run_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -517,10 +521,10 @@ fn iface_project__post_project_username_project_params__to_json(p: &iface_projec
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => iface_project__build_parameters__to_json(v), None => Value::Null });
-    m.insert("parallel".into(), match (&p.parallel) { Some(v) => iface_project__parallel__to_json(v), None => Value::Null });
-    m.insert("revision".into(), match (&p.revision) { Some(v) => iface_project__revision__to_json(v), None => Value::Null });
-    m.insert("tag".into(), match (&p.tag) { Some(v) => iface_project__tag__to_json(v), None => Value::Null });
+    m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("parallel".into(), match (&p.parallel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("revision".into(), match (&p.revision) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -606,9 +610,9 @@ fn iface_project__post_project_username_project_tree_branch_params__to_json(p: &
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("project".into(), Value::String((&p.project).clone()));
     m.insert("branch".into(), Value::String((&p.branch).clone()));
-    m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => iface_project__build_parameters__to_json(v), None => Value::Null });
-    m.insert("parallel".into(), match (&p.parallel) { Some(v) => iface_project__parallel__to_json(v), None => Value::Null });
-    m.insert("revision".into(), match (&p.revision) { Some(v) => iface_project__revision__to_json(v), None => Value::Null });
+    m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("parallel".into(), match (&p.parallel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("revision".into(), match (&p.revision) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -652,10 +656,36 @@ fn iface_project__get_project_username_project_build_num_tests_params__to_json(p
     Value::Object(m)
 }
 
-fn iface_project__builds__from_json(v: &Value) -> Option<iface_project::Builds> {
+fn iface_project__build__from_json(v: &Value) -> Option<iface_project::Build> {
     let m = v.as_object()?;
-    Some(iface_project::Builds {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_project::Build {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        build_time_millis: m.get("build_time_millis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        build_url: m.get("build_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_email: m.get("committer_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_name: m.get("committer_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dont_build: m.get("dont_build").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__lifecycle__from_str)),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| iface_project__previous_build__from_json(v)),
+        queued_at: m.get("queued_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reponame: m.get("reponame").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        retry_of: m.get("retry_of").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_time: m.get("stop_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vcs_url: m.get("vcs_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        why: m.get("why").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_project__previous_build__from_json(v: &Value) -> Option<iface_project::PreviousBuild> {
+    let m = v.as_object()?;
+    Some(iface_project::PreviousBuild {
+        build_num: m.get("build_num").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        build_time_millis: m.get("build_time_millis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__status__from_str)),
     })
 }
 
@@ -664,31 +694,10 @@ fn iface_project__build_summary__from_json(v: &Value) -> Option<iface_project::B
     Some(iface_project::BuildSummary {
         added_at: m.get("added_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         build_num: m.get("build_num").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        outcome: m.get("outcome").filter(|v| !v.is_null()).and_then(|v| iface_project__outcome__from_json(v)),
+        outcome: m.get("outcome").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__outcome__from_str)),
         pushed_at: m.get("pushed_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_project__status__from_json(v)),
-        vcs_revision: m.get("vcs_revision").filter(|v| !v.is_null()).and_then(|v| iface_project__sha1__from_json(v)),
-    })
-}
-
-fn iface_project__outcome__from_json(v: &Value) -> Option<iface_project::Outcome> {
-    let m = v.as_object()?;
-    Some(iface_project::Outcome {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_project__status__from_json(v: &Value) -> Option<iface_project::Status> {
-    let m = v.as_object()?;
-    Some(iface_project::Status {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_project__sha1__from_json(v: &Value) -> Option<iface_project::Sha1> {
-    let m = v.as_object()?;
-    Some(iface_project::Sha1 {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__status__from_str)),
+        vcs_revision: m.get("vcs_revision").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -699,13 +708,6 @@ fn iface_project__delete_project_username_project_build_cache_response__from_jso
     })
 }
 
-fn iface_project__keys__from_json(v: &Value) -> Option<iface_project::Keys> {
-    let m = v.as_object()?;
-    Some(iface_project::Keys {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_project__key__from_json(v: &Value) -> Option<iface_project::Key> {
     let m = v.as_object()?;
     Some(iface_project::Key {
@@ -713,7 +715,7 @@ fn iface_project__key__from_json(v: &Value) -> Option<iface_project::Key> {
         preferred: m.get("preferred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         public_key: m.get("public_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__post_project_username_project_checkout_key_body_enum__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__key_type_op_enum__from_str)),
     })
 }
 
@@ -721,13 +723,6 @@ fn iface_project__delete_project_username_project_checkout_key_fingerprint_respo
     let m = v.as_object()?;
     Some(iface_project::DeleteProjectUsernameProjectCheckoutKeyFingerprintResponse {
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__delete_project_username_project_checkout_key_fingerprint_response_message_enum__from_str)),
-    })
-}
-
-fn iface_project__envvars__from_json(v: &Value) -> Option<iface_project::Envvars> {
-    let m = v.as_object()?;
-    Some(iface_project::Envvars {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -746,50 +741,10 @@ fn iface_project__delete_project_username_project_envvar_name_response__from_jso
     })
 }
 
-fn iface_project__build__from_json(v: &Value) -> Option<iface_project::Build> {
-    let m = v.as_object()?;
-    Some(iface_project::Build {
-        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        build_time_millis: m.get("build_time_millis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        build_url: m.get("build_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        committer_email: m.get("committer_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        committer_name: m.get("committer_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        dont_build: m.get("dont_build").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| iface_project__lifecycle__from_json(v)),
-        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| iface_project__previous_build__from_json(v)),
-        queued_at: m.get("queued_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        reponame: m.get("reponame").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        retry_of: m.get("retry_of").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        stop_time: m.get("stop_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        vcs_url: m.get("vcs_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        why: m.get("why").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_project__lifecycle__from_json(v: &Value) -> Option<iface_project::Lifecycle> {
-    let m = v.as_object()?;
-    Some(iface_project::Lifecycle {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_project__previous_build__from_json(v: &Value) -> Option<iface_project::PreviousBuild> {
-    let m = v.as_object()?;
-    Some(iface_project::PreviousBuild {
-        build_num: m.get("build_num").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        build_time_millis: m.get("build_time_millis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_project__status__from_json(v)),
-    })
-}
-
 fn iface_project__build_detail__from_json(v: &Value) -> Option<iface_project::BuildDetail> {
     let m = v.as_object()?;
     Some(iface_project::BuildDetail {
-        all_commit_details: m.get("all_commit_details").filter(|v| !v.is_null()).and_then(|v| iface_project__commit_details__from_json(v)),
+        all_commit_details: m.get("all_commit_details").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_project__commit_detail__from_json(x)).collect())),
         compare: m.get("compare").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         job_name: m.get("job_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         node: m.get("node").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -802,10 +757,21 @@ fn iface_project__build_detail__from_json(v: &Value) -> Option<iface_project::Bu
     })
 }
 
-fn iface_project__commit_details__from_json(v: &Value) -> Option<iface_project::CommitDetails> {
+fn iface_project__commit_detail__from_json(v: &Value) -> Option<iface_project::CommitDetail> {
     let m = v.as_object()?;
-    Some(iface_project::CommitDetails {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_project::CommitDetail {
+        author_date: m.get("author_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        author_email: m.get("author_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        author_login: m.get("author_login").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        author_name: m.get("author_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit: m.get("commit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit_url: m.get("commit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_date: m.get("committer_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_email: m.get("committer_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_login: m.get("committer_login").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        committer_name: m.get("committer_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -831,10 +797,10 @@ fn iface_project__user__from_json(v: &Value) -> Option<iface_project::User> {
         in_beta_program: m.get("in_beta_program").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         login: m.get("login").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        organization_prefs: m.get("organization_prefs").filter(|v| !v.is_null()).and_then(|v| iface_project__user_organization_prefs__from_json(v)),
+        organization_prefs: m.get("organization_prefs").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_project::UserOrganizationPrefsEntry { key: k.clone(), value: val })).collect())),
         parallelism: m.get("parallelism").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        projects: m.get("projects").filter(|v| !v.is_null()).and_then(|v| iface_project__user_projects__from_json(v)),
+        projects: m.get("projects").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_project::UserProjectsEntry { key: k.clone(), value: val })).collect())),
         pusher_id: m.get("pusher_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         selected_email: m.get("selected_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sign_in_count: m.get("sign_in_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -842,24 +808,29 @@ fn iface_project__user__from_json(v: &Value) -> Option<iface_project::User> {
     })
 }
 
-fn iface_project__user_organization_prefs__from_json(v: &Value) -> Option<iface_project::UserOrganizationPrefs> {
+fn iface_project__user_organization_prefs_entry__from_json(v: &Value) -> Option<iface_project::UserOrganizationPrefsEntry> {
     let m = v.as_object()?;
-    Some(iface_project::UserOrganizationPrefs {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_project__user_projects__from_json(v: &Value) -> Option<iface_project::UserProjects> {
-    let m = v.as_object()?;
-    Some(iface_project::UserProjects {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_project__artifacts__from_json(v: &Value) -> Option<iface_project::Artifacts> {
-    let m = v.as_object()?;
-    Some(iface_project::Artifacts {
+    Some(iface_project::UserOrganizationPrefsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_project__user_projects_entry__from_json(v: &Value) -> Option<iface_project::UserProjectsEntry> {
+    let m = v.as_object()?;
+    Some(iface_project::UserProjectsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_project__artifact__from_json(v: &Value) -> Option<iface_project::Artifact> {
+    let m = v.as_object()?;
+    Some(iface_project::Artifact {
+        node_index: m.get("node_index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pretty_path: m.get("pretty_path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -877,16 +848,59 @@ fn iface_project__tests_tests_item__from_json(v: &Value) -> Option<iface_project
         file: m.get("file").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_project__status__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_project__status__from_str)),
         run_time: m.get("run_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_project__post_project_username_project_checkout_key_body_enum__from_str(s: &str) -> Option<iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum> {
+fn iface_project__lifecycle__from_str(s: &str) -> Option<iface_project::Lifecycle> {
     match s {
-        "deploy-key" => Some(iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::DeployKey),
-        "github-user-key" => Some(iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::GithubUserKey),
+        "queued" => Some(iface_project::Lifecycle::Queued),
+        "scheduled" => Some(iface_project::Lifecycle::Scheduled),
+        "not_run" => Some(iface_project::Lifecycle::NotRun),
+        "not_running" => Some(iface_project::Lifecycle::NotRunning),
+        "running" => Some(iface_project::Lifecycle::Running),
+        "finished" => Some(iface_project::Lifecycle::Finished),
+        _ => None,
+    }
+}
+
+fn iface_project__status__from_str(s: &str) -> Option<iface_project::Status> {
+    match s {
+        "retried" => Some(iface_project::Status::Retried),
+        "canceled" => Some(iface_project::Status::Canceled),
+        "infrastructure_fail" => Some(iface_project::Status::InfrastructureFail),
+        "timedout" => Some(iface_project::Status::Timedout),
+        "not_run" => Some(iface_project::Status::NotRun),
+        "running" => Some(iface_project::Status::Running),
+        "failed" => Some(iface_project::Status::Failed),
+        "queued" => Some(iface_project::Status::Queued),
+        "scheduled" => Some(iface_project::Status::Scheduled),
+        "not_running" => Some(iface_project::Status::NotRunning),
+        "no_tests" => Some(iface_project::Status::NoTests),
+        "fixed" => Some(iface_project::Status::Fixed),
+        "success" => Some(iface_project::Status::Success),
+        _ => None,
+    }
+}
+
+fn iface_project__outcome__from_str(s: &str) -> Option<iface_project::Outcome> {
+    match s {
+        "canceled" => Some(iface_project::Outcome::Canceled),
+        "infrastructure_fail" => Some(iface_project::Outcome::InfrastructureFail),
+        "timedout" => Some(iface_project::Outcome::Timedout),
+        "failed" => Some(iface_project::Outcome::Failed),
+        "no_tests" => Some(iface_project::Outcome::NoTests),
+        "success" => Some(iface_project::Outcome::Success),
+        _ => None,
+    }
+}
+
+fn iface_project__key_type_op_enum__from_str(s: &str) -> Option<iface_project::KeyTypeOpEnum> {
+    match s {
+        "deploy-key" => Some(iface_project::KeyTypeOpEnum::DeployKey),
+        "github-user-key" => Some(iface_project::KeyTypeOpEnum::GithubUserKey),
         _ => None,
     }
 }
@@ -898,12 +912,12 @@ fn iface_project__delete_project_username_project_checkout_key_fingerprint_respo
     }
 }
 
-fn iface_project__get_project_username_project__ok(body: String) -> Result<iface_project::Builds, crate::runtime::DispatchError> {
+fn iface_project__get_project_username_project__ok(body: String) -> Result<Vec<iface_project::Build>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_project__builds__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_project__build__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -952,12 +966,12 @@ fn iface_project__delete_project_username_project_build_cache__err(e: crate::run
     }
 }
 
-fn iface_project__get_project_username_project_checkout_key__ok(body: String) -> Result<iface_project::Keys, crate::runtime::DispatchError> {
+fn iface_project__get_project_username_project_checkout_key__ok(body: String) -> Result<Vec<iface_project::Key>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_project__keys__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_project__key__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1024,12 +1038,12 @@ fn iface_project__delete_project_username_project_checkout_key_fingerprint__err(
     }
 }
 
-fn iface_project__get_project_username_project_envvar__ok(body: String) -> Result<iface_project::Envvars, crate::runtime::DispatchError> {
+fn iface_project__get_project_username_project_envvar__ok(body: String) -> Result<Vec<iface_project::Envvar>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_project__envvars__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_project__envvar__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1143,12 +1157,12 @@ fn iface_project__get_project_username_project_build_num__err(e: crate::runtime:
     }
 }
 
-fn iface_project__get_project_username_project_build_num_artifacts__ok(body: String) -> Result<iface_project::Artifacts, crate::runtime::DispatchError> {
+fn iface_project__get_project_username_project_build_num_artifacts__ok(body: String) -> Result<Vec<iface_project::Artifact>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_project__artifacts__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_project__artifact__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1216,7 +1230,7 @@ fn iface_project__get_project_username_project_build_num_tests__err(e: crate::ru
 }
 
 impl iface_project::Guest for crate::Component {
-    fn get_project_username_project(params: iface_project::GetProjectUsernameProjectParams) -> Result<iface_project::Builds, String> {
+    fn get_project_username_project(params: iface_project::GetProjectUsernameProjectParams) -> Result<Vec<iface_project::Build>, String> {
         let json = iface_project__get_project_username_project_params__to_json(&params);
         match dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT, json).and_then(iface_project__get_project_username_project__ok) {
             Ok(v) => Ok(v),
@@ -1237,7 +1251,7 @@ impl iface_project::Guest for crate::Component {
             Err(e) => Err(iface_project__delete_project_username_project_build_cache__err(e)),
         }
     }
-    fn get_project_username_project_checkout_key(params: iface_project::GetProjectUsernameProjectCheckoutKeyParams) -> Result<iface_project::Keys, String> {
+    fn get_project_username_project_checkout_key(params: iface_project::GetProjectUsernameProjectCheckoutKeyParams) -> Result<Vec<iface_project::Key>, String> {
         let json = iface_project__get_project_username_project_checkout_key_params__to_json(&params);
         match dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY, json).and_then(iface_project__get_project_username_project_checkout_key__ok) {
             Ok(v) => Ok(v),
@@ -1265,7 +1279,7 @@ impl iface_project::Guest for crate::Component {
             Err(e) => Err(iface_project__delete_project_username_project_checkout_key_fingerprint__err(e)),
         }
     }
-    fn get_project_username_project_envvar(params: iface_project::GetProjectUsernameProjectEnvvarParams) -> Result<iface_project::Envvars, String> {
+    fn get_project_username_project_envvar(params: iface_project::GetProjectUsernameProjectEnvvarParams) -> Result<Vec<iface_project::Envvar>, String> {
         let json = iface_project__get_project_username_project_envvar_params__to_json(&params);
         match dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_ENVVAR, json).and_then(iface_project__get_project_username_project_envvar__ok) {
             Ok(v) => Ok(v),
@@ -1314,7 +1328,7 @@ impl iface_project::Guest for crate::Component {
             Err(e) => Err(iface_project__get_project_username_project_build_num__err(e)),
         }
     }
-    fn get_project_username_project_build_num_artifacts(params: iface_project::GetProjectUsernameProjectBuildNumArtifactsParams) -> Result<iface_project::Artifacts, String> {
+    fn get_project_username_project_build_num_artifacts(params: iface_project::GetProjectUsernameProjectBuildNumArtifactsParams) -> Result<Vec<iface_project::Artifact>, String> {
         let json = iface_project__get_project_username_project_build_num_artifacts_params__to_json(&params);
         match dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM_ARTIFACTS, json).and_then(iface_project__get_project_username_project_build_num_artifacts__ok) {
             Ok(v) => Ok(v),

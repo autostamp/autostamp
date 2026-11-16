@@ -196,6 +196,25 @@ fn iface_users__get_collection_fields_apps_item_enum__to_str(e: &iface_users::Ge
     }
 }
 
+fn iface_users__user_role__to_str(e: &iface_users::UserRole) -> &'static str {
+    match e {
+        iface_users::UserRole::Admin => "ADMIN",
+        iface_users::UserRole::Finance => "FINANCE",
+        iface_users::UserRole::Technical => "TECHNICAL",
+        iface_users::UserRole::AccountHolder => "ACCOUNT_HOLDER",
+        iface_users::UserRole::ReadOnly => "READ_ONLY",
+        iface_users::UserRole::Sales => "SALES",
+        iface_users::UserRole::Marketing => "MARKETING",
+        iface_users::UserRole::AppManager => "APP_MANAGER",
+        iface_users::UserRole::Developer => "DEVELOPER",
+        iface_users::UserRole::AccessToReports => "ACCESS_TO_REPORTS",
+        iface_users::UserRole::CustomerSupport => "CUSTOMER_SUPPORT",
+        iface_users::UserRole::CreateApps => "CREATE_APPS",
+        iface_users::UserRole::CloudManagedDeveloperId => "CLOUD_MANAGED_DEVELOPER_ID",
+        iface_users::UserRole::CloudManagedAppDistribution => "CLOUD_MANAGED_APP_DISTRIBUTION",
+    }
+}
+
 fn iface_users__user_relationships_visible_apps_data_item_type_op_enum__to_str(e: &iface_users::UserRelationshipsVisibleAppsDataItemTypeOpEnum) -> &'static str {
     match e {
         iface_users::UserRelationshipsVisibleAppsDataItemTypeOpEnum::Apps => "apps",
@@ -324,14 +343,8 @@ fn iface_users__user_attributes__to_json(p: &iface_users::UserAttributes) -> Val
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("provisioningAllowed".into(), match (&p.provisioning_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Array((v).iter().map(|v| iface_users__user_role__to_json(v)).collect()), None => Value::Null });
+    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__user_role__to_str(v).into())).collect()), None => Value::Null });
     m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_users__user_role__to_json(p: &iface_users::UserRole) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -762,7 +775,7 @@ fn iface_users__user_update_request_data_attributes__to_json(p: &iface_users::Us
     let mut m = Map::new();
     m.insert("allAppsVisible".into(), match (&p.all_apps_visible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("provisioningAllowed".into(), match (&p.provisioning_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Array((v).iter().map(|v| iface_users__user_role__to_json(v)).collect()), None => Value::Null });
+    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__user_role__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -917,15 +930,8 @@ fn iface_users__user_attributes__from_json(v: &Value) -> Option<iface_users::Use
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         provisioning_allowed: m.get("provisioningAllowed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__user_role__from_json(x)).collect())),
+        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_users__user_role__from_str)).collect())),
         username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_users__user_role__from_json(v: &Value) -> Option<iface_users::UserRole> {
-    let m = v.as_object()?;
-    Some(iface_users::UserRole {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1423,6 +1429,26 @@ fn iface_users__apps_response__from_json(v: &Value) -> Option<iface_users::AppsR
         links: match m.get("links").and_then(|v| iface_users__paged_document_links__from_json(v)) { Some(x) => x, None => return None },
         meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_users__paging_information__from_json(v)),
     })
+}
+
+fn iface_users__user_role__from_str(s: &str) -> Option<iface_users::UserRole> {
+    match s {
+        "ADMIN" => Some(iface_users::UserRole::Admin),
+        "FINANCE" => Some(iface_users::UserRole::Finance),
+        "TECHNICAL" => Some(iface_users::UserRole::Technical),
+        "ACCOUNT_HOLDER" => Some(iface_users::UserRole::AccountHolder),
+        "READ_ONLY" => Some(iface_users::UserRole::ReadOnly),
+        "SALES" => Some(iface_users::UserRole::Sales),
+        "MARKETING" => Some(iface_users::UserRole::Marketing),
+        "APP_MANAGER" => Some(iface_users::UserRole::AppManager),
+        "DEVELOPER" => Some(iface_users::UserRole::Developer),
+        "ACCESS_TO_REPORTS" => Some(iface_users::UserRole::AccessToReports),
+        "CUSTOMER_SUPPORT" => Some(iface_users::UserRole::CustomerSupport),
+        "CREATE_APPS" => Some(iface_users::UserRole::CreateApps),
+        "CLOUD_MANAGED_DEVELOPER_ID" => Some(iface_users::UserRole::CloudManagedDeveloperId),
+        "CLOUD_MANAGED_APP_DISTRIBUTION" => Some(iface_users::UserRole::CloudManagedAppDistribution),
+        _ => None,
+    }
 }
 
 fn iface_users__user_relationships_visible_apps_data_item_type_op_enum__from_str(s: &str) -> Option<iface_users::UserRelationshipsVisibleAppsDataItemTypeOpEnum> {

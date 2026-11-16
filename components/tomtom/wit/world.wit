@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `key` |
-package autostamp:tomtom@0.5.0;
+package autostamp:tomtom@0.6.0;
 
 interface copyrights {
   variant get-map-version-number-copyrights-format-error {

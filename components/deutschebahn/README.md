@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:deutschebahn@0.5.0` |
-| Published version | `0.5.0+deutschebahn-v1` |
+| Package | `autostamp:deutschebahn@0.6.0` |
+| Published version | `0.6.0+deutschebahn-v1` |
 | Tag filter | all tags |
 | Operations generated | 4 |
 | Infer API-key credentials | enabled — not triggered |

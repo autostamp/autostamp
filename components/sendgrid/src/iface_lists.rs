@@ -136,7 +136,7 @@ fn iface_lists__contact_details2__to_json(p: &iface_lists::ContactDetails2) -> V
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_lists__contact_details2_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("facebook".into(), match (&p.facebook) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -154,9 +154,10 @@ fn iface_lists__contact_details2__to_json(p: &iface_lists::ContactDetails2) -> V
     Value::Object(m)
 }
 
-fn iface_lists__contact_details2_custom_fields__to_json(p: &iface_lists::ContactDetails2CustomFields) -> Value {
+fn iface_lists__contact_details2_custom_fields_entry__to_json(p: &iface_lists::ContactDetails2CustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -282,7 +283,7 @@ fn iface_lists__contact_details2__from_json(v: &Value) -> Option<iface_lists::Co
         city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        custom_fields: m.get("custom_fields").filter(|v| !v.is_null()).and_then(|v| iface_lists__contact_details2_custom_fields__from_json(v)),
+        custom_fields: m.get("custom_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_lists::ContactDetails2CustomFieldsEntry { key: k.clone(), value: val })).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         facebook: m.get("facebook").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -300,10 +301,11 @@ fn iface_lists__contact_details2__from_json(v: &Value) -> Option<iface_lists::Co
     })
 }
 
-fn iface_lists__contact_details2_custom_fields__from_json(v: &Value) -> Option<iface_lists::ContactDetails2CustomFields> {
+fn iface_lists__contact_details2_custom_fields_entry__from_json(v: &Value) -> Option<iface_lists::ContactDetails2CustomFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_lists::ContactDetails2CustomFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_lists::ContactDetails2CustomFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

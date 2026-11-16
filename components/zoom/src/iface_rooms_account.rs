@@ -79,15 +79,17 @@ fn iface_rooms_account__update_zr_acc_profile_body_basic__to_json(p: &iface_room
     Value::Object(m)
 }
 
-fn iface_rooms_account__update_zr_acc_profile_response__to_json(p: &iface_rooms_account::UpdateZrAccProfileResponse) -> Value {
+fn iface_rooms_account__update_zr_acc_profile_response_entry__to_json(p: &iface_rooms_account::UpdateZrAccProfileResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_rooms_account__update_zoom_room_acc_settings_response__to_json(p: &iface_rooms_account::UpdateZoomRoomAccSettingsResponse) -> Value {
+fn iface_rooms_account__update_zoom_room_acc_settings_response_entry__to_json(p: &iface_rooms_account::UpdateZoomRoomAccSettingsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -127,17 +129,19 @@ fn iface_rooms_account__get_zr_account_profile_response_basic__from_json(v: &Val
     })
 }
 
-fn iface_rooms_account__update_zr_acc_profile_response__from_json(v: &Value) -> Option<iface_rooms_account::UpdateZrAccProfileResponse> {
+fn iface_rooms_account__update_zr_acc_profile_response_entry__from_json(v: &Value) -> Option<iface_rooms_account::UpdateZrAccProfileResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_rooms_account::UpdateZrAccProfileResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_rooms_account::UpdateZrAccProfileResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_rooms_account__update_zoom_room_acc_settings_response__from_json(v: &Value) -> Option<iface_rooms_account::UpdateZoomRoomAccSettingsResponse> {
+fn iface_rooms_account__update_zoom_room_acc_settings_response_entry__from_json(v: &Value) -> Option<iface_rooms_account::UpdateZoomRoomAccSettingsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_rooms_account::UpdateZoomRoomAccSettingsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_rooms_account::UpdateZoomRoomAccSettingsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -162,12 +166,12 @@ fn iface_rooms_account__get_zr_account_profile__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_rooms_account__update_zr_acc_profile__ok(body: String) -> Result<iface_rooms_account::UpdateZrAccProfileResponse, crate::runtime::DispatchError> {
+fn iface_rooms_account__update_zr_acc_profile__ok(body: String) -> Result<Vec<iface_rooms_account::UpdateZrAccProfileResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_rooms_account__update_zr_acc_profile_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_rooms_account::UpdateZrAccProfileResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -197,12 +201,12 @@ fn iface_rooms_account__get_zr_account_settings__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_rooms_account__update_zoom_room_acc_settings__ok(body: String) -> Result<iface_rooms_account::UpdateZoomRoomAccSettingsResponse, crate::runtime::DispatchError> {
+fn iface_rooms_account__update_zoom_room_acc_settings__ok(body: String) -> Result<Vec<iface_rooms_account::UpdateZoomRoomAccSettingsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_rooms_account__update_zoom_room_acc_settings_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_rooms_account::UpdateZoomRoomAccSettingsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -225,7 +229,7 @@ impl iface_rooms_account::Guest for crate::Component {
             Err(e) => Err(iface_rooms_account__get_zr_account_profile__err(e)),
         }
     }
-    fn update_zr_acc_profile(params: iface_rooms_account::UpdateZrAccProfileParams) -> Result<iface_rooms_account::UpdateZrAccProfileResponse, iface_rooms_account::UpdateZrAccProfileError> {
+    fn update_zr_acc_profile(params: iface_rooms_account::UpdateZrAccProfileParams) -> Result<Vec<iface_rooms_account::UpdateZrAccProfileResponseEntry>, iface_rooms_account::UpdateZrAccProfileError> {
         let json = iface_rooms_account__update_zr_acc_profile_params__to_json(&params);
         match dispatch(&OP_ROOMS_ACCOUNT_UPDATE_ZR_ACC_PROFILE, json).and_then(iface_rooms_account__update_zr_acc_profile__ok) {
             Ok(v) => Ok(v),
@@ -239,7 +243,7 @@ impl iface_rooms_account::Guest for crate::Component {
             Err(e) => Err(iface_rooms_account__get_zr_account_settings__err(e)),
         }
     }
-    fn update_zoom_room_acc_settings(params: iface_rooms_account::UpdateZoomRoomAccSettingsParams) -> Result<iface_rooms_account::UpdateZoomRoomAccSettingsResponse, iface_rooms_account::UpdateZoomRoomAccSettingsError> {
+    fn update_zoom_room_acc_settings(params: iface_rooms_account::UpdateZoomRoomAccSettingsParams) -> Result<Vec<iface_rooms_account::UpdateZoomRoomAccSettingsResponseEntry>, iface_rooms_account::UpdateZoomRoomAccSettingsError> {
         let json = iface_rooms_account__update_zoom_room_acc_settings_params__to_json(&params);
         match dispatch(&OP_ROOMS_ACCOUNT_UPDATE_ZOOM_ROOM_ACC_SETTINGS, json).and_then(iface_rooms_account__update_zoom_room_acc_settings__ok) {
             Ok(v) => Ok(v),

@@ -20,7 +20,7 @@ const OP_SERVICE_INSTANCE_CREATE_SERVICE_INSTANCE: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
         FieldSpec { snake: "addon", wire: "addon", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -45,7 +45,7 @@ const OP_SERVICE_INSTANCE_UPDATE_SERVICE_INSTANCE: OpSpec = OpSpec {
         FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
         FieldSpec { snake: "addon", wire: "addon", location: FieldLocation::Path },
         FieldSpec { snake: "instance_id", wire: "instance_id", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -66,41 +66,59 @@ const OP_SERVICE_INSTANCE_DELETE_SERVICE_INSTANCE: OpSpec = OpSpec {
 fn iface_service_instance__service_instance__to_json(p: &iface_service_instance::ServiceInstance) -> Value {
     let mut m = Map::new();
     m.insert("auth_url".into(), match (&p.auth_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("config".into(), match (&p.config) { Some(v) => iface_service_instance__service_instance_config__to_json(v), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("env".into(), match (&p.env) { Some(v) => iface_service_instance__service_instance_env__to_json(v), None => Value::Null });
-    m.insert("external_attributes".into(), match (&p.external_attributes) { Some(v) => iface_service_instance__service_instance_external_attributes__to_json(v), None => Value::Null });
+    m.insert("env".into(), match (&p.env) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("external_attributes".into(), match (&p.external_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("service_name".into(), match (&p.service_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("service_path".into(), match (&p.service_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("service_slug".into(), match (&p.service_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("snippets".into(), match (&p.snippets) { Some(v) => Value::Array((v).iter().map(|v| iface_service_instance__service_instance_snippets_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("snippets".into(), match (&p.snippets) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_service_instance__service_instance_config__to_json(p: &iface_service_instance::ServiceInstanceConfig) -> Value {
+fn iface_service_instance__service_instance_config_entry__to_json(p: &iface_service_instance::ServiceInstanceConfigEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_service_instance__service_instance_env__to_json(p: &iface_service_instance::ServiceInstanceEnv) -> Value {
+fn iface_service_instance__service_instance_env_entry__to_json(p: &iface_service_instance::ServiceInstanceEnvEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_service_instance__service_instance_external_attributes__to_json(p: &iface_service_instance::ServiceInstanceExternalAttributes) -> Value {
+fn iface_service_instance__service_instance_external_attributes_entry__to_json(p: &iface_service_instance::ServiceInstanceExternalAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_service_instance__service_instance_snippets_item__to_json(p: &iface_service_instance::ServiceInstanceSnippetsItem) -> Value {
+fn iface_service_instance__service_instance_snippets_item_entry__to_json(p: &iface_service_instance::ServiceInstanceSnippetsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_service_instance__create_service_instance_body_entry__to_json(p: &iface_service_instance::CreateServiceInstanceBodyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_service_instance__update_service_instance_body_entry__to_json(p: &iface_service_instance::UpdateServiceInstanceBodyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -114,7 +132,7 @@ fn iface_service_instance__create_service_instance_params__to_json(p: &iface_ser
     let mut m = Map::new();
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("addon".into(), Value::String((&p.addon).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -131,7 +149,7 @@ fn iface_service_instance__update_service_instance_params__to_json(p: &iface_ser
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("addon".into(), Value::String((&p.addon).clone()));
     m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -147,45 +165,49 @@ fn iface_service_instance__service_instance__from_json(v: &Value) -> Option<ifac
     let m = v.as_object()?;
     Some(iface_service_instance::ServiceInstance {
         auth_url: m.get("auth_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_service_instance__service_instance_config__from_json(v)),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_service_instance::ServiceInstanceConfigEntry { key: k.clone(), value: val })).collect())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        env: m.get("env").filter(|v| !v.is_null()).and_then(|v| iface_service_instance__service_instance_env__from_json(v)),
-        external_attributes: m.get("external_attributes").filter(|v| !v.is_null()).and_then(|v| iface_service_instance__service_instance_external_attributes__from_json(v)),
+        env: m.get("env").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_service_instance::ServiceInstanceEnvEntry { key: k.clone(), value: val })).collect())),
+        external_attributes: m.get("external_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_service_instance::ServiceInstanceExternalAttributesEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         service_name: m.get("service_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         service_path: m.get("service_path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         service_slug: m.get("service_slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        snippets: m.get("snippets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_service_instance__service_instance_snippets_item__from_json(x)).collect())),
+        snippets: m.get("snippets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_service_instance::ServiceInstanceSnippetsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_service_instance__service_instance_config__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceConfig> {
+fn iface_service_instance__service_instance_config_entry__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceConfigEntry> {
     let m = v.as_object()?;
-    Some(iface_service_instance::ServiceInstanceConfig {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_service_instance::ServiceInstanceConfigEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_service_instance__service_instance_env__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceEnv> {
+fn iface_service_instance__service_instance_env_entry__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceEnvEntry> {
     let m = v.as_object()?;
-    Some(iface_service_instance::ServiceInstanceEnv {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_service_instance::ServiceInstanceEnvEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_service_instance__service_instance_external_attributes__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceExternalAttributes> {
+fn iface_service_instance__service_instance_external_attributes_entry__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceExternalAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_service_instance::ServiceInstanceExternalAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_service_instance::ServiceInstanceExternalAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_service_instance__service_instance_snippets_item__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceSnippetsItem> {
+fn iface_service_instance__service_instance_snippets_item_entry__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceSnippetsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_service_instance::ServiceInstanceSnippetsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_service_instance::ServiceInstanceSnippetsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

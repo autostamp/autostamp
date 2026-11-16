@@ -51,9 +51,11 @@ fn iface_whitelists__delete_response__to_json(p: &iface_whitelists::DeleteRespon
     Value::Object(m)
 }
 
-fn iface_whitelists__list_response__to_json(p: &iface_whitelists::ListResponse) -> Value {
+fn iface_whitelists__list_response_item__to_json(p: &iface_whitelists::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -94,10 +96,12 @@ fn iface_whitelists__delete_response__from_json(v: &Value) -> Option<iface_white
     })
 }
 
-fn iface_whitelists__list_response__from_json(v: &Value) -> Option<iface_whitelists::ListResponse> {
+fn iface_whitelists__list_response_item__from_json(v: &Value) -> Option<iface_whitelists::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_whitelists::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_whitelists::ListResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -137,12 +141,12 @@ fn iface_whitelists__post_whitelists_delete_json__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_whitelists__post_whitelists_list_json__ok(body: String) -> Result<iface_whitelists::ListResponse, crate::runtime::DispatchError> {
+fn iface_whitelists__post_whitelists_list_json__ok(body: String) -> Result<Vec<iface_whitelists::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_whitelists__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_whitelists__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -170,7 +174,7 @@ impl iface_whitelists::Guest for crate::Component {
             Err(e) => Err(iface_whitelists__post_whitelists_delete_json__err(e)),
         }
     }
-    fn post_whitelists_list_json(params: iface_whitelists::PostWhitelistsListJsonParams) -> Result<iface_whitelists::ListResponse, String> {
+    fn post_whitelists_list_json(params: iface_whitelists::PostWhitelistsListJsonParams) -> Result<Vec<iface_whitelists::ListResponseItem>, String> {
         let json = iface_whitelists__post_whitelists_list_json_params__to_json(&params);
         match dispatch(&OP_WHITELISTS_POST_WHITELISTS_LIST_JSON, json).and_then(iface_whitelists__post_whitelists_list_json__ok) {
             Ok(v) => Ok(v),

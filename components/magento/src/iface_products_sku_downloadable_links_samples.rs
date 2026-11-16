@@ -28,7 +28,7 @@ const OP_PRODUCTS_SKU_DOWNLOADABLE_LINKS_SAMPLES_DOWNLOADABLE_SAMPLE_REPOSITORY_
 
 fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_interface__to_json(p: &iface_products_sku_downloadable_links_samples::DownloadableDataSampleInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_sku_downloadable_links_samples__downloadable_data_sample_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sample_file".into(), match (&p.sample_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sample_file_content".into(), match (&p.sample_file_content) { Some(v) => iface_products_sku_downloadable_links_samples__downloadable_data_file_content_interface__to_json(v), None => Value::Null });
@@ -39,23 +39,25 @@ fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_inter
     Value::Object(m)
 }
 
-fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_extension_interface__to_json(p: &iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterface) -> Value {
+fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_extension_interface_entry__to_json(p: &iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_products_sku_downloadable_links_samples__downloadable_data_file_content_interface__to_json(p: &iface_products_sku_downloadable_links_samples::DownloadableDataFileContentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_sku_downloadable_links_samples__downloadable_data_file_content_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("file_data".into(), Value::String((&p.file_data).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
-fn iface_products_sku_downloadable_links_samples__downloadable_data_file_content_extension_interface__to_json(p: &iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterface) -> Value {
+fn iface_products_sku_downloadable_links_samples__downloadable_data_file_content_extension_interface_entry__to_json(p: &iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -76,7 +78,7 @@ fn iface_products_sku_downloadable_links_samples__downloadable_sample_repository
 fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_interface__from_json(v: &Value) -> Option<iface_products_sku_downloadable_links_samples::DownloadableDataSampleInterface> {
     let m = v.as_object()?;
     Some(iface_products_sku_downloadable_links_samples::DownloadableDataSampleInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_sku_downloadable_links_samples__downloadable_data_sample_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         sample_file: m.get("sample_file").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sample_file_content: m.get("sample_file_content").filter(|v| !v.is_null()).and_then(|v| iface_products_sku_downloadable_links_samples__downloadable_data_file_content_interface__from_json(v)),
@@ -87,26 +89,28 @@ fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_inter
     })
 }
 
-fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_extension_interface__from_json(v: &Value) -> Option<iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterface> {
+fn iface_products_sku_downloadable_links_samples__downloadable_data_sample_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_sku_downloadable_links_samples::DownloadableDataSampleExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_products_sku_downloadable_links_samples__downloadable_data_file_content_interface__from_json(v: &Value) -> Option<iface_products_sku_downloadable_links_samples::DownloadableDataFileContentInterface> {
     let m = v.as_object()?;
     Some(iface_products_sku_downloadable_links_samples::DownloadableDataFileContentInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_sku_downloadable_links_samples__downloadable_data_file_content_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         file_data: m.get("file_data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products_sku_downloadable_links_samples__downloadable_data_file_content_extension_interface__from_json(v: &Value) -> Option<iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterface> {
+fn iface_products_sku_downloadable_links_samples__downloadable_data_file_content_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_sku_downloadable_links_samples::DownloadableDataFileContentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

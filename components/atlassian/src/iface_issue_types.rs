@@ -186,13 +186,14 @@ fn iface_issue_types__avatar__to_json(p: &iface_issue_types::Avatar) -> Value {
     m.insert("isSelected".into(), match (&p.is_selected) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("isSystemAvatar".into(), match (&p.is_system_avatar) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("urls".into(), match (&p.urls) { Some(v) => iface_issue_types__avatar_urls__to_json(v), None => Value::Null });
+    m.insert("urls".into(), match (&p.urls) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_issue_types__avatar_urls__to_json(p: &iface_issue_types::AvatarUrls) -> Value {
+fn iface_issue_types__avatar_urls_entry__to_json(p: &iface_issue_types::AvatarUrlsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -317,14 +318,15 @@ fn iface_issue_types__avatar__from_json(v: &Value) -> Option<iface_issue_types::
         is_selected: m.get("isSelected").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_system_avatar: m.get("isSystemAvatar").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        urls: m.get("urls").filter(|v| !v.is_null()).and_then(|v| iface_issue_types__avatar_urls__from_json(v)),
+        urls: m.get("urls").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_types::AvatarUrlsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_issue_types__avatar_urls__from_json(v: &Value) -> Option<iface_issue_types::AvatarUrls> {
+fn iface_issue_types__avatar_urls_entry__from_json(v: &Value) -> Option<iface_issue_types::AvatarUrlsEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_types::AvatarUrls {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_types::AvatarUrlsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -138,9 +138,10 @@ fn iface_alerts__patch_alerts_alert_id_response__to_json(p: &iface_alerts::Patch
     Value::Object(m)
 }
 
-fn iface_alerts__delete_alerts_alert_id_response__to_json(p: &iface_alerts::DeleteAlertsAlertIdResponse) -> Value {
+fn iface_alerts__delete_alerts_alert_id_response_entry__to_json(p: &iface_alerts::DeleteAlertsAlertIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -236,10 +237,11 @@ fn iface_alerts__patch_alerts_alert_id_response__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_alerts__delete_alerts_alert_id_response__from_json(v: &Value) -> Option<iface_alerts::DeleteAlertsAlertIdResponse> {
+fn iface_alerts__delete_alerts_alert_id_response_entry__from_json(v: &Value) -> Option<iface_alerts::DeleteAlertsAlertIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_alerts::DeleteAlertsAlertIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_alerts::DeleteAlertsAlertIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -334,12 +336,12 @@ fn iface_alerts__patch_alerts_alert_id__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_alerts__delete_alerts_alert_id__ok(body: String) -> Result<iface_alerts::DeleteAlertsAlertIdResponse, crate::runtime::DispatchError> {
+fn iface_alerts__delete_alerts_alert_id__ok(body: String) -> Result<Vec<iface_alerts::DeleteAlertsAlertIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_alerts__delete_alerts_alert_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_alerts::DeleteAlertsAlertIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -381,7 +383,7 @@ impl iface_alerts::Guest for crate::Component {
             Err(e) => Err(iface_alerts__patch_alerts_alert_id__err(e)),
         }
     }
-    fn delete_alerts_alert_id(params: iface_alerts::DeleteAlertsAlertIdParams) -> Result<iface_alerts::DeleteAlertsAlertIdResponse, String> {
+    fn delete_alerts_alert_id(params: iface_alerts::DeleteAlertsAlertIdParams) -> Result<Vec<iface_alerts::DeleteAlertsAlertIdResponseEntry>, String> {
         let json = iface_alerts__delete_alerts_alert_id_params__to_json(&params);
         match dispatch(&OP_ALERTS_DELETE_ALERTS_ALERT_ID, json).and_then(iface_alerts__delete_alerts_alert_id__ok) {
             Ok(v) => Ok(v),

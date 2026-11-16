@@ -60,9 +60,77 @@ fn iface_suggested_edits__get_suggested_edits_sort_enum__to_str(e: &iface_sugges
     }
 }
 
-fn iface_suggested_edits__suggested_edits__to_json(p: &iface_suggested_edits::SuggestedEdits) -> Value {
+fn iface_suggested_edits__suggested_edits_item__to_json(p: &iface_suggested_edits::SuggestedEditsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("approval_date".into(), match (&p.approval_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("proposing_user".into(), match (&p.proposing_user) { Some(v) => iface_suggested_edits__suggested_edits_item_proposing_user__to_json(v), None => Value::Null });
+    m.insert("rejection_date".into(), match (&p.rejection_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("suggested_edit_id".into(), match (&p.suggested_edit_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suggested_edits__suggested_edits_item_proposing_user__to_json(p: &iface_suggested_edits::SuggestedEditsItemProposingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_suggested_edits__suggested_edits_item_proposing_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suggested_edits__suggested_edits_item_proposing_user_badge_counts__to_json(p: &iface_suggested_edits::SuggestedEditsItemProposingUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suggested_edits__suggested_edits_item_v2__to_json(p: &iface_suggested_edits::SuggestedEditsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("approval_date".into(), match (&p.approval_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("proposing_user".into(), match (&p.proposing_user) { Some(v) => iface_suggested_edits__suggested_edits_item_v2_proposing_user__to_json(v), None => Value::Null });
+    m.insert("rejection_date".into(), match (&p.rejection_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("suggested_edit_id".into(), match (&p.suggested_edit_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suggested_edits__suggested_edits_item_v2_proposing_user__to_json(p: &iface_suggested_edits::SuggestedEditsItemV2ProposingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_suggested_edits__suggested_edits_item_v2_proposing_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suggested_edits__suggested_edits_item_v2_proposing_user_badge_counts__to_json(p: &iface_suggested_edits::SuggestedEditsItemV2ProposingUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -99,19 +167,92 @@ fn iface_suggested_edits__get_suggested_edits_ids_params__to_json(p: &iface_sugg
     Value::Object(m)
 }
 
-fn iface_suggested_edits__suggested_edits__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEdits> {
+fn iface_suggested_edits__suggested_edits_item__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEditsItem> {
     let m = v.as_object()?;
-    Some(iface_suggested_edits::SuggestedEdits {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_suggested_edits::SuggestedEditsItem {
+        approval_date: m.get("approval_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        proposing_user: m.get("proposing_user").filter(|v| !v.is_null()).and_then(|v| iface_suggested_edits__suggested_edits_item_proposing_user__from_json(v)),
+        rejection_date: m.get("rejection_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        suggested_edit_id: m.get("suggested_edit_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_suggested_edits__get_suggested_edits__ok(body: String) -> Result<iface_suggested_edits::SuggestedEdits, crate::runtime::DispatchError> {
+fn iface_suggested_edits__suggested_edits_item_proposing_user__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEditsItemProposingUser> {
+    let m = v.as_object()?;
+    Some(iface_suggested_edits::SuggestedEditsItemProposingUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_suggested_edits__suggested_edits_item_proposing_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_suggested_edits__suggested_edits_item_proposing_user_badge_counts__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEditsItemProposingUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_suggested_edits::SuggestedEditsItemProposingUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_suggested_edits__suggested_edits_item_v2__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEditsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_suggested_edits::SuggestedEditsItemV2 {
+        approval_date: m.get("approval_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        proposing_user: m.get("proposing_user").filter(|v| !v.is_null()).and_then(|v| iface_suggested_edits__suggested_edits_item_v2_proposing_user__from_json(v)),
+        rejection_date: m.get("rejection_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        suggested_edit_id: m.get("suggested_edit_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_suggested_edits__suggested_edits_item_v2_proposing_user__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEditsItemV2ProposingUser> {
+    let m = v.as_object()?;
+    Some(iface_suggested_edits::SuggestedEditsItemV2ProposingUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_suggested_edits__suggested_edits_item_v2_proposing_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_suggested_edits__suggested_edits_item_v2_proposing_user_badge_counts__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEditsItemV2ProposingUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_suggested_edits::SuggestedEditsItemV2ProposingUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_suggested_edits__get_suggested_edits__ok(body: String) -> Result<Vec<iface_suggested_edits::SuggestedEditsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_suggested_edits__suggested_edits__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_suggested_edits__suggested_edits_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -136,12 +277,12 @@ fn iface_suggested_edits__get_suggested_edits__err(e: crate::runtime::DispatchEr
     }
 }
 
-fn iface_suggested_edits__get_suggested_edits_ids__ok(body: String) -> Result<iface_suggested_edits::SuggestedEdits, crate::runtime::DispatchError> {
+fn iface_suggested_edits__get_suggested_edits_ids__ok(body: String) -> Result<Vec<iface_suggested_edits::SuggestedEditsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_suggested_edits__suggested_edits__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_suggested_edits__suggested_edits_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -167,14 +308,14 @@ fn iface_suggested_edits__get_suggested_edits_ids__err(e: crate::runtime::Dispat
 }
 
 impl iface_suggested_edits::Guest for crate::Component {
-    fn get_suggested_edits(params: iface_suggested_edits::GetSuggestedEditsParams) -> Result<iface_suggested_edits::SuggestedEdits, iface_suggested_edits::GetSuggestedEditsError> {
+    fn get_suggested_edits(params: iface_suggested_edits::GetSuggestedEditsParams) -> Result<Vec<iface_suggested_edits::SuggestedEditsItem>, iface_suggested_edits::GetSuggestedEditsError> {
         let json = iface_suggested_edits__get_suggested_edits_params__to_json(&params);
         match dispatch(&OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS, json).and_then(iface_suggested_edits__get_suggested_edits__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_suggested_edits__get_suggested_edits__err(e)),
         }
     }
-    fn get_suggested_edits_ids(params: iface_suggested_edits::GetSuggestedEditsIdsParams) -> Result<iface_suggested_edits::SuggestedEdits, iface_suggested_edits::GetSuggestedEditsIdsError> {
+    fn get_suggested_edits_ids(params: iface_suggested_edits::GetSuggestedEditsIdsParams) -> Result<Vec<iface_suggested_edits::SuggestedEditsItemV2>, iface_suggested_edits::GetSuggestedEditsIdsError> {
         let json = iface_suggested_edits__get_suggested_edits_ids_params__to_json(&params);
         match dispatch(&OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS_IDS, json).and_then(iface_suggested_edits__get_suggested_edits_ids__ok) {
             Ok(v) => Ok(v),

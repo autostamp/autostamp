@@ -117,7 +117,7 @@ fn iface_promotion_codes__promotion_code__to_json(p: &iface_promotion_codes::Pro
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_promotion_codes__promotion_code_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_promotion_codes__promotion_code_object_enum__to_str(&p.object).into()));
     m.insert("restrictions".into(), iface_promotion_codes__resource_restrictions__to_json(&p.restrictions));
     m.insert("times_redeemed".into(), Value::Number(serde_json::Number::from(*(&p.times_redeemed))));
@@ -130,13 +130,13 @@ fn iface_promotion_codes__coupon__to_json(p: &iface_promotion_codes::Coupon) -> 
     m.insert("applies_to".into(), match (&p.applies_to) { Some(v) => iface_promotion_codes__coupon_applies_to__to_json(v), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_promotion_codes__coupon_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_promotion_codes__coupon_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("duration".into(), Value::String(iface_promotion_codes__coupon_duration_enum__to_str(&p.duration).into()));
     m.insert("duration_in_months".into(), match (&p.duration_in_months) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_promotion_codes__coupon_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_promotion_codes__coupon_object_enum__to_str(&p.object).into()));
     m.insert("percent_off".into(), match (&p.percent_off) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -152,69 +152,100 @@ fn iface_promotion_codes__coupon_applies_to__to_json(p: &iface_promotion_codes::
     Value::Object(m)
 }
 
-fn iface_promotion_codes__coupon_currency_options__to_json(p: &iface_promotion_codes::CouponCurrencyOptions) -> Value {
+fn iface_promotion_codes__coupon_currency_option__to_json(p: &iface_promotion_codes::CouponCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount_off".into(), Value::Number(serde_json::Number::from(*(&p.amount_off))));
     Value::Object(m)
 }
 
-fn iface_promotion_codes__coupon_metadata__to_json(p: &iface_promotion_codes::CouponMetadata) -> Value {
+fn iface_promotion_codes__coupon_currency_options_entry__to_json(p: &iface_promotion_codes::CouponCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_promotion_codes__coupon_currency_option__to_json(&p.value));
     Value::Object(m)
 }
 
-fn iface_promotion_codes__promotion_code_metadata__to_json(p: &iface_promotion_codes::PromotionCodeMetadata) -> Value {
+fn iface_promotion_codes__coupon_metadata_entry__to_json(p: &iface_promotion_codes::CouponMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_promotion_codes__promotion_code_metadata_entry__to_json(p: &iface_promotion_codes::PromotionCodeMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_promotion_codes__resource_restrictions__to_json(p: &iface_promotion_codes::ResourceRestrictions) -> Value {
     let mut m = Map::new();
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_promotion_codes__resource_restrictions_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_promotion_codes__promotion_code_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("first_time_transaction".into(), Value::Bool(*(&p.first_time_transaction)));
     m.insert("minimum_amount".into(), match (&p.minimum_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("minimum_amount_currency".into(), match (&p.minimum_amount_currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_promotion_codes__resource_restrictions_currency_options__to_json(p: &iface_promotion_codes::ResourceRestrictionsCurrencyOptions) -> Value {
+fn iface_promotion_codes__promotion_code_currency_option__to_json(p: &iface_promotion_codes::PromotionCodeCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minimum_amount".into(), Value::Number(serde_json::Number::from(*(&p.minimum_amount))));
     Value::Object(m)
 }
 
-fn iface_promotion_codes__post_promotion_codes_body_metadata__to_json(p: &iface_promotion_codes::PostPromotionCodesBodyMetadata) -> Value {
+fn iface_promotion_codes__resource_restrictions_currency_options_entry__to_json(p: &iface_promotion_codes::ResourceRestrictionsCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_promotion_codes__promotion_code_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_promotion_codes__post_promotion_codes_body_metadata_entry__to_json(p: &iface_promotion_codes::PostPromotionCodesBodyMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_promotion_codes__post_promotion_codes_body_restrictions__to_json(p: &iface_promotion_codes::PostPromotionCodesBodyRestrictions) -> Value {
     let mut m = Map::new();
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_promotion_codes__post_promotion_codes_body_restrictions_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_promotion_codes__post_promotion_codes_body_restrictions_currency_options_value__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("first_time_transaction".into(), match (&p.first_time_transaction) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("minimum_amount".into(), match (&p.minimum_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("minimum_amount_currency".into(), match (&p.minimum_amount_currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_promotion_codes__post_promotion_codes_body_restrictions_currency_options__to_json(p: &iface_promotion_codes::PostPromotionCodesBodyRestrictionsCurrencyOptions) -> Value {
+fn iface_promotion_codes__post_promotion_codes_body_restrictions_currency_options_value__to_json(p: &iface_promotion_codes::PostPromotionCodesBodyRestrictionsCurrencyOptionsValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minimum_amount".into(), match (&p.minimum_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_promotion_codes__post_promotion_codes_body_restrictions_currency_options_entry__to_json(p: &iface_promotion_codes::PostPromotionCodesBodyRestrictionsCurrencyOptionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_promotion_codes__post_promotion_codes_body_restrictions_currency_options_value__to_json(&p.value));
     Value::Object(m)
 }
 
 fn iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions__to_json(p: &iface_promotion_codes::PostPromotionCodesPromotionCodeBodyRestrictions) -> Value {
     let mut m = Map::new();
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions_currency_options_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions_currency_options__to_json(p: &iface_promotion_codes::PostPromotionCodesPromotionCodeBodyRestrictionsCurrencyOptions) -> Value {
+fn iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions_currency_options_value__to_json(p: &iface_promotion_codes::PostPromotionCodesPromotionCodeBodyRestrictionsCurrencyOptionsValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minimum_amount".into(), match (&p.minimum_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions_currency_options_entry__to_json(p: &iface_promotion_codes::PostPromotionCodesPromotionCodeBodyRestrictionsCurrencyOptionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_promotion_codes__post_promotion_codes_promotion_code_body_restrictions_currency_options_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -242,7 +273,7 @@ fn iface_promotion_codes__post_promotion_codes_params__to_json(p: &iface_promoti
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("expires_at".into(), match (&p.expires_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_promotion_codes__post_promotion_codes_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("restrictions".into(), match (&p.restrictions) { Some(v) => iface_promotion_codes__post_promotion_codes_body_restrictions__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -287,7 +318,7 @@ fn iface_promotion_codes__promotion_code__from_json(v: &Value) -> Option<iface_p
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_promotion_codes__promotion_code_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_promotion_codes::PromotionCodeMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_promotion_codes__promotion_code_object_enum__from_str)) { Some(x) => x, None => return None },
         restrictions: match m.get("restrictions").and_then(|v| iface_promotion_codes__resource_restrictions__from_json(v)) { Some(x) => x, None => return None },
         times_redeemed: m.get("times_redeemed").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -301,13 +332,13 @@ fn iface_promotion_codes__coupon__from_json(v: &Value) -> Option<iface_promotion
         applies_to: m.get("applies_to").filter(|v| !v.is_null()).and_then(|v| iface_promotion_codes__coupon_applies_to__from_json(v)),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_promotion_codes__coupon_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_promotion_codes__coupon_currency_option__from_json(x)).map(|val| iface_promotion_codes::CouponCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         duration: match m.get("duration").and_then(|v| (v).as_str().and_then(iface_promotion_codes__coupon_duration_enum__from_str)) { Some(x) => x, None => return None },
         duration_in_months: m.get("duration_in_months").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_promotion_codes__coupon_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_promotion_codes::CouponMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_promotion_codes__coupon_object_enum__from_str)) { Some(x) => x, None => return None },
         percent_off: m.get("percent_off").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -324,41 +355,59 @@ fn iface_promotion_codes__coupon_applies_to__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_promotion_codes__coupon_currency_options__from_json(v: &Value) -> Option<iface_promotion_codes::CouponCurrencyOptions> {
+fn iface_promotion_codes__coupon_currency_option__from_json(v: &Value) -> Option<iface_promotion_codes::CouponCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_promotion_codes::CouponCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_promotion_codes::CouponCurrencyOption {
+        amount_off: m.get("amount_off").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_promotion_codes__coupon_metadata__from_json(v: &Value) -> Option<iface_promotion_codes::CouponMetadata> {
+fn iface_promotion_codes__coupon_currency_options_entry__from_json(v: &Value) -> Option<iface_promotion_codes::CouponCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_promotion_codes::CouponMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_promotion_codes::CouponCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_promotion_codes__coupon_currency_option__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_promotion_codes__promotion_code_metadata__from_json(v: &Value) -> Option<iface_promotion_codes::PromotionCodeMetadata> {
+fn iface_promotion_codes__coupon_metadata_entry__from_json(v: &Value) -> Option<iface_promotion_codes::CouponMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_promotion_codes::PromotionCodeMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_promotion_codes::CouponMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_promotion_codes__promotion_code_metadata_entry__from_json(v: &Value) -> Option<iface_promotion_codes::PromotionCodeMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_promotion_codes::PromotionCodeMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_promotion_codes__resource_restrictions__from_json(v: &Value) -> Option<iface_promotion_codes::ResourceRestrictions> {
     let m = v.as_object()?;
     Some(iface_promotion_codes::ResourceRestrictions {
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_promotion_codes__resource_restrictions_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_promotion_codes__promotion_code_currency_option__from_json(x)).map(|val| iface_promotion_codes::ResourceRestrictionsCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         first_time_transaction: m.get("first_time_transaction").and_then(|v| (v).as_bool()).unwrap_or_default(),
         minimum_amount: m.get("minimum_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         minimum_amount_currency: m.get("minimum_amount_currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_promotion_codes__resource_restrictions_currency_options__from_json(v: &Value) -> Option<iface_promotion_codes::ResourceRestrictionsCurrencyOptions> {
+fn iface_promotion_codes__promotion_code_currency_option__from_json(v: &Value) -> Option<iface_promotion_codes::PromotionCodeCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_promotion_codes::ResourceRestrictionsCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_promotion_codes::PromotionCodeCurrencyOption {
+        minimum_amount: m.get("minimum_amount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_promotion_codes__resource_restrictions_currency_options_entry__from_json(v: &Value) -> Option<iface_promotion_codes::ResourceRestrictionsCurrencyOptionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_promotion_codes::ResourceRestrictionsCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_promotion_codes__promotion_code_currency_option__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 

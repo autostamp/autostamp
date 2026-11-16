@@ -16,16 +16,17 @@ const OP_PRODUCTS_BASE_PRICES_INFORMATION_CATALOG_BASE_PRICE_STORAGE_V1_GET_POST
 
 fn iface_products_base_prices_information__catalog_data_base_price_interface__to_json(p: &iface_products_base_prices_information::CatalogDataBasePriceInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_base_prices_information__catalog_data_base_price_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), serde_json::Number::from_f64(*(&p.price)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("sku".into(), Value::String((&p.sku).clone()));
     m.insert("store_id".into(), Value::Number(serde_json::Number::from(*(&p.store_id))));
     Value::Object(m)
 }
 
-fn iface_products_base_prices_information__catalog_data_base_price_extension_interface__to_json(p: &iface_products_base_prices_information::CatalogDataBasePriceExtensionInterface) -> Value {
+fn iface_products_base_prices_information__catalog_data_base_price_extension_interface_entry__to_json(p: &iface_products_base_prices_information::CatalogDataBasePriceExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -38,17 +39,18 @@ fn iface_products_base_prices_information__catalog_base_price_storage_v1_get_pos
 fn iface_products_base_prices_information__catalog_data_base_price_interface__from_json(v: &Value) -> Option<iface_products_base_prices_information::CatalogDataBasePriceInterface> {
     let m = v.as_object()?;
     Some(iface_products_base_prices_information::CatalogDataBasePriceInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_base_prices_information__catalog_data_base_price_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_base_prices_information::CatalogDataBasePriceExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         price: m.get("price").and_then(|v| (v).as_f64()).unwrap_or_default(),
         sku: m.get("sku").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         store_id: m.get("store_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_products_base_prices_information__catalog_data_base_price_extension_interface__from_json(v: &Value) -> Option<iface_products_base_prices_information::CatalogDataBasePriceExtensionInterface> {
+fn iface_products_base_prices_information__catalog_data_base_price_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_base_prices_information::CatalogDataBasePriceExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_base_prices_information::CatalogDataBasePriceExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_base_prices_information::CatalogDataBasePriceExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

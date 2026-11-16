@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apiKeyScheme` | header `x-api-key` |
-package autostamp:spoonacular@0.5.0;
+package autostamp:spoonacular@0.6.0;
 
 interface misc {
   enum detect-food-in-text-content-type-enum {
@@ -495,7 +495,7 @@ interface ingredients {
     estimated-cost: get-ingredient-information-response-estimated-cost,
     id: s32,
     image: string,
-    meta: list<get-ingredient-information-response-meta-item>,
+    meta: list<list<get-ingredient-information-response-meta-item-entry>>,
     name: string,
     name-clean: string,
     nutrition: get-ingredient-information-response-nutrition,
@@ -513,9 +513,10 @@ interface ingredients {
     value: f64
   }
 
-  record get-ingredient-information-response-meta-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-ingredient-information-response-meta-item-entry {
+    key: string,
+    value: string
   }
 
   record get-ingredient-information-response-nutrition {
@@ -555,9 +556,10 @@ interface ingredients {
     substitutes: list<string>
   }
 
-  record by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   variant autocomplete-ingredient-search-error {
@@ -737,7 +739,7 @@ interface ingredients {
     /// Whether the the measures should be 'us' or 'metric'.
     measure: option<by-id-image-measure-enum>
   }
-  by-id-image: func(params: by-id-image-params) -> result<by-id-image-response, by-id-image-error>;
+  by-id-image: func(params: by-id-image-params) -> result<list<by-id-image-response-entry>, by-id-image-error>;
 
 }
 
@@ -776,9 +778,10 @@ interface recipes {
     original: string
   }
 
-  record analyze-recipe-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record analyze-recipe-response-entry {
+    key: string,
+    value: string
   }
 
   record analyze-recipe-instructions-response {
@@ -863,7 +866,7 @@ interface recipes {
 
   record extract-recipe-from-website-response {
     aggregate-likes: s32,
-    analyzed-instructions: list<extract-recipe-from-website-response-analyzed-instructions-item>,
+    analyzed-instructions: list<list<extract-recipe-from-website-response-analyzed-instructions-item-entry>>,
     cheap: bool,
     credits-text: string,
     cuisines: list<string>,
@@ -901,9 +904,10 @@ interface recipes {
     wine-pairing: extract-recipe-from-website-response-wine-pairing
   }
 
-  record extract-recipe-from-website-response-analyzed-instructions-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record extract-recipe-from-website-response-analyzed-instructions-item-entry {
+    key: string,
+    value: string
   }
 
   record extract-recipe-from-website-response-extended-ingredients-item {
@@ -963,7 +967,7 @@ interface recipes {
     missed-ingredient-count: s32,
     missed-ingredients: list<search-recipes-by-ingredients-response-item-missed-ingredients-item>,
     title: string,
-    unused-ingredients: list<search-recipes-by-ingredients-response-item-unused-ingredients-item>,
+    unused-ingredients: list<list<search-recipes-by-ingredients-response-item-unused-ingredients-item-entry>>,
     used-ingredient-count: f64,
     used-ingredients: list<search-recipes-by-ingredients-response-item-used-ingredients-item>
   }
@@ -982,9 +986,10 @@ interface recipes {
     unit-short: string
   }
 
-  record search-recipes-by-ingredients-response-item-unused-ingredients-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record search-recipes-by-ingredients-response-item-unused-ingredients-item-entry {
+    key: string,
+    value: string
   }
 
   record search-recipes-by-ingredients-response-item-used-ingredients-item {
@@ -1248,7 +1253,7 @@ interface recipes {
 
   record get-random-recipes-response-recipes-item {
     aggregate-likes: f64,
-    analyzed-instructions: option<list<get-random-recipes-response-recipes-item-analyzed-instructions-item>>,
+    analyzed-instructions: option<list<list<get-random-recipes-response-recipes-item-analyzed-instructions-item-entry>>>,
     cheap: bool,
     credits-text: string,
     cuisines: option<list<string>>,
@@ -1286,9 +1291,10 @@ interface recipes {
     wine-pairing: option<get-random-recipes-response-recipes-item-wine-pairing>
   }
 
-  record get-random-recipes-response-recipes-item-analyzed-instructions-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-random-recipes-response-recipes-item-analyzed-instructions-item-entry {
+    key: string,
+    value: string
   }
 
   record get-random-recipes-response-recipes-item-extended-ingredients-item {
@@ -1386,9 +1392,10 @@ interface recipes {
     name: string
   }
 
-  record create-recipe-card-get-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-recipe-card-get-response-entry {
+    key: string,
+    value: string
   }
 
   record get-recipe-equipment-by-id-response {
@@ -1400,14 +1407,15 @@ interface recipes {
     name: string
   }
 
-  record equipment-by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record equipment-by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   record get-recipe-information-response {
     aggregate-likes: s32,
-    analyzed-instructions: list<get-recipe-information-response-analyzed-instructions-item>,
+    analyzed-instructions: list<list<get-recipe-information-response-analyzed-instructions-item-entry>>,
     cheap: bool,
     credits-text: string,
     cuisines: list<string>,
@@ -1445,9 +1453,10 @@ interface recipes {
     wine-pairing: get-recipe-information-response-wine-pairing
   }
 
-  record get-recipe-information-response-analyzed-instructions-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-recipe-information-response-analyzed-instructions-item-entry {
+    key: string,
+    value: string
   }
 
   record get-recipe-information-response-extended-ingredients-item {
@@ -1524,9 +1533,10 @@ interface recipes {
     value: f64
   }
 
-  record recipe-nutrition-label-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record recipe-nutrition-label-image-response-entry {
+    key: string,
+    value: string
   }
 
   record get-recipe-nutrition-widget-by-id-response {
@@ -1552,9 +1562,10 @@ interface recipes {
     percent-of-daily-needs: f64
   }
 
-  record recipe-nutrition-by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record recipe-nutrition-by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   record get-recipe-price-breakdown-by-id-response {
@@ -1585,9 +1596,10 @@ interface recipes {
     value: f64
   }
 
-  record price-breakdown-by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record price-breakdown-by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   record get-similar-recipes-response-item {
@@ -1615,9 +1627,10 @@ interface recipes {
     sweetness: f64
   }
 
-  record recipe-taste-by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record recipe-taste-by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   variant compute-glycemic-load-error {
@@ -1935,7 +1948,7 @@ interface recipes {
     servings: option<s32>,
     title: option<string>
   }
-  analyze-recipe: func(params: analyze-recipe-params) -> result<analyze-recipe-response, analyze-recipe-error>;
+  analyze-recipe: func(params: analyze-recipe-params) -> result<list<analyze-recipe-response-entry>, analyze-recipe-error>;
 
   /// Analyze Recipe Instructions
   record analyze-recipe-instructions-params {
@@ -2490,7 +2503,7 @@ interface recipes {
     /// The font color for the recipe card as a hex-string.
     font-color: option<string>
   }
-  create-recipe-card-get: func(params: create-recipe-card-get-params) -> result<create-recipe-card-get-response, create-recipe-card-get-error>;
+  create-recipe-card-get: func(params: create-recipe-card-get-params) -> result<list<create-recipe-card-get-response-entry>, create-recipe-card-get-error>;
 
   /// Equipment by ID Widget
   record visualize-recipe-equipment-by-id-params {
@@ -2513,7 +2526,7 @@ interface recipes {
     /// The recipe id.
     id: string
   }
-  equipment-by-id-image: func(params: equipment-by-id-image-params) -> result<equipment-by-id-image-response, equipment-by-id-image-error>;
+  equipment-by-id-image: func(params: equipment-by-id-image-params) -> result<list<equipment-by-id-image-response-entry>, equipment-by-id-image-error>;
 
   /// Get Recipe Information
   record get-recipe-information-params {
@@ -2568,7 +2581,7 @@ interface recipes {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  recipe-nutrition-label-image: func(params: recipe-nutrition-label-image-params) -> result<recipe-nutrition-label-image-response, recipe-nutrition-label-image-error>;
+  recipe-nutrition-label-image: func(params: recipe-nutrition-label-image-params) -> result<list<recipe-nutrition-label-image-response-entry>, recipe-nutrition-label-image-error>;
 
   /// Recipe Nutrition by ID Widget
   record visualize-recipe-nutrition-by-id-params {
@@ -2593,7 +2606,7 @@ interface recipes {
     /// The recipe id.
     id: string
   }
-  recipe-nutrition-by-id-image: func(params: recipe-nutrition-by-id-image-params) -> result<recipe-nutrition-by-id-image-response, recipe-nutrition-by-id-image-error>;
+  recipe-nutrition-by-id-image: func(params: recipe-nutrition-by-id-image-params) -> result<list<recipe-nutrition-by-id-image-response-entry>, recipe-nutrition-by-id-image-error>;
 
   /// Price Breakdown by ID Widget
   record visualize-recipe-price-breakdown-by-id-params {
@@ -2616,7 +2629,7 @@ interface recipes {
     /// The recipe id.
     id: string
   }
-  price-breakdown-by-id-image: func(params: price-breakdown-by-id-image-params) -> result<price-breakdown-by-id-image-response, price-breakdown-by-id-image-error>;
+  price-breakdown-by-id-image: func(params: price-breakdown-by-id-image-params) -> result<list<price-breakdown-by-id-image-response-entry>, price-breakdown-by-id-image-error>;
 
   /// Get Similar Recipes
   record get-similar-recipes-params {
@@ -2665,7 +2678,7 @@ interface recipes {
     /// Red, green, blue values for the chart color.
     rgb: option<string>
   }
-  recipe-taste-by-id-image: func(params: recipe-taste-by-id-image-params) -> result<recipe-taste-by-id-image-response, recipe-taste-by-id-image-error>;
+  recipe-taste-by-id-image: func(params: recipe-taste-by-id-image-params) -> result<list<recipe-taste-by-id-image-response-entry>, recipe-taste-by-id-image-error>;
 
 }
 
@@ -2747,14 +2760,16 @@ interface menu-items {
     unit: string
   }
 
-  record menu-item-nutrition-label-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record menu-item-nutrition-label-image-response-entry {
+    key: string,
+    value: string
   }
 
-  record menu-item-nutrition-by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record menu-item-nutrition-by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   variant search-menu-items-error {
@@ -2877,7 +2892,7 @@ interface menu-items {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  menu-item-nutrition-label-image: func(params: menu-item-nutrition-label-image-params) -> result<menu-item-nutrition-label-image-response, menu-item-nutrition-label-image-error>;
+  menu-item-nutrition-label-image: func(params: menu-item-nutrition-label-image-params) -> result<list<menu-item-nutrition-label-image-response-entry>, menu-item-nutrition-label-image-error>;
 
   /// Menu Item Nutrition by ID Widget
   record visualize-menu-item-nutrition-by-id-params {
@@ -2895,7 +2910,7 @@ interface menu-items {
     /// The menu item id.
     id: string
   }
-  menu-item-nutrition-by-id-image: func(params: menu-item-nutrition-by-id-image-params) -> result<menu-item-nutrition-by-id-image-response, menu-item-nutrition-by-id-image-error>;
+  menu-item-nutrition-by-id-image: func(params: menu-item-nutrition-by-id-image-params) -> result<list<menu-item-nutrition-by-id-image-response-entry>, menu-item-nutrition-by-id-image-error>;
 
 }
 
@@ -3009,27 +3024,30 @@ interface products {
   }
 
   record get-comparable-products-response-comparable-products {
-    calories: list<get-comparable-products-response-comparable-products-calories-item>,
-    likes: list<get-comparable-products-response-comparable-products-likes-item>,
-    price: list<get-comparable-products-response-comparable-products-price-item>,
+    calories: list<list<get-comparable-products-response-comparable-products-calories-item-entry>>,
+    likes: list<list<get-comparable-products-response-comparable-products-likes-item-entry>>,
+    price: list<list<get-comparable-products-response-comparable-products-price-item-entry>>,
     protein: list<get-comparable-products-response-comparable-products-protein-item>,
     spoonacular-score: list<get-comparable-products-response-comparable-products-spoonacular-score-item>,
-    sugar: list<get-comparable-products-response-comparable-products-sugar-item>
+    sugar: list<list<get-comparable-products-response-comparable-products-sugar-item-entry>>
   }
 
-  record get-comparable-products-response-comparable-products-calories-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-comparable-products-response-comparable-products-calories-item-entry {
+    key: string,
+    value: string
   }
 
-  record get-comparable-products-response-comparable-products-likes-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-comparable-products-response-comparable-products-likes-item-entry {
+    key: string,
+    value: string
   }
 
-  record get-comparable-products-response-comparable-products-price-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-comparable-products-response-comparable-products-price-item-entry {
+    key: string,
+    value: string
   }
 
   record get-comparable-products-response-comparable-products-protein-item {
@@ -3046,9 +3064,10 @@ interface products {
     title: string
   }
 
-  record get-comparable-products-response-comparable-products-sugar-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-comparable-products-response-comparable-products-sugar-item-entry {
+    key: string,
+    value: string
   }
 
   record get-product-information-response {
@@ -3100,14 +3119,16 @@ interface products {
     unit: string
   }
 
-  record product-nutrition-label-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record product-nutrition-label-image-response-entry {
+    key: string,
+    value: string
   }
 
-  record product-nutrition-by-id-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record product-nutrition-by-id-image-response-entry {
+    key: string,
+    value: string
   }
 
   variant classify-grocery-product-error {
@@ -3290,7 +3311,7 @@ interface products {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  product-nutrition-label-image: func(params: product-nutrition-label-image-params) -> result<product-nutrition-label-image-response, product-nutrition-label-image-error>;
+  product-nutrition-label-image: func(params: product-nutrition-label-image-params) -> result<list<product-nutrition-label-image-response-entry>, product-nutrition-label-image-error>;
 
   /// Product Nutrition by ID Widget
   record visualize-product-nutrition-by-id-params {
@@ -3308,7 +3329,7 @@ interface products {
     /// The id of the product.
     id: string
   }
-  product-nutrition-by-id-image: func(params: product-nutrition-by-id-image-params) -> result<product-nutrition-by-id-image-response, product-nutrition-by-id-image-error>;
+  product-nutrition-by-id-image: func(params: product-nutrition-by-id-image-params) -> result<list<product-nutrition-by-id-image-response-entry>, product-nutrition-by-id-image-error>;
 
 }
 
@@ -3335,7 +3356,7 @@ interface food {
     offers-third-party-delivery: option<bool>,
     phone-number: option<s32>,
     pickup-enabled: option<bool>,
-    store-photos: option<list<search-restaurants-response-restaurants-item-store-photos-item>>,
+    store-photos: option<list<list<search-restaurants-response-restaurants-item-store-photos-item-entry>>>,
     type-op: option<string>,
     weighted-rating-value: option<f64>
   }
@@ -3400,9 +3421,10 @@ interface food {
     wednesday: option<string>
   }
 
-  record search-restaurants-response-restaurants-item-store-photos-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record search-restaurants-response-restaurants-item-store-photos-item-entry {
+    key: string,
+    value: string
   }
 
   variant search-restaurants-error {
@@ -3572,9 +3594,10 @@ interface meal-planning {
     protein: f64
   }
 
-  record clear-meal-plan-day-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record clear-meal-plan-day-response-entry {
+    key: string,
+    value: string
   }
 
   record add-to-meal-plan-body-value {
@@ -3585,14 +3608,16 @@ interface meal-planning {
     name: string
   }
 
-  record add-to-meal-plan-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record add-to-meal-plan-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-from-meal-plan-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-from-meal-plan-response-entry {
+    key: string,
+    value: string
   }
 
   record get-shopping-list-response {
@@ -3681,9 +3706,10 @@ interface meal-planning {
     unit: string
   }
 
-  record delete-from-shopping-list-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-from-shopping-list-response-entry {
+    key: string,
+    value: string
   }
 
   record generate-shopping-list-response {
@@ -3832,9 +3858,10 @@ interface meal-planning {
     unit: string
   }
 
-  record delete-meal-plan-template-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-meal-plan-template-response-entry {
+    key: string,
+    value: string
   }
 
   record get-meal-plan-week-response {
@@ -4041,7 +4068,7 @@ interface meal-planning {
     /// The username.
     username-v2: string
   }
-  clear-meal-plan-day: func(params: clear-meal-plan-day-params) -> result<clear-meal-plan-day-response, clear-meal-plan-day-error>;
+  clear-meal-plan-day: func(params: clear-meal-plan-day-params) -> result<list<clear-meal-plan-day-response-entry>, clear-meal-plan-day-error>;
 
   /// Add to Meal Plan
   record add-to-meal-plan-params {
@@ -4055,7 +4082,7 @@ interface meal-planning {
     type-op: string,
     value: add-to-meal-plan-body-value
   }
-  add-to-meal-plan: func(params: add-to-meal-plan-params) -> result<add-to-meal-plan-response, add-to-meal-plan-error>;
+  add-to-meal-plan: func(params: add-to-meal-plan-params) -> result<list<add-to-meal-plan-response-entry>, add-to-meal-plan-error>;
 
   /// Delete from Meal Plan
   record delete-from-meal-plan-params {
@@ -4072,7 +4099,7 @@ interface meal-planning {
     /// The username.
     username-v2: string
   }
-  delete-from-meal-plan: func(params: delete-from-meal-plan-params) -> result<delete-from-meal-plan-response, delete-from-meal-plan-error>;
+  delete-from-meal-plan: func(params: delete-from-meal-plan-params) -> result<list<delete-from-meal-plan-response-entry>, delete-from-meal-plan-error>;
 
   /// Get Shopping List
   record get-shopping-list-params {
@@ -4110,7 +4137,7 @@ interface meal-planning {
     /// The username.
     username-v2: string
   }
-  delete-from-shopping-list: func(params: delete-from-shopping-list-params) -> result<delete-from-shopping-list-response, delete-from-shopping-list-error>;
+  delete-from-shopping-list: func(params: delete-from-shopping-list-params) -> result<list<delete-from-shopping-list-response-entry>, delete-from-shopping-list-error>;
 
   /// Generate Shopping List
   record generate-shopping-list-params {
@@ -4181,7 +4208,7 @@ interface meal-planning {
     /// The username.
     username-v2: string
   }
-  delete-meal-plan-template: func(params: delete-meal-plan-template-params) -> result<delete-meal-plan-template-response, delete-meal-plan-template-error>;
+  delete-meal-plan-template: func(params: delete-meal-plan-template-params) -> result<list<delete-meal-plan-template-response-entry>, delete-meal-plan-template-error>;
 
   /// Get Meal Plan Week
   record get-meal-plan-week-params {

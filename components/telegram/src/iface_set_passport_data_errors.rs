@@ -15,12 +15,6 @@ const OP_SET_PASSPORT_DATA_ERRORS_POST_SET_PASSPORT_DATA_ERRORS: OpSpec = OpSpec
     ],
 };
 
-fn iface_set_passport_data_errors__passport_element_error__to_json(p: &iface_set_passport_data_errors::PassportElementError) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_set_passport_data_errors__post_set_passport_data_errors_response__to_json(p: &iface_set_passport_data_errors::PostSetPassportDataErrorsResponse) -> Value {
     let mut m = Map::new();
     m.insert("ok".into(), Value::Bool(*(&p.ok)));
@@ -30,7 +24,7 @@ fn iface_set_passport_data_errors__post_set_passport_data_errors_response__to_js
 
 fn iface_set_passport_data_errors__post_set_passport_data_errors_params__to_json(p: &iface_set_passport_data_errors::PostSetPassportDataErrorsParams) -> Value {
     let mut m = Map::new();
-    m.insert("errors".into(), Value::Array((&p.errors).iter().map(|v| iface_set_passport_data_errors__passport_element_error__to_json(v)).collect()));
+    m.insert("errors".into(), Value::Array((&p.errors).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("user_id".into(), Value::Number(serde_json::Number::from(*(&p.user_id))));
     Value::Object(m)
 }

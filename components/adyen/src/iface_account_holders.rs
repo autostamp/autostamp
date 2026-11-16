@@ -455,7 +455,7 @@ fn iface_account_holders__account_holder_details__to_json(p: &iface_account_hold
     m.insert("individualDetails".into(), match (&p.individual_details) { Some(v) => iface_account_holders__individual_details__to_json(v), None => Value::Null });
     m.insert("lastReviewDate".into(), match (&p.last_review_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("merchantCategoryCode".into(), match (&p.merchant_category_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_account_holders__account_holder_details_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("principalBusinessAddress".into(), match (&p.principal_business_address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
     m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -634,9 +634,10 @@ fn iface_account_holders__individual_details__to_json(p: &iface_account_holders:
     Value::Object(m)
 }
 
-fn iface_account_holders__account_holder_details_metadata__to_json(p: &iface_account_holders::AccountHolderDetailsMetadata) -> Value {
+fn iface_account_holders__account_holder_details_metadata_entry__to_json(p: &iface_account_holders::AccountHolderDetailsMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -960,7 +961,7 @@ fn iface_account_holders__account_holder_details__from_json(v: &Value) -> Option
         individual_details: m.get("individualDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__individual_details__from_json(v)),
         last_review_date: m.get("lastReviewDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         merchant_category_code: m.get("merchantCategoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_details_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account_holders::AccountHolderDetailsMetadataEntry { key: k.clone(), value: val })).collect())),
         principal_business_address: m.get("principalBusinessAddress").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_address__from_json(v)),
         web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -1156,10 +1157,11 @@ fn iface_account_holders__individual_details__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_account_holders__account_holder_details_metadata__from_json(v: &Value) -> Option<iface_account_holders::AccountHolderDetailsMetadata> {
+fn iface_account_holders__account_holder_details_metadata_entry__from_json(v: &Value) -> Option<iface_account_holders::AccountHolderDetailsMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_account_holders::AccountHolderDetailsMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account_holders::AccountHolderDetailsMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

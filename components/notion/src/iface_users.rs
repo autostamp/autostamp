@@ -10,11 +10,18 @@ const OP_USERS_RETRIEVE_A_USER: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
         FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_users__retrieve_a_user_body_entry__to_json(p: &iface_users::RetrieveAUserBodyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_users__retrieve_a_user_response__to_json(p: &iface_users::RetrieveAUserResponse) -> Value {
     let mut m = Map::new();
@@ -37,7 +44,7 @@ fn iface_users__retrieve_a_user_params__to_json(p: &iface_users::RetrieveAUserPa
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

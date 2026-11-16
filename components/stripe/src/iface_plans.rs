@@ -172,7 +172,7 @@ fn iface_plans__plan__to_json(p: &iface_plans::Plan) -> Value {
     m.insert("interval".into(), Value::String(iface_plans__plan_interval_enum__to_str(&p.interval).into()));
     m.insert("interval_count".into(), Value::Number(serde_json::Number::from(*(&p.interval_count))));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_plans__plan_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("nickname".into(), match (&p.nickname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_plans__plan_object_enum__to_str(&p.object).into()));
     m.insert("product".into(), match (&p.product) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -184,9 +184,10 @@ fn iface_plans__plan__to_json(p: &iface_plans::Plan) -> Value {
     Value::Object(m)
 }
 
-fn iface_plans__plan_metadata__to_json(p: &iface_plans::PlanMetadata) -> Value {
+fn iface_plans__plan_metadata_entry__to_json(p: &iface_plans::PlanMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -312,7 +313,7 @@ fn iface_plans__plan__from_json(v: &Value) -> Option<iface_plans::Plan> {
         interval: match m.get("interval").and_then(|v| (v).as_str().and_then(iface_plans__plan_interval_enum__from_str)) { Some(x) => x, None => return None },
         interval_count: m.get("interval_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_plans__plan_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_plans::PlanMetadataEntry { key: k.clone(), value: val })).collect())),
         nickname: m.get("nickname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_plans__plan_object_enum__from_str)) { Some(x) => x, None => return None },
         product: m.get("product").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -324,10 +325,11 @@ fn iface_plans__plan__from_json(v: &Value) -> Option<iface_plans::Plan> {
     })
 }
 
-fn iface_plans__plan_metadata__from_json(v: &Value) -> Option<iface_plans::PlanMetadata> {
+fn iface_plans__plan_metadata_entry__from_json(v: &Value) -> Option<iface_plans::PlanMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_plans::PlanMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_plans::PlanMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

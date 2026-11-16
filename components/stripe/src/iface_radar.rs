@@ -269,7 +269,7 @@ fn iface_radar__value_list__to_json(p: &iface_radar::ValueList) -> Value {
     m.insert("item_type".into(), Value::String(iface_radar__value_list_item_type_enum__to_str(&p.item_type).into()));
     m.insert("list_items".into(), iface_radar__value_list_list_items__to_json(&p.list_items));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_radar__value_list_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("object".into(), Value::String(iface_radar__value_list_object_enum__to_str(&p.object).into()));
     Value::Object(m)
@@ -284,21 +284,24 @@ fn iface_radar__value_list_list_items__to_json(p: &iface_radar::ValueListListIte
     Value::Object(m)
 }
 
-fn iface_radar__value_list_metadata__to_json(p: &iface_radar::ValueListMetadata) -> Value {
+fn iface_radar__value_list_metadata_entry__to_json(p: &iface_radar::ValueListMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_radar__post_radar_value_lists_body_metadata__to_json(p: &iface_radar::PostRadarValueListsBodyMetadata) -> Value {
+fn iface_radar__post_radar_value_lists_body_metadata_entry__to_json(p: &iface_radar::PostRadarValueListsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_radar__post_radar_value_lists_value_list_body_metadata__to_json(p: &iface_radar::PostRadarValueListsValueListBodyMetadata) -> Value {
+fn iface_radar__post_radar_value_lists_value_list_body_metadata_entry__to_json(p: &iface_radar::PostRadarValueListsValueListBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -384,7 +387,7 @@ fn iface_radar__post_radar_value_lists_params__to_json(p: &iface_radar::PostRada
     m.insert("alias".into(), Value::String((&p.alias).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String(iface_radar__value_list_item_type_enum__to_str(v).into()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_radar__post_radar_value_lists_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
@@ -402,7 +405,7 @@ fn iface_radar__post_radar_value_lists_value_list_params__to_json(p: &iface_rada
     m.insert("value_list".into(), Value::String((&p.value_list).clone()));
     m.insert("alias".into(), match (&p.alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_radar__post_radar_value_lists_value_list_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -490,7 +493,7 @@ fn iface_radar__value_list__from_json(v: &Value) -> Option<iface_radar::ValueLis
         item_type: match m.get("item_type").and_then(|v| (v).as_str().and_then(iface_radar__value_list_item_type_enum__from_str)) { Some(x) => x, None => return None },
         list_items: match m.get("list_items").and_then(|v| iface_radar__value_list_list_items__from_json(v)) { Some(x) => x, None => return None },
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_radar__value_list_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_radar::ValueListMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_radar__value_list_object_enum__from_str)) { Some(x) => x, None => return None },
     })
@@ -506,10 +509,11 @@ fn iface_radar__value_list_list_items__from_json(v: &Value) -> Option<iface_rada
     })
 }
 
-fn iface_radar__value_list_metadata__from_json(v: &Value) -> Option<iface_radar::ValueListMetadata> {
+fn iface_radar__value_list_metadata_entry__from_json(v: &Value) -> Option<iface_radar::ValueListMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_radar::ValueListMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_radar::ValueListMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

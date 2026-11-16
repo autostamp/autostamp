@@ -19,15 +19,23 @@ const OP_METADATA_UPDATE_SITE_METADATA: OpSpec = OpSpec {
     path_template: "/sites/{site_id}/metadata",
     fields: &[
         FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
 
-fn iface_metadata__metadata__to_json(p: &iface_metadata::Metadata) -> Value {
+fn iface_metadata__metadata_entry__to_json(p: &iface_metadata::MetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_metadata__metadata_entry_v2__to_json(p: &iface_metadata::MetadataEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -40,23 +48,24 @@ fn iface_metadata__get_site_metadata_params__to_json(p: &iface_metadata::GetSite
 fn iface_metadata__update_site_metadata_params__to_json(p: &iface_metadata::UpdateSiteMetadataParams) -> Value {
     let mut m = Map::new();
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_metadata__metadata__from_json(v: &Value) -> Option<iface_metadata::Metadata> {
+fn iface_metadata__metadata_entry__from_json(v: &Value) -> Option<iface_metadata::MetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_metadata::Metadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_metadata::MetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_metadata__get_site_metadata__ok(body: String) -> Result<iface_metadata::Metadata, crate::runtime::DispatchError> {
+fn iface_metadata__get_site_metadata__ok(body: String) -> Result<Vec<iface_metadata::MetadataEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_metadata__metadata__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_metadata::MetadataEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -81,7 +90,7 @@ fn iface_metadata__update_site_metadata__err(e: crate::runtime::DispatchError) -
 }
 
 impl iface_metadata::Guest for crate::Component {
-    fn get_site_metadata(params: iface_metadata::GetSiteMetadataParams) -> Result<iface_metadata::Metadata, String> {
+    fn get_site_metadata(params: iface_metadata::GetSiteMetadataParams) -> Result<Vec<iface_metadata::MetadataEntry>, String> {
         let json = iface_metadata__get_site_metadata_params__to_json(&params);
         match dispatch(&OP_METADATA_GET_SITE_METADATA, json).and_then(iface_metadata__get_site_metadata__ok) {
             Ok(v) => Ok(v),

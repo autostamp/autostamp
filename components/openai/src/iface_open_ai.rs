@@ -394,35 +394,24 @@ fn iface_open_ai__chat_completion_request_message_role_enum__to_str(e: &iface_op
     }
 }
 
-fn iface_open_ai__create_image_request_response_format_enum__to_str(e: &iface_open_ai::CreateImageRequestResponseFormatEnum) -> &'static str {
+fn iface_open_ai__create_image_request_properties_response_format__to_str(e: &iface_open_ai::CreateImageRequestPropertiesResponseFormat) -> &'static str {
     match e {
-        iface_open_ai::CreateImageRequestResponseFormatEnum::Url => "url",
-        iface_open_ai::CreateImageRequestResponseFormatEnum::B64Json => "b64_json",
+        iface_open_ai::CreateImageRequestPropertiesResponseFormat::Url => "url",
+        iface_open_ai::CreateImageRequestPropertiesResponseFormat::B64Json => "b64_json",
     }
 }
 
-fn iface_open_ai__create_image_request_size_enum__to_str(e: &iface_open_ai::CreateImageRequestSizeEnum) -> &'static str {
+fn iface_open_ai__create_image_request_properties_size__to_str(e: &iface_open_ai::CreateImageRequestPropertiesSize) -> &'static str {
     match e {
-        iface_open_ai::CreateImageRequestSizeEnum::V256x256 => "256x256",
-        iface_open_ai::CreateImageRequestSizeEnum::V512x512 => "512x512",
-        iface_open_ai::CreateImageRequestSizeEnum::V1024x1024 => "1024x1024",
+        iface_open_ai::CreateImageRequestPropertiesSize::V256x256 => "256x256",
+        iface_open_ai::CreateImageRequestPropertiesSize::V512x512 => "512x512",
+        iface_open_ai::CreateImageRequestPropertiesSize::V1024x1024 => "1024x1024",
     }
 }
 
-fn iface_open_ai__create_completion_request_properties_logit_bias__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesLogitBias) -> Value {
+fn iface_open_ai__create_completion_request_properties_logit_bias_entry__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesLogitBiasEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_search_request_properties_return_metadata__to_json(p: &iface_open_ai::CreateSearchRequestPropertiesReturnMetadata) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_completion_request_properties_user__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesUser) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -457,9 +446,10 @@ fn iface_open_ai__create_translation_response__to_json(p: &iface_open_ai::Create
     Value::Object(m)
 }
 
-fn iface_open_ai__create_chat_completion_request_logit_bias__to_json(p: &iface_open_ai::CreateChatCompletionRequestLogitBias) -> Value {
+fn iface_open_ai__create_chat_completion_request_logit_bias_entry__to_json(p: &iface_open_ai::CreateChatCompletionRequestLogitBiasEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -505,32 +495,9 @@ fn iface_open_ai__create_chat_completion_response_usage__to_json(p: &iface_open_
     Value::Object(m)
 }
 
-fn iface_open_ai__create_answer_request_properties_expand__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesExpand) -> Value {
+fn iface_open_ai__create_completion_request_properties_logit_bias_entry_v2__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesLogitBiasEntryV2) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_logprobs__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesLogprobs) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_completion_request_properties_model__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesModel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_return_prompt__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesReturnPrompt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_search_model__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesSearchModel) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -554,9 +521,10 @@ fn iface_open_ai__create_classification_response_selected_examples_item__to_json
     Value::Object(m)
 }
 
-fn iface_open_ai__create_completion_request_logit_bias__to_json(p: &iface_open_ai::CreateCompletionRequestLogitBias) -> Value {
+fn iface_open_ai__create_completion_request_logit_bias_entry__to_json(p: &iface_open_ai::CreateCompletionRequestLogitBiasEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -585,13 +553,14 @@ fn iface_open_ai__create_completion_response_choices_item_logprobs__to_json(p: &
     m.insert("text_offset".into(), match (&p.text_offset) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     m.insert("token_logprobs".into(), match (&p.token_logprobs) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     m.insert("tokens".into(), match (&p.tokens) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("top_logprobs".into(), match (&p.top_logprobs) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("top_logprobs".into(), match (&p.top_logprobs) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__to_json(p: &iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItem) -> Value {
+fn iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item_entry__to_json(p: &iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -626,13 +595,14 @@ fn iface_open_ai__create_edit_response_choices_item_logprobs__to_json(p: &iface_
     m.insert("text_offset".into(), match (&p.text_offset) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     m.insert("token_logprobs".into(), match (&p.token_logprobs) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     m.insert("tokens".into(), match (&p.tokens) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("top_logprobs".into(), match (&p.top_logprobs) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("top_logprobs".into(), match (&p.top_logprobs) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__to_json(p: &iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItem) -> Value {
+fn iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item_entry__to_json(p: &iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -716,13 +686,14 @@ fn iface_open_ai__file__to_json(p: &iface_open_ai::File) -> Value {
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("purpose".into(), Value::String((&p.purpose).clone()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status_details".into(), match (&p.status_details) { Some(v) => iface_open_ai__file_status_details__to_json(v), None => Value::Null });
+    m.insert("status_details".into(), match (&p.status_details) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_open_ai__file_status_details__to_json(p: &iface_open_ai::FileStatusDetails) -> Value {
+fn iface_open_ai__file_status_details_entry__to_json(p: &iface_open_ai::FileStatusDetailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -746,7 +717,7 @@ fn iface_open_ai__fine_tune__to_json(p: &iface_open_ai::FineTune) -> Value {
     m.insert("created_at".into(), Value::Number(serde_json::Number::from(*(&p.created_at))));
     m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__fine_tune_event__to_json(v)).collect()), None => Value::Null });
     m.insert("fine_tuned_model".into(), Value::String((&p.fine_tuned_model).clone()));
-    m.insert("hyperparams".into(), iface_open_ai__fine_tune_hyperparams__to_json(&p.hyperparams));
+    m.insert("hyperparams".into(), Value::Object((&p.hyperparams).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("model".into(), Value::String((&p.model).clone()));
     m.insert("object".into(), Value::String((&p.object).clone()));
@@ -768,9 +739,10 @@ fn iface_open_ai__fine_tune_event__to_json(p: &iface_open_ai::FineTuneEvent) -> 
     Value::Object(m)
 }
 
-fn iface_open_ai__fine_tune_hyperparams__to_json(p: &iface_open_ai::FineTuneHyperparams) -> Value {
+fn iface_open_ai__fine_tune_hyperparams_entry__to_json(p: &iface_open_ai::FineTuneHyperparamsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -778,24 +750,6 @@ fn iface_open_ai__list_fine_tune_events_response__to_json(p: &iface_open_ai::Lis
     let mut m = Map::new();
     m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__fine_tune_event__to_json(v)).collect()));
     m.insert("object".into(), Value::String((&p.object).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_image_request_properties_n__to_json(p: &iface_open_ai::CreateImageRequestPropertiesN) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_image_request_properties_response_format__to_json(p: &iface_open_ai::CreateImageRequestPropertiesResponseFormat) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_image_request_properties_size__to_json(p: &iface_open_ai::CreateImageRequestPropertiesSize) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -884,19 +838,19 @@ fn iface_open_ai__create_answer_params__to_json(p: &iface_open_ai::CreateAnswerP
     m.insert("examples_context".into(), Value::String((&p.examples_context).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_completion_request_properties_logit_bias__to_json(v), None => Value::Null });
+    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("max_rerank".into(), match (&p.max_rerank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("max_tokens".into(), match (&p.max_tokens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("model".into(), Value::String((&p.model).clone()));
     m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("question".into(), Value::String((&p.question).clone()));
-    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => iface_open_ai__create_search_request_properties_return_metadata__to_json(v), None => Value::Null });
+    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("return_prompt".into(), match (&p.return_prompt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("search_model".into(), match (&p.search_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -924,7 +878,7 @@ fn iface_open_ai__create_translation_params__to_json(p: &iface_open_ai::CreateTr
 fn iface_open_ai__create_chat_completion_params__to_json(p: &iface_open_ai::CreateChatCompletionParams) -> Value {
     let mut m = Map::new();
     m.insert("frequency_penalty".into(), match (&p.frequency_penalty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_chat_completion_request_logit_bias__to_json(v), None => Value::Null });
+    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("max_tokens".into(), match (&p.max_tokens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("messages".into(), Value::Array((&p.messages).iter().map(|v| iface_open_ai__chat_completion_request_message__to_json(v)).collect()));
     m.insert("model".into(), Value::String((&p.model).clone()));
@@ -934,26 +888,26 @@ fn iface_open_ai__create_chat_completion_params__to_json(p: &iface_open_ai::Crea
     m.insert("stream".into(), match (&p.stream_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("top_p".into(), match (&p.top_p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_open_ai__create_classification_params__to_json(p: &iface_open_ai::CreateClassificationParams) -> Value {
     let mut m = Map::new();
     m.insert("examples".into(), match (&p.examples) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()), None => Value::Null });
-    m.insert("expand".into(), match (&p.expand) { Some(v) => iface_open_ai__create_answer_request_properties_expand__to_json(v), None => Value::Null });
+    m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("labels".into(), match (&p.labels) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_completion_request_properties_logit_bias__to_json(v), None => Value::Null });
-    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => iface_open_ai__create_answer_request_properties_logprobs__to_json(v), None => Value::Null });
+    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("max_examples".into(), match (&p.max_examples) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("model".into(), iface_open_ai__create_completion_request_properties_model__to_json(&p.model));
+    m.insert("model".into(), Value::String((&p.model).clone()));
     m.insert("query".into(), Value::String((&p.query).clone()));
-    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => iface_open_ai__create_search_request_properties_return_metadata__to_json(v), None => Value::Null });
-    m.insert("return_prompt".into(), match (&p.return_prompt) { Some(v) => iface_open_ai__create_answer_request_properties_return_prompt__to_json(v), None => Value::Null });
-    m.insert("search_model".into(), match (&p.search_model) { Some(v) => iface_open_ai__create_answer_request_properties_search_model__to_json(v), None => Value::Null });
+    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("return_prompt".into(), match (&p.return_prompt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("search_model".into(), match (&p.search_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -962,7 +916,7 @@ fn iface_open_ai__create_completion_params__to_json(p: &iface_open_ai::CreateCom
     m.insert("best_of".into(), match (&p.best_of) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("echo".into(), match (&p.echo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("frequency_penalty".into(), match (&p.frequency_penalty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_completion_request_logit_bias__to_json(v), None => Value::Null });
+    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("max_tokens".into(), match (&p.max_tokens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("model".into(), Value::String((&p.model).clone()));
@@ -992,8 +946,8 @@ fn iface_open_ai__create_edit_params__to_json(p: &iface_open_ai::CreateEditParam
 fn iface_open_ai__create_embedding_params__to_json(p: &iface_open_ai::CreateEmbeddingParams) -> Value {
     let mut m = Map::new();
     m.insert("input".into(), Value::String((&p.input).clone()));
-    m.insert("model".into(), iface_open_ai__create_completion_request_properties_model__to_json(&p.model));
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1011,7 +965,7 @@ fn iface_open_ai__create_search_params__to_json(p: &iface_open_ai::CreateSearchP
     m.insert("max_rerank".into(), match (&p.max_rerank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1080,11 +1034,11 @@ fn iface_open_ai__create_image_edit_params__to_json(p: &iface_open_ai::CreateIma
     let mut m = Map::new();
     m.insert("image".into(), Value::String((&p.image).clone()));
     m.insert("mask".into(), match (&p.mask) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("n".into(), match (&p.n) { Some(v) => iface_open_ai__create_image_request_properties_n__to_json(v), None => Value::Null });
+    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("prompt".into(), Value::String((&p.prompt).clone()));
-    m.insert("response_format".into(), match (&p.response_format) { Some(v) => iface_open_ai__create_image_request_properties_response_format__to_json(v), None => Value::Null });
-    m.insert("size".into(), match (&p.size) { Some(v) => iface_open_ai__create_image_request_properties_size__to_json(v), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String(iface_open_ai__create_image_request_properties_response_format__to_str(v).into()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_open_ai__create_image_request_properties_size__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1092,19 +1046,19 @@ fn iface_open_ai__create_image_params__to_json(p: &iface_open_ai::CreateImagePar
     let mut m = Map::new();
     m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("prompt".into(), Value::String((&p.prompt).clone()));
-    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String(iface_open_ai__create_image_request_response_format_enum__to_str(v).into()), None => Value::Null });
-    m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_open_ai__create_image_request_size_enum__to_str(v).into()), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String(iface_open_ai__create_image_request_properties_response_format__to_str(v).into()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_open_ai__create_image_request_properties_size__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_open_ai__create_image_variation_params__to_json(p: &iface_open_ai::CreateImageVariationParams) -> Value {
     let mut m = Map::new();
     m.insert("image".into(), Value::String((&p.image).clone()));
-    m.insert("n".into(), match (&p.n) { Some(v) => iface_open_ai__create_image_request_properties_n__to_json(v), None => Value::Null });
-    m.insert("response_format".into(), match (&p.response_format) { Some(v) => iface_open_ai__create_image_request_properties_response_format__to_json(v), None => Value::Null });
-    m.insert("size".into(), match (&p.size) { Some(v) => iface_open_ai__create_image_request_properties_size__to_json(v), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String(iface_open_ai__create_image_request_properties_response_format__to_str(v).into()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_open_ai__create_image_request_properties_size__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1248,14 +1202,15 @@ fn iface_open_ai__create_completion_response_choices_item_logprobs__from_json(v:
         text_offset: m.get("text_offset").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
         token_logprobs: m.get("token_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
         tokens: m.get("tokens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        top_logprobs: m.get("top_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__from_json(x)).collect())),
+        top_logprobs: m.get("top_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItem> {
+fn iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item_entry__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1294,14 +1249,15 @@ fn iface_open_ai__create_edit_response_choices_item_logprobs__from_json(v: &Valu
         text_offset: m.get("text_offset").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
         token_logprobs: m.get("token_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
         tokens: m.get("tokens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        top_logprobs: m.get("top_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__from_json(x)).collect())),
+        top_logprobs: m.get("top_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItem> {
+fn iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item_entry__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1395,14 +1351,15 @@ fn iface_open_ai__file__from_json(v: &Value) -> Option<iface_open_ai::File> {
         object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         purpose: m.get("purpose").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status_details: m.get("status_details").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__file_status_details__from_json(v)),
+        status_details: m.get("status_details").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_open_ai::FileStatusDetailsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_open_ai__file_status_details__from_json(v: &Value) -> Option<iface_open_ai::FileStatusDetails> {
+fn iface_open_ai__file_status_details_entry__from_json(v: &Value) -> Option<iface_open_ai::FileStatusDetailsEntry> {
     let m = v.as_object()?;
-    Some(iface_open_ai::FileStatusDetails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_open_ai::FileStatusDetailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1429,7 +1386,7 @@ fn iface_open_ai__fine_tune__from_json(v: &Value) -> Option<iface_open_ai::FineT
         created_at: m.get("created_at").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__fine_tune_event__from_json(x)).collect())),
         fine_tuned_model: m.get("fine_tuned_model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        hyperparams: match m.get("hyperparams").and_then(|v| iface_open_ai__fine_tune_hyperparams__from_json(v)) { Some(x) => x, None => return None },
+        hyperparams: m.get("hyperparams").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_open_ai::FineTuneHyperparamsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         model: m.get("model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -1452,10 +1409,11 @@ fn iface_open_ai__fine_tune_event__from_json(v: &Value) -> Option<iface_open_ai:
     })
 }
 
-fn iface_open_ai__fine_tune_hyperparams__from_json(v: &Value) -> Option<iface_open_ai::FineTuneHyperparams> {
+fn iface_open_ai__fine_tune_hyperparams_entry__from_json(v: &Value) -> Option<iface_open_ai::FineTuneHyperparamsEntry> {
     let m = v.as_object()?;
-    Some(iface_open_ai::FineTuneHyperparams {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_open_ai::FineTuneHyperparamsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

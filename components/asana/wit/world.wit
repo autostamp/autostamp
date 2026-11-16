@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `personalAccessToken` | `Authorization: Bearer <secret>` |
-package autostamp:asana@0.5.0;
+package autostamp:asana@0.6.0;
 
 interface attachments {
   enum attachment-request-resource-subtype-enum {
@@ -88,13 +88,13 @@ interface attachments {
   }
 
   record delete-attachment-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-attachments-for-object-error {
@@ -227,7 +227,7 @@ interface batch-api {
   /// An action object for use in a batch request.
   record batch-request-action {
     /// For `GET` requests, this should be a map of query parameters you would have normally passed in the URL. Options and pagination are not accepted here; put them in `options` instead. For `POST`, `PATCH`, and `PUT` methods, this should be the content you would have normally put in the data field of the body.
-    data: option<batch-request-action-data>,
+    data: option<list<batch-request-action-data-entry>>,
     /// The HTTP method you wish to emulate for the action.
     method: batch-request-action-method-enum,
     /// Pagination (`limit` and `offset`) and output options (`fields` or `expand`) for the action. “Pretty” JSON output is not an available option on individual actions; if you want pretty output, specify that option on the parent request.
@@ -236,10 +236,10 @@ interface batch-api {
     relative-path: string
   }
 
-  /// For `GET` requests, this should be a map of query parameters you would have normally passed in the URL. Options and pagination are not accepted here; put them in `options` instead. For `POST`, `PATCH`, and `PUT` methods, this should be the content you would have normally put in the data field of the body.
-  record batch-request-action-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record batch-request-action-data-entry {
+    key: string,
+    value: string
   }
 
   /// Pagination (`limit` and `offset`) and output options (`fields` or `expand`) for the action. “Pretty” JSON output is not an available option on individual actions; if you want pretty output, specify that option on the parent request.
@@ -259,23 +259,23 @@ interface batch-api {
   /// A response object returned from a batch request.
   record batch-response {
     /// The JSON body that the invoked endpoint returned.
-    body: option<batch-response-body>,
+    body: option<list<batch-response-body-entry>>,
     /// A map of HTTP headers specific to this result. This is primarily used for returning a `Location` header to accompany a `201 Created` result.  The parent HTTP response will contain all common headers.
-    headers: option<batch-response-headers>,
+    headers: option<list<batch-response-headers-entry>>,
     /// The HTTP status code that the invoked endpoint returned.
     status-code: option<s32>
   }
 
-  /// The JSON body that the invoked endpoint returned.
-  record batch-response-body {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record batch-response-body-entry {
+    key: string,
+    value: string
   }
 
-  /// A map of HTTP headers specific to this result. This is primarily used for returning a `Location` header to accompany a `201 Created` result.  The parent HTTP response will contain all common headers.
-  record batch-response-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record batch-response-headers-entry {
+    key: string,
+    value: string
   }
 
   variant create-batch-request-error {
@@ -648,13 +648,13 @@ interface custom-fields {
   }
 
   record delete-custom-field-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record enum-option-request {
@@ -1171,13 +1171,13 @@ interface goal-relationships {
   }
 
   record remove-supporting-relationship-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-goal-relationships-error {
@@ -1538,13 +1538,13 @@ interface goals {
   }
 
   record delete-goal-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record task-add-followers-request {
@@ -2645,13 +2645,13 @@ interface portfolios {
   }
 
   record delete-portfolio-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record add-custom-field-setting-request {
@@ -2679,7 +2679,13 @@ interface portfolios {
   }
 
   record add-item-for-portfolio-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v2>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v2 {
+    key: string,
+    value: string
   }
 
   record add-members-request {
@@ -2710,7 +2716,13 @@ interface portfolios {
   }
 
   record remove-custom-field-setting-for-portfolio-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v3>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v3 {
+    key: string,
+    value: string
   }
 
   record portfolio-remove-item-request {
@@ -2719,7 +2731,13 @@ interface portfolios {
   }
 
   record remove-item-for-portfolio-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v4>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v4 {
+    key: string,
+    value: string
   }
 
   record remove-members-request {
@@ -3417,13 +3435,13 @@ interface project-briefs {
   }
 
   record delete-project-brief-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record create-project-brief-response {
@@ -3676,13 +3694,13 @@ interface project-statuses {
   }
 
   record delete-project-status-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record get-project-statuses-for-project-response {
@@ -4415,7 +4433,7 @@ interface projects {
     start-on: option<string>,
     workspace: option<project-request-workspace>,
     /// An object where each key is a Custom Field GID and each value is an enum GID, string, number, or object.
-    custom-fields: option<project-request-custom-fields>,
+    custom-fields: option<list<project-request-custom-fields-entry>>,
     /// *Create-only*. Comma separated string of users. Followers are a subset of members who have opted in to receive "tasks added" notifications for a project.
     followers: option<string>,
     /// The current owner of the project, may be null.
@@ -4590,10 +4608,10 @@ interface projects {
     name: option<string>
   }
 
-  /// An object where each key is a Custom Field GID and each value is an enum GID, string, number, or object.
-  record project-request-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-request-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record create-project-response {
@@ -4753,13 +4771,13 @@ interface projects {
   }
 
   record delete-project-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record add-custom-field-setting-request {
@@ -4861,7 +4879,13 @@ interface projects {
   }
 
   record remove-custom-field-setting-for-project-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v2>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v2 {
+    key: string,
+    value: string
   }
 
   record remove-followers-request {
@@ -5461,13 +5485,13 @@ interface sections {
   }
 
   record insert-section-for-project-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record get-section-response {
@@ -5479,7 +5503,13 @@ interface sections {
   }
 
   record delete-section-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v2>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v2 {
+    key: string,
+    value: string
   }
 
   record section-task-insert-request {
@@ -5492,7 +5522,13 @@ interface sections {
   }
 
   record add-task-for-section-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v3>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v3 {
+    key: string,
+    value: string
   }
 
   variant get-sections-for-project-error {
@@ -5984,7 +6020,7 @@ interface tasks {
     /// The `assignee_section` property will be returned in the response only if the request was sent by the user who is the assignee of the task. Note that you can only write to `assignee_section` with the gid of an existing section visible in the user's "My Tasks" list.
     assignee-section: option<string>,
     /// An object where each key is a Custom Field GID and each value is an enum GID, string, number, object, or array.
-    custom-fields: option<task-request-custom-fields>,
+    custom-fields: option<list<task-request-custom-fields-entry>>,
     /// *Create-Only* An array of strings identifying users. These can either be the string "me", an email, or the gid of a user. In order to change followers on an existing task use `addFollowers` and `removeFollowers`.
     followers: option<list<string>>,
     /// Gid of a task.
@@ -6051,10 +6087,10 @@ interface tasks {
     name: option<string>
   }
 
-  /// An object where each key is a Custom Field GID and each value is an enum GID, string, number, object, or array.
-  record task-request-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record task-request-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record create-task-response {
@@ -6286,13 +6322,13 @@ interface tasks {
   }
 
   record delete-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record modify-dependencies-request {
@@ -6301,7 +6337,13 @@ interface tasks {
   }
 
   record add-dependencies-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v2>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v2 {
+    key: string,
+    value: string
   }
 
   /// A set of dependent tasks.
@@ -6311,7 +6353,13 @@ interface tasks {
   }
 
   record add-dependents-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v3>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v3 {
+    key: string,
+    value: string
   }
 
   record task-add-followers-request {
@@ -6335,7 +6383,13 @@ interface tasks {
   }
 
   record add-project-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v4>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v4 {
+    key: string,
+    value: string
   }
 
   record task-add-tag-request {
@@ -6344,7 +6398,13 @@ interface tasks {
   }
 
   record add-tag-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v5>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v5 {
+    key: string,
+    value: string
   }
 
   record get-dependencies-for-task-response {
@@ -6390,11 +6450,23 @@ interface tasks {
   }
 
   record remove-dependencies-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v6>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v6 {
+    key: string,
+    value: string
   }
 
   record remove-dependents-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v7>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v7 {
+    key: string,
+    value: string
   }
 
   record task-remove-followers-request {
@@ -6412,7 +6484,13 @@ interface tasks {
   }
 
   record remove-project-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v8>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v8 {
+    key: string,
+    value: string
   }
 
   record task-remove-tag-request {
@@ -6421,7 +6499,13 @@ interface tasks {
   }
 
   record remove-tag-for-task-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry-v9>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry-v9 {
+    key: string,
+    value: string
   }
 
   record task-set-parent-request {
@@ -7342,13 +7426,13 @@ interface status-updates {
   }
 
   record delete-status-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-statuses-for-object-error {
@@ -7820,13 +7904,13 @@ interface stories {
   }
 
   record delete-story-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record get-stories-for-task-response {
@@ -8066,13 +8150,13 @@ interface tags {
   }
 
   record delete-tag-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record get-tags-for-task-response {
@@ -8580,13 +8664,13 @@ interface teams {
   }
 
   record remove-user-for-team-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   record get-teams-for-user-response {
@@ -9439,13 +9523,13 @@ interface webhooks {
   }
 
   record delete-webhook-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-webhooks-error {
@@ -9652,13 +9736,13 @@ interface workspaces {
   }
 
   record remove-user-for-workspace-response {
-    data: option<empty-response>
+    data: option<list<empty-response-entry>>
   }
 
-  /// An empty object. Some endpoints do not return an object on success. The success is conveyed through a 2-- status code and returning an empty object.
-  record empty-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-workspaces-error {
@@ -9818,7 +9902,7 @@ interface audit-log-api {
     context: option<audit-log-event-context>,
     /// The time the event was created.
     created-at: option<string>,
-    details: option<audit-log-event-details>,
+    details: option<list<audit-log-event-details-entry>>,
     /// The category that this `event_type` belongs to.
     event-category: option<string>,
     /// The type of the event.
@@ -9858,10 +9942,10 @@ interface audit-log-api {
     user-agent: option<string>
   }
 
-  /// Event specific details. The schema will vary depending on the `event_type`.
-  record audit-log-event-details {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record audit-log-event-details-entry {
+    key: string,
+    value: string
   }
 
   /// The primary object that was affected by this event.

@@ -104,7 +104,7 @@ fn iface_users__subscription__to_json(p: &iface_users::Subscription) -> Value {
     m.insert("formats".into(), match (&p.formats) { Some(v) => Value::Array((v).iter().map(|v| iface_users__license_format__to_json(v)).collect()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_users__subscription_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price_per_download".into(), match (&p.price_per_download) { Some(v) => iface_users__price__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -128,9 +128,10 @@ fn iface_users__license_format__to_json(p: &iface_users::LicenseFormat) -> Value
     Value::Object(m)
 }
 
-fn iface_users__subscription_metadata__to_json(p: &iface_users::SubscriptionMetadata) -> Value {
+fn iface_users__subscription_metadata_entry__to_json(p: &iface_users::SubscriptionMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -145,15 +146,16 @@ fn iface_users__error__to_json(p: &iface_users::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_users__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__error_items_item__to_json(p: &iface_users::ErrorItemsItem) -> Value {
+fn iface_users__error_items_item_entry__to_json(p: &iface_users::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -215,7 +217,7 @@ fn iface_users__subscription__from_json(v: &Value) -> Option<iface_users::Subscr
         formats: m.get("formats").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__license_format__from_json(x)).collect())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_users__subscription_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_users::SubscriptionMetadataEntry { key: k.clone(), value: val })).collect())),
         price_per_download: m.get("price_per_download").filter(|v| !v.is_null()).and_then(|v| iface_users__price__from_json(v)),
     })
 }
@@ -241,10 +243,11 @@ fn iface_users__license_format__from_json(v: &Value) -> Option<iface_users::Lice
     })
 }
 
-fn iface_users__subscription_metadata__from_json(v: &Value) -> Option<iface_users::SubscriptionMetadata> {
+fn iface_users__subscription_metadata_entry__from_json(v: &Value) -> Option<iface_users::SubscriptionMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_users::SubscriptionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_users::SubscriptionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -261,16 +264,17 @@ fn iface_users__error__from_json(v: &Value) -> Option<iface_users::Error> {
     Some(iface_users::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_users::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_users__error_items_item__from_json(v: &Value) -> Option<iface_users::ErrorItemsItem> {
+fn iface_users__error_items_item_entry__from_json(v: &Value) -> Option<iface_users::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_users::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_users::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

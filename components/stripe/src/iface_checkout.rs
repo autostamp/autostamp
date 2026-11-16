@@ -773,7 +773,7 @@ fn iface_checkout__session__to_json(p: &iface_checkout::Session) -> Value {
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => iface_checkout__session_line_items__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String(iface_checkout__session_locale_enum__to_str(v).into()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__session_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("mode".into(), Value::String(iface_checkout__session_mode_enum__to_str(&p.mode).into()));
     m.insert("object".into(), Value::String(iface_checkout__session_object_enum__to_str(&p.object).into()));
     m.insert("payment_intent".into(), match (&p.payment_intent) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -887,13 +887,13 @@ fn iface_checkout__coupon__to_json(p: &iface_checkout::Coupon) -> Value {
     m.insert("applies_to".into(), match (&p.applies_to) { Some(v) => iface_checkout__coupon_applies_to__to_json(v), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_checkout__coupon_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_checkout__coupon_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("duration".into(), Value::String(iface_checkout__coupon_duration_enum__to_str(&p.duration).into()));
     m.insert("duration_in_months".into(), match (&p.duration_in_months) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__coupon_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_checkout__coupon_object_enum__to_str(&p.object).into()));
     m.insert("percent_off".into(), match (&p.percent_off) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -909,15 +909,23 @@ fn iface_checkout__coupon_applies_to__to_json(p: &iface_checkout::CouponAppliesT
     Value::Object(m)
 }
 
-fn iface_checkout__coupon_currency_options__to_json(p: &iface_checkout::CouponCurrencyOptions) -> Value {
+fn iface_checkout__coupon_currency_option__to_json(p: &iface_checkout::CouponCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount_off".into(), Value::Number(serde_json::Number::from(*(&p.amount_off))));
     Value::Object(m)
 }
 
-fn iface_checkout__coupon_metadata__to_json(p: &iface_checkout::CouponMetadata) -> Value {
+fn iface_checkout__coupon_currency_options_entry__to_json(p: &iface_checkout::CouponCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_checkout__coupon_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_checkout__coupon_metadata_entry__to_json(p: &iface_checkout::CouponMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -939,7 +947,7 @@ fn iface_checkout__tax_rate__to_json(p: &iface_checkout::TaxRate) -> Value {
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_checkout__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -947,15 +955,17 @@ fn iface_checkout__tax_rate__to_json(p: &iface_checkout::TaxRate) -> Value {
     Value::Object(m)
 }
 
-fn iface_checkout__tax_rate_metadata__to_json(p: &iface_checkout::TaxRateMetadata) -> Value {
+fn iface_checkout__tax_rate_metadata_entry__to_json(p: &iface_checkout::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_checkout__session_metadata__to_json(p: &iface_checkout::SessionMetadata) -> Value {
+fn iface_checkout__session_metadata_entry__to_json(p: &iface_checkout::SessionMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1069,14 +1079,15 @@ fn iface_checkout__post_checkout_sessions_body_invoice_creation_invoice_data__to
     m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("footer".into(), match (&p.footer) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_invoice_creation_invoice_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rendering_options".into(), match (&p.rendering_options) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_invoice_creation_invoice_data_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodyInvoiceCreationInvoiceDataMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_invoice_creation_invoice_data_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodyInvoiceCreationInvoiceDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1115,15 +1126,16 @@ fn iface_checkout__post_checkout_sessions_body_line_items_item_price_data_produc
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_line_items_item_price_data_product_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("tax_code".into(), match (&p.tax_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_line_items_item_price_data_product_data_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodyLineItemsItemPriceDataProductDataMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_line_items_item_price_data_product_data_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodyLineItemsItemPriceDataProductDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1134,9 +1146,10 @@ fn iface_checkout__post_checkout_sessions_body_line_items_item_price_data_recurr
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodyMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1145,7 +1158,7 @@ fn iface_checkout__post_checkout_sessions_body_payment_intent_data__to_json(p: &
     m.insert("application_fee_amount".into(), match (&p.application_fee_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("capture_method".into(), match (&p.capture_method) { Some(v) => Value::String(iface_checkout__post_checkout_sessions_body_payment_intent_data_capture_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_payment_intent_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("receipt_email".into(), match (&p.receipt_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("setup_future_usage".into(), match (&p.setup_future_usage) { Some(v) => Value::String(iface_checkout__post_checkout_sessions_body_payment_intent_data_setup_future_usage_enum__to_str(v).into()), None => Value::Null });
@@ -1157,9 +1170,10 @@ fn iface_checkout__post_checkout_sessions_body_payment_intent_data__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_payment_intent_data_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodyPaymentIntentDataMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_payment_intent_data_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodyPaymentIntentDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1439,14 +1453,15 @@ fn iface_checkout__post_checkout_sessions_body_phone_number_collection__to_json(
 fn iface_checkout__post_checkout_sessions_body_setup_intent_data__to_json(p: &iface_checkout::PostCheckoutSessionsBodySetupIntentData) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_setup_intent_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_setup_intent_data_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodySetupIntentDataMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_setup_intent_data_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodySetupIntentDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1468,7 +1483,7 @@ fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_ra
     m.insert("delivery_estimate".into(), match (&p.delivery_estimate) { Some(v) => iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_delivery_estimate__to_json(v), None => Value::Null });
     m.insert("display_name".into(), Value::String((&p.display_name).clone()));
     m.insert("fixed_amount".into(), match (&p.fixed_amount) { Some(v) => iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_checkout__post_checkout_sessions_body_line_items_item_price_data_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tax_code".into(), match (&p.tax_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_type_op_enum__to_str(v).into()), None => Value::Null });
@@ -1500,19 +1515,28 @@ fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_ra
     let mut m = Map::new();
     m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount_currency_options_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount_currency_options__to_json(p: &iface_checkout::PostCheckoutSessionsBodyShippingOptionsItemShippingRateDataFixedAmountCurrencyOptions) -> Value {
+fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount_currency_options_value__to_json(p: &iface_checkout::PostCheckoutSessionsBodyShippingOptionsItemShippingRateDataFixedAmountCurrencyOptionsValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_checkout__post_checkout_sessions_body_line_items_item_price_data_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodyShippingOptionsItemShippingRateDataMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount_currency_options_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodyShippingOptionsItemShippingRateDataFixedAmountCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_fixed_amount_currency_options_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_checkout__post_checkout_sessions_body_shipping_options_item_shipping_rate_data_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodyShippingOptionsItemShippingRateDataMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1521,7 +1545,7 @@ fn iface_checkout__post_checkout_sessions_body_subscription_data__to_json(p: &if
     m.insert("application_fee_percent".into(), match (&p.application_fee_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("default_tax_rates".into(), match (&p.default_tax_rates) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_subscription_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("transfer_data".into(), match (&p.transfer_data) { Some(v) => iface_checkout__post_checkout_sessions_body_subscription_data_transfer_data__to_json(v), None => Value::Null });
     m.insert("trial_end".into(), match (&p.trial_end) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1530,9 +1554,10 @@ fn iface_checkout__post_checkout_sessions_body_subscription_data__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_checkout__post_checkout_sessions_body_subscription_data_metadata__to_json(p: &iface_checkout::PostCheckoutSessionsBodySubscriptionDataMetadata) -> Value {
+fn iface_checkout__post_checkout_sessions_body_subscription_data_metadata_entry__to_json(p: &iface_checkout::PostCheckoutSessionsBodySubscriptionDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1607,7 +1632,7 @@ fn iface_checkout__post_checkout_sessions_params__to_json(p: &iface_checkout::Po
     m.insert("invoice_creation".into(), match (&p.invoice_creation) { Some(v) => iface_checkout__post_checkout_sessions_body_invoice_creation__to_json(v), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => Value::Array((v).iter().map(|v| iface_checkout__post_checkout_sessions_body_line_items_item__to_json(v)).collect()), None => Value::Null });
     m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String(iface_checkout__session_locale_enum__to_str(v).into()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_checkout__post_checkout_sessions_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String(iface_checkout__session_mode_enum__to_str(v).into()), None => Value::Null });
     m.insert("payment_intent_data".into(), match (&p.payment_intent_data) { Some(v) => iface_checkout__post_checkout_sessions_body_payment_intent_data__to_json(v), None => Value::Null });
     m.insert("payment_method_collection".into(), match (&p.payment_method_collection) { Some(v) => Value::String(iface_checkout__session_customer_creation_enum__to_str(v).into()), None => Value::Null });
@@ -1689,7 +1714,7 @@ fn iface_checkout__session__from_json(v: &Value) -> Option<iface_checkout::Sessi
         line_items: m.get("line_items").filter(|v| !v.is_null()).and_then(|v| iface_checkout__session_line_items__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_checkout__session_locale_enum__from_str)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_checkout__session_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_checkout::SessionMetadataEntry { key: k.clone(), value: val })).collect())),
         mode: match m.get("mode").and_then(|v| (v).as_str().and_then(iface_checkout__session_mode_enum__from_str)) { Some(x) => x, None => return None },
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_checkout__session_object_enum__from_str)) { Some(x) => x, None => return None },
         payment_intent: m.get("payment_intent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1812,13 +1837,13 @@ fn iface_checkout__coupon__from_json(v: &Value) -> Option<iface_checkout::Coupon
         applies_to: m.get("applies_to").filter(|v| !v.is_null()).and_then(|v| iface_checkout__coupon_applies_to__from_json(v)),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_checkout__coupon_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_checkout__coupon_currency_option__from_json(x)).map(|val| iface_checkout::CouponCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         duration: match m.get("duration").and_then(|v| (v).as_str().and_then(iface_checkout__coupon_duration_enum__from_str)) { Some(x) => x, None => return None },
         duration_in_months: m.get("duration_in_months").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_checkout__coupon_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_checkout::CouponMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_checkout__coupon_object_enum__from_str)) { Some(x) => x, None => return None },
         percent_off: m.get("percent_off").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -1835,17 +1860,26 @@ fn iface_checkout__coupon_applies_to__from_json(v: &Value) -> Option<iface_check
     })
 }
 
-fn iface_checkout__coupon_currency_options__from_json(v: &Value) -> Option<iface_checkout::CouponCurrencyOptions> {
+fn iface_checkout__coupon_currency_option__from_json(v: &Value) -> Option<iface_checkout::CouponCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_checkout::CouponCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_checkout::CouponCurrencyOption {
+        amount_off: m.get("amount_off").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_checkout__coupon_metadata__from_json(v: &Value) -> Option<iface_checkout::CouponMetadata> {
+fn iface_checkout__coupon_currency_options_entry__from_json(v: &Value) -> Option<iface_checkout::CouponCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_checkout::CouponMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_checkout::CouponCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_checkout__coupon_currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_checkout__coupon_metadata_entry__from_json(v: &Value) -> Option<iface_checkout::CouponMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_checkout::CouponMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1869,7 +1903,7 @@ fn iface_checkout__tax_rate__from_json(v: &Value) -> Option<iface_checkout::TaxR
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_checkout__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_checkout::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_checkout__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1877,17 +1911,19 @@ fn iface_checkout__tax_rate__from_json(v: &Value) -> Option<iface_checkout::TaxR
     })
 }
 
-fn iface_checkout__tax_rate_metadata__from_json(v: &Value) -> Option<iface_checkout::TaxRateMetadata> {
+fn iface_checkout__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_checkout::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_checkout::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_checkout::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_checkout__session_metadata__from_json(v: &Value) -> Option<iface_checkout::SessionMetadata> {
+fn iface_checkout__session_metadata_entry__from_json(v: &Value) -> Option<iface_checkout::SessionMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_checkout::SessionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_checkout::SessionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

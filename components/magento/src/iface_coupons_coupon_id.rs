@@ -41,7 +41,7 @@ fn iface_coupons_coupon_id__sales_rule_data_coupon_interface__to_json(p: &iface_
     m.insert("coupon_id".into(), match (&p.coupon_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expiration_date".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_coupons_coupon_id__sales_rule_data_coupon_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_primary".into(), Value::Bool(*(&p.is_primary)));
     m.insert("rule_id".into(), Value::Number(serde_json::Number::from(*(&p.rule_id))));
     m.insert("times_used".into(), Value::Number(serde_json::Number::from(*(&p.times_used))));
@@ -51,9 +51,10 @@ fn iface_coupons_coupon_id__sales_rule_data_coupon_interface__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_coupons_coupon_id__sales_rule_data_coupon_extension_interface__to_json(p: &iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterface) -> Value {
+fn iface_coupons_coupon_id__sales_rule_data_coupon_extension_interface_entry__to_json(p: &iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -83,7 +84,7 @@ fn iface_coupons_coupon_id__sales_rule_data_coupon_interface__from_json(v: &Valu
         coupon_id: m.get("coupon_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         expiration_date: m.get("expiration_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_coupons_coupon_id__sales_rule_data_coupon_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_primary: m.get("is_primary").and_then(|v| (v).as_bool()).unwrap_or_default(),
         rule_id: m.get("rule_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         times_used: m.get("times_used").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -93,10 +94,11 @@ fn iface_coupons_coupon_id__sales_rule_data_coupon_interface__from_json(v: &Valu
     })
 }
 
-fn iface_coupons_coupon_id__sales_rule_data_coupon_extension_interface__from_json(v: &Value) -> Option<iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterface> {
+fn iface_coupons_coupon_id__sales_rule_data_coupon_extension_interface_entry__from_json(v: &Value) -> Option<iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_coupons_coupon_id::SalesRuleDataCouponExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

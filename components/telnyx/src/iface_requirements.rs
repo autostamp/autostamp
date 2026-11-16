@@ -73,29 +73,8 @@ fn iface_requirements__doc_reqs_requirement_type_type_op_enum__to_str(e: &iface_
 
 fn iface_requirements__list_requirements_response__to_json(p: &iface_requirements::ListRequirementsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_requirements__doc_reqs_requirement_list__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_requirements__doc_reqs_requirement__to_json(v)).collect()), None => Value::Null });
     m.insert("meta".into(), match (&p.meta) { Some(v) => iface_requirements__pagination_meta__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requirements__doc_reqs_requirement_list__to_json(p: &iface_requirements::DocReqsRequirementList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_requirements__pagination_meta__to_json(p: &iface_requirements::PaginationMeta) -> Value {
-    let mut m = Map::new();
-    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("total_results".into(), match (&p.total_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requirements__doc_reqs_retrieve_document_requirements_response__to_json(p: &iface_requirements::DocReqsRetrieveDocumentRequirementsResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_requirements__doc_reqs_requirement__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -134,6 +113,21 @@ fn iface_requirements__doc_reqs_requirement_type_acceptance_criteria__to_json(p:
     Value::Object(m)
 }
 
+fn iface_requirements__pagination_meta__to_json(p: &iface_requirements::PaginationMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_results".into(), match (&p.total_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_requirements__doc_reqs_retrieve_document_requirements_response__to_json(p: &iface_requirements::DocReqsRetrieveDocumentRequirementsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_requirements__doc_reqs_requirement__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_requirements__list_requirements_params__to_json(p: &iface_requirements::ListRequirementsParams) -> Value {
     let mut m = Map::new();
     m.insert("filter_country_code".into(), match (&p.filter_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -154,32 +148,8 @@ fn iface_requirements__doc_reqs_retrieve_document_requirements_params__to_json(p
 fn iface_requirements__list_requirements_response__from_json(v: &Value) -> Option<iface_requirements::ListRequirementsResponse> {
     let m = v.as_object()?;
     Some(iface_requirements::ListRequirementsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_requirements__doc_reqs_requirement_list__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_requirements__doc_reqs_requirement__from_json(x)).collect())),
         meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_requirements__pagination_meta__from_json(v)),
-    })
-}
-
-fn iface_requirements__doc_reqs_requirement_list__from_json(v: &Value) -> Option<iface_requirements::DocReqsRequirementList> {
-    let m = v.as_object()?;
-    Some(iface_requirements::DocReqsRequirementList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_requirements__pagination_meta__from_json(v: &Value) -> Option<iface_requirements::PaginationMeta> {
-    let m = v.as_object()?;
-    Some(iface_requirements::PaginationMeta {
-        page_number: m.get("page_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        total_results: m.get("total_results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_requirements__doc_reqs_retrieve_document_requirements_response__from_json(v: &Value) -> Option<iface_requirements::DocReqsRetrieveDocumentRequirementsResponse> {
-    let m = v.as_object()?;
-    Some(iface_requirements::DocReqsRetrieveDocumentRequirementsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_requirements__doc_reqs_requirement__from_json(v)),
     })
 }
 
@@ -218,6 +188,23 @@ fn iface_requirements__doc_reqs_requirement_type_acceptance_criteria__from_json(
     Some(iface_requirements::DocReqsRequirementTypeAcceptanceCriteria {
         locality_limit: m.get("locality_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         time_limit: m.get("time_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_requirements__pagination_meta__from_json(v: &Value) -> Option<iface_requirements::PaginationMeta> {
+    let m = v.as_object()?;
+    Some(iface_requirements::PaginationMeta {
+        page_number: m.get("page_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_results: m.get("total_results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_requirements__doc_reqs_retrieve_document_requirements_response__from_json(v: &Value) -> Option<iface_requirements::DocReqsRetrieveDocumentRequirementsResponse> {
+    let m = v.as_object()?;
+    Some(iface_requirements::DocReqsRetrieveDocumentRequirementsResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_requirements__doc_reqs_requirement__from_json(v)),
     })
 }
 

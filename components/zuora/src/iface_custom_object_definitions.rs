@@ -117,15 +117,15 @@ fn iface_custom_object_definitions__custom_object_definition_schema_type_op_enum
     }
 }
 
-fn iface_custom_object_definitions__custom_object_custom_field_definition_update_origin_enum__to_str(e: &iface_custom_object_definitions::CustomObjectCustomFieldDefinitionUpdateOriginEnum) -> &'static str {
+fn iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_cardinality_enum__to_str(e: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitionRelationshipsItemCardinalityEnum) -> &'static str {
     match e {
-        iface_custom_object_definitions::CustomObjectCustomFieldDefinitionUpdateOriginEnum::Custom => "custom",
+        iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitionRelationshipsItemCardinalityEnum::ManyToOne => "manyToOne",
     }
 }
 
-fn iface_custom_object_definitions__custom_object_definition_update_action_request_relationship_cardinality_enum__to_str(e: &iface_custom_object_definitions::CustomObjectDefinitionUpdateActionRequestRelationshipCardinalityEnum) -> &'static str {
+fn iface_custom_object_definitions__custom_object_custom_field_definition_update_origin_enum__to_str(e: &iface_custom_object_definitions::CustomObjectCustomFieldDefinitionUpdateOriginEnum) -> &'static str {
     match e {
-        iface_custom_object_definitions::CustomObjectDefinitionUpdateActionRequestRelationshipCardinalityEnum::ManyToOne => "manyToOne",
+        iface_custom_object_definitions::CustomObjectCustomFieldDefinitionUpdateOriginEnum::Custom => "custom",
     }
 }
 
@@ -144,19 +144,7 @@ fn iface_custom_object_definitions__custom_object_definition_update_action_reque
 fn iface_custom_object_definitions__get_all_custom_object_definitions_in_namespace_response__to_json(p: &iface_custom_object_definitions::GetAllCustomObjectDefinitionsInNamespaceResponse) -> Value {
     let mut m = Map::new();
     m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("definitions".into(), match (&p.definitions) { Some(v) => iface_custom_object_definitions__custom_object_definitions__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_custom_object_definitions__custom_object_definitions__to_json(p: &iface_custom_object_definitions::CustomObjectDefinitions) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_custom_object_definitions__post_custom_object_definitions_request_definitions__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitions) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("definitions".into(), match (&p.definitions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_custom_object_definitions__custom_object_definition__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -240,16 +228,17 @@ fn iface_custom_object_definitions__custom_object_all_fields_definition_updated_
 fn iface_custom_object_definitions__custom_object_definition_schema_relationships_item__to_json(p: &iface_custom_object_definitions::CustomObjectDefinitionSchemaRelationshipsItem) -> Value {
     let mut m = Map::new();
     m.insert("cardinality".into(), match (&p.cardinality) { Some(v) => Value::String(iface_custom_object_definitions__custom_object_definition_schema_relationships_item_cardinality_enum__to_str(v).into()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_custom_object_definitions__fields_additional_properties__to_json(v), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recordConstraints".into(), match (&p.record_constraints) { Some(v) => iface_custom_object_definitions__custom_object_definition_schema_relationships_item_record_constraints__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_custom_object_definitions__fields_additional_properties__to_json(p: &iface_custom_object_definitions::FieldsAdditionalProperties) -> Value {
+fn iface_custom_object_definitions__fields_additional_properties_entry__to_json(p: &iface_custom_object_definitions::FieldsAdditionalPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -262,6 +251,75 @@ fn iface_custom_object_definitions__custom_object_definition_schema_relationship
 fn iface_custom_object_definitions__custom_object_definition_schema_relationships_item_record_constraints_create__to_json(p: &iface_custom_object_definitions::CustomObjectDefinitionSchemaRelationshipsItemRecordConstraintsCreate) -> Value {
     let mut m = Map::new();
     m.insert("enforceValidMapping".into(), match (&p.enforce_valid_mapping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__custom_object_definitions_entry__to_json(p: &iface_custom_object_definitions::CustomObjectDefinitionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_custom_object_definitions__custom_object_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definitions_request_definition__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("filterable".into(), match (&p.filterable) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("label".into(), Value::String((&p.label).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_custom_object_definitions__post_custom_object_definition_field_definition_request__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("relationships".into(), match (&p.relationships) { Some(v) => Value::Array((v).iter().map(|v| iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("required".into(), match (&p.required) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definition_field_definition_request__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionFieldDefinitionRequest) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label".into(), Value::String((&p.label).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definition_fields_definition_request_entry__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionFieldsDefinitionRequestEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_custom_object_definitions__post_custom_object_definition_field_definition_request__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitionRelationshipsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("cardinality".into(), match (&p.cardinality) { Some(v) => Value::String(iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_cardinality_enum__to_str(v).into()), None => Value::Null });
+    m.insert("fields".into(), Value::Object((&p.fields).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
+    m.insert("namespace".into(), Value::String((&p.namespace).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("recordConstraints".into(), match (&p.record_constraints) { Some(v) => iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_record_constraints__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__fields_additional_properties_for_post_definition_entry__to_json(p: &iface_custom_object_definitions::FieldsAdditionalPropertiesForPostDefinitionEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_record_constraints__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitionRelationshipsItemRecordConstraints) -> Value {
+    let mut m = Map::new();
+    m.insert("create".into(), match (&p.create) { Some(v) => iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_record_constraints_create__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_record_constraints_create__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitionRelationshipsItemRecordConstraintsCreate) -> Value {
+    let mut m = Map::new();
+    m.insert("enforceValidMapping".into(), match (&p.enforce_valid_mapping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__post_custom_object_definitions_request_definitions_entry__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsRequestDefinitionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_custom_object_definitions__post_custom_object_definitions_request_definition__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -300,11 +358,18 @@ fn iface_custom_object_definitions__custom_object_custom_field_definition_update
 
 fn iface_custom_object_definitions__custom_object_definition_update_action_request_relationship__to_json(p: &iface_custom_object_definitions::CustomObjectDefinitionUpdateActionRequestRelationship) -> Value {
     let mut m = Map::new();
-    m.insert("cardinality".into(), match (&p.cardinality) { Some(v) => Value::String(iface_custom_object_definitions__custom_object_definition_update_action_request_relationship_cardinality_enum__to_str(v).into()), None => Value::Null });
-    m.insert("fields".into(), iface_custom_object_definitions__fields_additional_properties__to_json(&p.fields));
+    m.insert("cardinality".into(), match (&p.cardinality) { Some(v) => Value::String(iface_custom_object_definitions__post_custom_object_definitions_request_definition_relationships_item_cardinality_enum__to_str(v).into()), None => Value::Null });
+    m.insert("fields".into(), Value::Object((&p.fields).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("namespace".into(), Value::String((&p.namespace).clone()));
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("recordConstraints".into(), match (&p.record_constraints) { Some(v) => iface_custom_object_definitions__custom_object_definition_update_action_request_relationship_record_constraints__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__fields_additional_properties_entry_v2__to_json(p: &iface_custom_object_definitions::FieldsAdditionalPropertiesEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -341,10 +406,17 @@ fn iface_custom_object_definitions__custom_object_definition_update_action_respo
 fn iface_custom_object_definitions__custom_object_definition_update_action_response_relationship__to_json(p: &iface_custom_object_definitions::CustomObjectDefinitionUpdateActionResponseRelationship) -> Value {
     let mut m = Map::new();
     m.insert("cardinality".into(), match (&p.cardinality) { Some(v) => Value::String(iface_custom_object_definitions__custom_object_definition_schema_relationships_item_cardinality_enum__to_str(v).into()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_custom_object_definitions__fields_additional_properties__to_json(v), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recordConstraints".into(), match (&p.record_constraints) { Some(v) => iface_custom_object_definitions__custom_object_definition_update_action_response_relationship_record_constraints__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_definitions__fields_additional_properties_entry_v3__to_json(p: &iface_custom_object_definitions::FieldsAdditionalPropertiesEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -376,7 +448,7 @@ fn iface_custom_object_definitions__post_custom_object_definitions_params__to_js
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("definitions".into(), match (&p.definitions) { Some(v) => iface_custom_object_definitions__post_custom_object_definitions_request_definitions__to_json(v), None => Value::Null });
+    m.insert("definitions".into(), match (&p.definitions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_custom_object_definitions__post_custom_object_definitions_request_definition__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -414,14 +486,7 @@ fn iface_custom_object_definitions__get_all_custom_object_definitions_in_namespa
     let m = v.as_object()?;
     Some(iface_custom_object_definitions::GetAllCustomObjectDefinitionsInNamespaceResponse {
         count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        definitions: m.get("definitions").filter(|v| !v.is_null()).and_then(|v| iface_custom_object_definitions__custom_object_definitions__from_json(v)),
-    })
-}
-
-fn iface_custom_object_definitions__custom_object_definitions__from_json(v: &Value) -> Option<iface_custom_object_definitions::CustomObjectDefinitions> {
-    let m = v.as_object()?;
-    Some(iface_custom_object_definitions::CustomObjectDefinitions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        definitions: m.get("definitions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_custom_object_definitions__custom_object_definition__from_json(x)).map(|val| iface_custom_object_definitions::CustomObjectDefinitionsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -514,17 +579,18 @@ fn iface_custom_object_definitions__custom_object_definition_schema_relationship
     let m = v.as_object()?;
     Some(iface_custom_object_definitions::CustomObjectDefinitionSchemaRelationshipsItem {
         cardinality: m.get("cardinality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_custom_object_definitions__custom_object_definition_schema_relationships_item_cardinality_enum__from_str)),
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_custom_object_definitions__fields_additional_properties__from_json(v)),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_custom_object_definitions::FieldsAdditionalPropertiesEntry { key: k.clone(), value: val })).collect())),
         namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         record_constraints: m.get("recordConstraints").filter(|v| !v.is_null()).and_then(|v| iface_custom_object_definitions__custom_object_definition_schema_relationships_item_record_constraints__from_json(v)),
     })
 }
 
-fn iface_custom_object_definitions__fields_additional_properties__from_json(v: &Value) -> Option<iface_custom_object_definitions::FieldsAdditionalProperties> {
+fn iface_custom_object_definitions__fields_additional_properties_entry__from_json(v: &Value) -> Option<iface_custom_object_definitions::FieldsAdditionalPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_custom_object_definitions::FieldsAdditionalProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_custom_object_definitions::FieldsAdditionalPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -539,6 +605,14 @@ fn iface_custom_object_definitions__custom_object_definition_schema_relationship
     let m = v.as_object()?;
     Some(iface_custom_object_definitions::CustomObjectDefinitionSchemaRelationshipsItemRecordConstraintsCreate {
         enforce_valid_mapping: m.get("enforceValidMapping").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_custom_object_definitions__custom_object_definitions_entry__from_json(v: &Value) -> Option<iface_custom_object_definitions::CustomObjectDefinitionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_custom_object_definitions::CustomObjectDefinitionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_custom_object_definitions__custom_object_definition__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -589,10 +663,18 @@ fn iface_custom_object_definitions__custom_object_definition_update_action_respo
     let m = v.as_object()?;
     Some(iface_custom_object_definitions::CustomObjectDefinitionUpdateActionResponseRelationship {
         cardinality: m.get("cardinality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_custom_object_definitions__custom_object_definition_schema_relationships_item_cardinality_enum__from_str)),
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_custom_object_definitions__fields_additional_properties__from_json(v)),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_custom_object_definitions::FieldsAdditionalPropertiesEntryV3 { key: k.clone(), value: val })).collect())),
         namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         record_constraints: m.get("recordConstraints").filter(|v| !v.is_null()).and_then(|v| iface_custom_object_definitions__custom_object_definition_update_action_response_relationship_record_constraints__from_json(v)),
+    })
+}
+
+fn iface_custom_object_definitions__fields_additional_properties_entry_v3__from_json(v: &Value) -> Option<iface_custom_object_definitions::FieldsAdditionalPropertiesEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_custom_object_definitions::FieldsAdditionalPropertiesEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

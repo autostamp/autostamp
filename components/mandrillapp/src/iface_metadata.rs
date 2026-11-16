@@ -57,9 +57,11 @@ fn iface_metadata__info__to_json(p: &iface_metadata::Info) -> Value {
     Value::Object(m)
 }
 
-fn iface_metadata__list_response__to_json(p: &iface_metadata::ListResponse) -> Value {
+fn iface_metadata__list_response_item__to_json(p: &iface_metadata::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("view_template".into(), match (&p.view_template) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -101,10 +103,12 @@ fn iface_metadata__info__from_json(v: &Value) -> Option<iface_metadata::Info> {
     })
 }
 
-fn iface_metadata__list_response__from_json(v: &Value) -> Option<iface_metadata::ListResponse> {
+fn iface_metadata__list_response_item__from_json(v: &Value) -> Option<iface_metadata::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_metadata::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_metadata::ListResponseItem {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        view_template: m.get("view_template").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -144,12 +148,12 @@ fn iface_metadata__post_metadata_delete_json__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_metadata__post_metadata_list_json__ok(body: String) -> Result<iface_metadata::ListResponse, crate::runtime::DispatchError> {
+fn iface_metadata__post_metadata_list_json__ok(body: String) -> Result<Vec<iface_metadata::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_metadata__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_metadata__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -195,7 +199,7 @@ impl iface_metadata::Guest for crate::Component {
             Err(e) => Err(iface_metadata__post_metadata_delete_json__err(e)),
         }
     }
-    fn post_metadata_list_json(params: iface_metadata::PostMetadataListJsonParams) -> Result<iface_metadata::ListResponse, String> {
+    fn post_metadata_list_json(params: iface_metadata::PostMetadataListJsonParams) -> Result<Vec<iface_metadata::ListResponseItem>, String> {
         let json = iface_metadata__post_metadata_list_json_params__to_json(&params);
         match dispatch(&OP_METADATA_POST_METADATA_LIST_JSON, json).and_then(iface_metadata__post_metadata_list_json__ok) {
             Ok(v) => Ok(v),

@@ -31,16 +31,17 @@ fn iface_customer_groups_search__customer_data_group_search_results_interface__t
 fn iface_customer_groups_search__customer_data_group_interface__to_json(p: &iface_customer_groups_search::CustomerDataGroupInterface) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customer_groups_search__customer_data_group_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("tax_class_id".into(), Value::Number(serde_json::Number::from(*(&p.tax_class_id))));
     m.insert("tax_class_name".into(), match (&p.tax_class_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_customer_groups_search__customer_data_group_extension_interface__to_json(p: &iface_customer_groups_search::CustomerDataGroupExtensionInterface) -> Value {
+fn iface_customer_groups_search__customer_data_group_extension_interface_entry__to_json(p: &iface_customer_groups_search::CustomerDataGroupExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -99,17 +100,18 @@ fn iface_customer_groups_search__customer_data_group_interface__from_json(v: &Va
     let m = v.as_object()?;
     Some(iface_customer_groups_search::CustomerDataGroupInterface {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_customer_groups_search__customer_data_group_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customer_groups_search::CustomerDataGroupExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         tax_class_id: m.get("tax_class_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         tax_class_name: m.get("tax_class_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_customer_groups_search__customer_data_group_extension_interface__from_json(v: &Value) -> Option<iface_customer_groups_search::CustomerDataGroupExtensionInterface> {
+fn iface_customer_groups_search__customer_data_group_extension_interface_entry__from_json(v: &Value) -> Option<iface_customer_groups_search::CustomerDataGroupExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_customer_groups_search::CustomerDataGroupExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customer_groups_search::CustomerDataGroupExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

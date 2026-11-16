@@ -19,7 +19,7 @@ fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_interface__t
     let mut m = Map::new();
     m.insert("backorders".into(), Value::Number(serde_json::Number::from(*(&p.backorders))));
     m.insert("enable_qty_increments".into(), Value::Bool(*(&p.enable_qty_increments)));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_stock_items_product_sku__catalog_inventory_data_stock_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_decimal_divided".into(), Value::Bool(*(&p.is_decimal_divided)));
     m.insert("is_in_stock".into(), Value::Bool(*(&p.is_in_stock)));
     m.insert("is_qty_decimal".into(), Value::Bool(*(&p.is_qty_decimal)));
@@ -47,9 +47,10 @@ fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_interface__t
     Value::Object(m)
 }
 
-fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_extension_interface__to_json(p: &iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterface) -> Value {
+fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_extension_interface_entry__to_json(p: &iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -65,7 +66,7 @@ fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_interface__f
     Some(iface_stock_items_product_sku::CatalogInventoryDataStockItemInterface {
         backorders: m.get("backorders").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         enable_qty_increments: m.get("enable_qty_increments").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_stock_items_product_sku__catalog_inventory_data_stock_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_decimal_divided: m.get("is_decimal_divided").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_in_stock: m.get("is_in_stock").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_qty_decimal: m.get("is_qty_decimal").and_then(|v| (v).as_bool()).unwrap_or_default(),
@@ -93,10 +94,11 @@ fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_interface__f
     })
 }
 
-fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_extension_interface__from_json(v: &Value) -> Option<iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterface> {
+fn iface_stock_items_product_sku__catalog_inventory_data_stock_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_stock_items_product_sku::CatalogInventoryDataStockItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

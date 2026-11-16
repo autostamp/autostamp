@@ -484,9 +484,10 @@ fn iface_tax__get_tax_calculations_calculation_line_items_response__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_tax__post_tax_transactions_create_from_calculation_body_metadata__to_json(p: &iface_tax::PostTaxTransactionsCreateFromCalculationBodyMetadata) -> Value {
+fn iface_tax__post_tax_transactions_create_from_calculation_body_metadata_entry__to_json(p: &iface_tax::PostTaxTransactionsCreateFromCalculationBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -499,7 +500,7 @@ fn iface_tax__transaction__to_json(p: &iface_tax::Transaction) -> Value {
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => iface_tax__transaction_line_items__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax__transaction_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_tax__transaction_object_enum__to_str(&p.object).into()));
     m.insert("reference".into(), Value::String((&p.reference).clone()));
     m.insert("reversal".into(), match (&p.reversal) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -524,7 +525,7 @@ fn iface_tax__transaction_line_item__to_json(p: &iface_tax::TransactionLineItem)
     m.insert("amount_tax".into(), Value::Number(serde_json::Number::from(*(&p.amount_tax))));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax__transaction_line_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_tax__transaction_line_item_object_enum__to_str(&p.object).into()));
     m.insert("quantity".into(), Value::Number(serde_json::Number::from(*(&p.quantity))));
     m.insert("reference".into(), Value::String((&p.reference).clone()));
@@ -535,15 +536,17 @@ fn iface_tax__transaction_line_item__to_json(p: &iface_tax::TransactionLineItem)
     Value::Object(m)
 }
 
-fn iface_tax__transaction_line_item_metadata__to_json(p: &iface_tax::TransactionLineItemMetadata) -> Value {
+fn iface_tax__transaction_line_item_metadata_entry__to_json(p: &iface_tax::TransactionLineItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tax__transaction_metadata__to_json(p: &iface_tax::TransactionMetadata) -> Value {
+fn iface_tax__transaction_metadata_entry__to_json(p: &iface_tax::TransactionMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -551,22 +554,24 @@ fn iface_tax__post_tax_transactions_create_reversal_body_line_items_item__to_jso
     let mut m = Map::new();
     m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
     m.insert("amount_tax".into(), Value::Number(serde_json::Number::from(*(&p.amount_tax))));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax__post_tax_transactions_create_reversal_body_line_items_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("original_line_item".into(), Value::String((&p.original_line_item).clone()));
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("reference".into(), Value::String((&p.reference).clone()));
     Value::Object(m)
 }
 
-fn iface_tax__post_tax_transactions_create_reversal_body_line_items_item_metadata__to_json(p: &iface_tax::PostTaxTransactionsCreateReversalBodyLineItemsItemMetadata) -> Value {
+fn iface_tax__post_tax_transactions_create_reversal_body_line_items_item_metadata_entry__to_json(p: &iface_tax::PostTaxTransactionsCreateReversalBodyLineItemsItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tax__post_tax_transactions_create_reversal_body_metadata__to_json(p: &iface_tax::PostTaxTransactionsCreateReversalBodyMetadata) -> Value {
+fn iface_tax__post_tax_transactions_create_reversal_body_metadata_entry__to_json(p: &iface_tax::PostTaxTransactionsCreateReversalBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -613,7 +618,7 @@ fn iface_tax__post_tax_transactions_create_from_calculation_params__to_json(p: &
     let mut m = Map::new();
     m.insert("calculation".into(), Value::String((&p.calculation).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax__post_tax_transactions_create_from_calculation_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("reference".into(), Value::String((&p.reference).clone()));
     Value::Object(m)
 }
@@ -622,7 +627,7 @@ fn iface_tax__post_tax_transactions_create_reversal_params__to_json(p: &iface_ta
     let mut m = Map::new();
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => Value::Array((v).iter().map(|v| iface_tax__post_tax_transactions_create_reversal_body_line_items_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax__post_tax_transactions_create_reversal_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("mode".into(), Value::String(iface_tax__post_tax_transactions_create_reversal_body_mode_enum__to_str(&p.mode).into()));
     m.insert("original_transaction".into(), Value::String((&p.original_transaction).clone()));
     m.insert("reference".into(), Value::String((&p.reference).clone()));
@@ -777,7 +782,7 @@ fn iface_tax__transaction__from_json(v: &Value) -> Option<iface_tax::Transaction
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         line_items: m.get("line_items").filter(|v| !v.is_null()).and_then(|v| iface_tax__transaction_line_items__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_tax__transaction_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tax::TransactionMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_tax__transaction_object_enum__from_str)) { Some(x) => x, None => return None },
         reference: m.get("reference").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         reversal: m.get("reversal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -804,7 +809,7 @@ fn iface_tax__transaction_line_item__from_json(v: &Value) -> Option<iface_tax::T
         amount_tax: m.get("amount_tax").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_tax__transaction_line_item_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tax::TransactionLineItemMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_tax__transaction_line_item_object_enum__from_str)) { Some(x) => x, None => return None },
         quantity: m.get("quantity").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         reference: m.get("reference").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -815,17 +820,19 @@ fn iface_tax__transaction_line_item__from_json(v: &Value) -> Option<iface_tax::T
     })
 }
 
-fn iface_tax__transaction_line_item_metadata__from_json(v: &Value) -> Option<iface_tax::TransactionLineItemMetadata> {
+fn iface_tax__transaction_line_item_metadata_entry__from_json(v: &Value) -> Option<iface_tax::TransactionLineItemMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_tax::TransactionLineItemMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tax::TransactionLineItemMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_tax__transaction_metadata__from_json(v: &Value) -> Option<iface_tax::TransactionMetadata> {
+fn iface_tax__transaction_metadata_entry__from_json(v: &Value) -> Option<iface_tax::TransactionMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_tax::TransactionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tax::TransactionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

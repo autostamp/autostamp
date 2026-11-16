@@ -21,9 +21,10 @@ const OP_CUSTOM_EVENT_DATA_POST_EVENTS_V3_SEND_SEND: OpSpec = OpSpec {
     ],
 };
 
-fn iface_custom_event_data__behavioral_event_http_completion_request_properties__to_json(p: &iface_custom_event_data::BehavioralEventHttpCompletionRequestProperties) -> Value {
+fn iface_custom_event_data__behavioral_event_http_completion_request_properties_entry__to_json(p: &iface_custom_event_data::BehavioralEventHttpCompletionRequestPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -33,7 +34,7 @@ fn iface_custom_event_data__post_events_v3_send_send_params__to_json(p: &iface_c
     m.insert("event_name".into(), Value::String((&p.event_name).clone()));
     m.insert("object_id".into(), match (&p.object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("occurred_at".into(), match (&p.occurred_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_custom_event_data__behavioral_event_http_completion_request_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("utk".into(), match (&p.utk) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uuid".into(), match (&p.uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)

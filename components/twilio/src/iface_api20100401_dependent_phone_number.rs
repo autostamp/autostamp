@@ -19,6 +19,22 @@ const OP_API20100401_DEPENDENT_PHONE_NUMBER_LIST_DEPENDENT_PHONE_NUMBER: OpSpec 
     ],
 };
 
+fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__to_str(e: &iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement) -> &'static str {
+    match e {
+        iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::None => "none",
+        iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::Any => "any",
+        iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::Local => "local",
+        iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::Foreign => "foreign",
+    }
+}
+
+fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__to_str(e: &iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus) -> &'static str {
+    match e {
+        iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus::Active => "Active",
+        iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus::Inactive => "Inactive",
+    }
+}
+
 fn iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent_phone_number_sms_fallback_method_enum__to_str(e: &iface_api20100401_dependent_phone_number::ApiV2010AccountAddressDependentPhoneNumberSmsFallbackMethodEnum) -> &'static str {
     match e {
         iface_api20100401_dependent_phone_number::ApiV2010AccountAddressDependentPhoneNumberSmsFallbackMethodEnum::Head => "HEAD",
@@ -47,13 +63,13 @@ fn iface_api20100401_dependent_phone_number__list_dependent_phone_number_respons
 fn iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent_phone_number__to_json(p: &iface_api20100401_dependent_phone_number::ApiV2010AccountAddressDependentPhoneNumber) -> Value {
     let mut m = Map::new();
     m.insert("account_sid".into(), match (&p.account_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("address_requirements".into(), match (&p.address_requirements) { Some(v) => iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__to_json(v), None => Value::Null });
+    m.insert("address_requirements".into(), match (&p.address_requirements) { Some(v) => Value::String(iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__to_str(v).into()), None => Value::Null });
     m.insert("api_version".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_created".into(), match (&p.date_created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_address_sid".into(), match (&p.emergency_address_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__to_json(v), None => Value::Null });
+    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => Value::String(iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__to_str(v).into()), None => Value::Null });
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -72,18 +88,6 @@ fn iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent
     m.insert("voice_fallback_url".into(), match (&p.voice_fallback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("voice_method".into(), match (&p.voice_method) { Some(v) => Value::String(iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("voice_url".into(), match (&p.voice_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__to_json(p: &iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__to_json(p: &iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -116,13 +120,13 @@ fn iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent
     let m = v.as_object()?;
     Some(iface_api20100401_dependent_phone_number::ApiV2010AccountAddressDependentPhoneNumber {
         account_sid: m.get("account_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        address_requirements: m.get("address_requirements").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__from_json(v)),
+        address_requirements: m.get("address_requirements").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__from_str)),
         api_version: m.get("api_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_created: m.get("date_created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         emergency_address_sid: m.get("emergency_address_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        emergency_status: m.get("emergency_status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__from_json(v)),
+        emergency_status: m.get("emergency_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__from_str)),
         friendly_name: m.get("friendly_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -144,18 +148,22 @@ fn iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent
     })
 }
 
-fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__from_json(v: &Value) -> Option<iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_address_requirement__from_str(s: &str) -> Option<iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement> {
+    match s {
+        "none" => Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::None),
+        "any" => Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::Any),
+        "local" => Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::Local),
+        "foreign" => Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumAddressRequirement::Foreign),
+        _ => None,
+    }
 }
 
-fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__from_json(v: &Value) -> Option<iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_dependent_phone_number__dependent_phone_number_enum_emergency_status__from_str(s: &str) -> Option<iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus> {
+    match s {
+        "Active" => Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus::Active),
+        "Inactive" => Some(iface_api20100401_dependent_phone_number::DependentPhoneNumberEnumEmergencyStatus::Inactive),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_dependent_phone_number__api_v2010_account_address_dependent_phone_number_sms_fallback_method_enum__from_str(s: &str) -> Option<iface_api20100401_dependent_phone_number::ApiV2010AccountAddressDependentPhoneNumberSmsFallbackMethodEnum> {

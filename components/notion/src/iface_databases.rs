@@ -122,13 +122,14 @@ fn iface_databases__retrieve_a_database_response_properties_link__to_json(p: &if
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_databases__retrieve_a_database_response_properties_link_url__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__retrieve_a_database_response_properties_link_url__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesLinkUrl) -> Value {
+fn iface_databases__retrieve_a_database_response_properties_link_url_entry__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesLinkUrlEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -136,14 +137,15 @@ fn iface_databases__retrieve_a_database_response_properties_name__to_json(p: &if
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("title".into(), match (&p.title) { Some(v) => iface_databases__retrieve_a_database_response_properties_name_title__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__retrieve_a_database_response_properties_name_title__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesNameTitle) -> Value {
+fn iface_databases__retrieve_a_database_response_properties_name_title_entry__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesNameTitleEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -172,31 +174,33 @@ fn iface_databases__retrieve_a_database_response_properties_publisher_select_opt
 
 fn iface_databases__retrieve_a_database_response_properties_publishing_release_date__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDate) -> Value {
     let mut m = Map::new();
-    m.insert("date".into(), match (&p.date) { Some(v) => iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__to_json(v), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDate) -> Value {
+fn iface_databases__retrieve_a_database_response_properties_publishing_release_date_date_entry__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDateEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_databases__retrieve_a_database_response_properties_read__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesRead) -> Value {
     let mut m = Map::new();
-    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => iface_databases__retrieve_a_database_response_properties_read_checkbox__to_json(v), None => Value::Null });
+    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__retrieve_a_database_response_properties_read_checkbox__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesReadCheckbox) -> Value {
+fn iface_databases__retrieve_a_database_response_properties_read_checkbox_entry__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesReadCheckboxEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -250,14 +254,15 @@ fn iface_databases__retrieve_a_database_response_properties_summary__to_json(p: 
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__retrieve_a_database_response_properties_summary_rich_text__to_json(v), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__retrieve_a_database_response_properties_summary_rich_text__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichText) -> Value {
+fn iface_databases__retrieve_a_database_response_properties_summary_rich_text_entry__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichTextEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -320,13 +325,14 @@ fn iface_databases__update_a_database_body_properties__to_json(p: &iface_databas
 
 fn iface_databases__update_a_database_body_properties_wine_pairing__to_json(p: &iface_databases::UpdateADatabaseBodyPropertiesWinePairing) -> Value {
     let mut m = Map::new();
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__update_a_database_body_properties_wine_pairing_rich_text__to_json(v), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_body_properties_wine_pairing_rich_text__to_json(p: &iface_databases::UpdateADatabaseBodyPropertiesWinePairingRichText) -> Value {
+fn iface_databases__update_a_database_body_properties_wine_pairing_rich_text_entry__to_json(p: &iface_databases::UpdateADatabaseBodyPropertiesWinePairingRichTextEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -425,13 +431,14 @@ fn iface_databases__update_a_database_response_properties_link__to_json(p: &ifac
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_databases__update_a_database_response_properties_link_url__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_response_properties_link_url__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesLinkUrl) -> Value {
+fn iface_databases__update_a_database_response_properties_link_url_entry__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesLinkUrlEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -439,14 +446,15 @@ fn iface_databases__update_a_database_response_properties_name__to_json(p: &ifac
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("title".into(), match (&p.title) { Some(v) => iface_databases__update_a_database_response_properties_name_title__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_response_properties_name_title__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesNameTitle) -> Value {
+fn iface_databases__update_a_database_response_properties_name_title_entry__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesNameTitleEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -475,31 +483,33 @@ fn iface_databases__update_a_database_response_properties_publisher_select_optio
 
 fn iface_databases__update_a_database_response_properties_publishing_release_date__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDate) -> Value {
     let mut m = Map::new();
-    m.insert("date".into(), match (&p.date) { Some(v) => iface_databases__update_a_database_response_properties_publishing_release_date_date__to_json(v), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_response_properties_publishing_release_date_date__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDate) -> Value {
+fn iface_databases__update_a_database_response_properties_publishing_release_date_date_entry__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDateEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_databases__update_a_database_response_properties_read__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesRead) -> Value {
     let mut m = Map::new();
-    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => iface_databases__update_a_database_response_properties_read_checkbox__to_json(v), None => Value::Null });
+    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_response_properties_read_checkbox__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesReadCheckbox) -> Value {
+fn iface_databases__update_a_database_response_properties_read_checkbox_entry__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesReadCheckboxEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -553,14 +563,15 @@ fn iface_databases__update_a_database_response_properties_summary__to_json(p: &i
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__update_a_database_response_properties_summary_rich_text__to_json(v), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_response_properties_summary_rich_text__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesSummaryRichText) -> Value {
+fn iface_databases__update_a_database_response_properties_summary_rich_text_entry__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesSummaryRichTextEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -591,14 +602,15 @@ fn iface_databases__update_a_database_response_properties_wine_pairing__to_json(
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__update_a_database_response_properties_wine_pairing_rich_text__to_json(v), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_databases__update_a_database_response_properties_wine_pairing_rich_text__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichText) -> Value {
+fn iface_databases__update_a_database_response_properties_wine_pairing_rich_text_entry__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichTextEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -976,14 +988,15 @@ fn iface_databases__retrieve_a_database_response_properties_link__from_json(v: &
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_link_url__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::RetrieveADatabaseResponsePropertiesLinkUrlEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_databases__retrieve_a_database_response_properties_link_url__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesLinkUrl> {
+fn iface_databases__retrieve_a_database_response_properties_link_url_entry__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesLinkUrlEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::RetrieveADatabaseResponsePropertiesLinkUrl {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesLinkUrlEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -992,15 +1005,16 @@ fn iface_databases__retrieve_a_database_response_properties_name__from_json(v: &
     Some(iface_databases::RetrieveADatabaseResponsePropertiesName {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_name_title__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::RetrieveADatabaseResponsePropertiesNameTitleEntry { key: k.clone(), value: val })).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__retrieve_a_database_response_properties_name_title__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesNameTitle> {
+fn iface_databases__retrieve_a_database_response_properties_name_title_entry__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesNameTitleEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::RetrieveADatabaseResponsePropertiesNameTitle {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesNameTitleEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1033,34 +1047,36 @@ fn iface_databases__retrieve_a_database_response_properties_publisher_select_opt
 fn iface_databases__retrieve_a_database_response_properties_publishing_release_date__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDate> {
     let m = v.as_object()?;
     Some(iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDate {
-        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__from_json(v)),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDateEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDate> {
+fn iface_databases__retrieve_a_database_response_properties_publishing_release_date_date_entry__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDateEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDate {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDateEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_databases__retrieve_a_database_response_properties_read__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesRead> {
     let m = v.as_object()?;
     Some(iface_databases::RetrieveADatabaseResponsePropertiesRead {
-        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_read_checkbox__from_json(v)),
+        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::RetrieveADatabaseResponsePropertiesReadCheckboxEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__retrieve_a_database_response_properties_read_checkbox__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesReadCheckbox> {
+fn iface_databases__retrieve_a_database_response_properties_read_checkbox_entry__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesReadCheckboxEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::RetrieveADatabaseResponsePropertiesReadCheckbox {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesReadCheckboxEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1121,15 +1137,16 @@ fn iface_databases__retrieve_a_database_response_properties_summary__from_json(v
     Some(iface_databases::RetrieveADatabaseResponsePropertiesSummary {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_summary_rich_text__from_json(v)),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichTextEntry { key: k.clone(), value: val })).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__retrieve_a_database_response_properties_summary_rich_text__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichText> {
+fn iface_databases__retrieve_a_database_response_properties_summary_rich_text_entry__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichTextEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichText {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichTextEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1282,14 +1299,15 @@ fn iface_databases__update_a_database_response_properties_link__from_json(v: &Va
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_link_url__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::UpdateADatabaseResponsePropertiesLinkUrlEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_databases__update_a_database_response_properties_link_url__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesLinkUrl> {
+fn iface_databases__update_a_database_response_properties_link_url_entry__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesLinkUrlEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::UpdateADatabaseResponsePropertiesLinkUrl {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::UpdateADatabaseResponsePropertiesLinkUrlEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1298,15 +1316,16 @@ fn iface_databases__update_a_database_response_properties_name__from_json(v: &Va
     Some(iface_databases::UpdateADatabaseResponsePropertiesName {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_name_title__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::UpdateADatabaseResponsePropertiesNameTitleEntry { key: k.clone(), value: val })).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__update_a_database_response_properties_name_title__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesNameTitle> {
+fn iface_databases__update_a_database_response_properties_name_title_entry__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesNameTitleEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::UpdateADatabaseResponsePropertiesNameTitle {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::UpdateADatabaseResponsePropertiesNameTitleEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1339,34 +1358,36 @@ fn iface_databases__update_a_database_response_properties_publisher_select_optio
 fn iface_databases__update_a_database_response_properties_publishing_release_date__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDate> {
     let m = v.as_object()?;
     Some(iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDate {
-        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_publishing_release_date_date__from_json(v)),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDateEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__update_a_database_response_properties_publishing_release_date_date__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDate> {
+fn iface_databases__update_a_database_response_properties_publishing_release_date_date_entry__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDateEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDate {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDateEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_databases__update_a_database_response_properties_read__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesRead> {
     let m = v.as_object()?;
     Some(iface_databases::UpdateADatabaseResponsePropertiesRead {
-        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_read_checkbox__from_json(v)),
+        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::UpdateADatabaseResponsePropertiesReadCheckboxEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__update_a_database_response_properties_read_checkbox__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesReadCheckbox> {
+fn iface_databases__update_a_database_response_properties_read_checkbox_entry__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesReadCheckboxEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::UpdateADatabaseResponsePropertiesReadCheckbox {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::UpdateADatabaseResponsePropertiesReadCheckboxEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1427,15 +1448,16 @@ fn iface_databases__update_a_database_response_properties_summary__from_json(v: 
     Some(iface_databases::UpdateADatabaseResponsePropertiesSummary {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_summary_rich_text__from_json(v)),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::UpdateADatabaseResponsePropertiesSummaryRichTextEntry { key: k.clone(), value: val })).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__update_a_database_response_properties_summary_rich_text__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesSummaryRichText> {
+fn iface_databases__update_a_database_response_properties_summary_rich_text_entry__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesSummaryRichTextEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::UpdateADatabaseResponsePropertiesSummaryRichText {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::UpdateADatabaseResponsePropertiesSummaryRichTextEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1470,15 +1492,16 @@ fn iface_databases__update_a_database_response_properties_wine_pairing__from_jso
     Some(iface_databases::UpdateADatabaseResponsePropertiesWinePairing {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_wine_pairing_rich_text__from_json(v)),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichTextEntry { key: k.clone(), value: val })).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_databases__update_a_database_response_properties_wine_pairing_rich_text__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichText> {
+fn iface_databases__update_a_database_response_properties_wine_pairing_rich_text_entry__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichTextEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichText {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichTextEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

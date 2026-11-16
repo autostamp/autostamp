@@ -1,4 +1,4 @@
-package autostamp:braze@0.5.0;
+package autostamp:braze@0.6.0;
 
 interface export-op {
   /// Campaign Analytics
@@ -331,21 +331,23 @@ interface messaging {
     value: option<string>
   }
 
-  record schedule-api-triggered-canvases-body-canvas-entry-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record schedule-api-triggered-canvases-body-canvas-entry-properties-entry {
+    key: string,
+    value: string
   }
 
   record schedule-api-triggered-canvases-body-recipients-item {
-    canvas-entry-properties: option<schedule-api-triggered-canvases-body-recipients-item-canvas-entry-properties>,
+    canvas-entry-properties: option<list<schedule-api-triggered-canvases-body-recipients-item-canvas-entry-properties-entry>>,
     external-user-id: option<string>,
     trigger-properties: option<string>,
     user-alias: option<string>
   }
 
-  record schedule-api-triggered-canvases-body-recipients-item-canvas-entry-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record schedule-api-triggered-canvases-body-recipients-item-canvas-entry-properties-entry {
+    key: string,
+    value: string
   }
 
   record schedule-api-triggered-canvases-body-schedule {
@@ -358,7 +360,7 @@ interface messaging {
   record schedule-api-triggered-canvases-params {
     audience: option<schedule-api-triggered-canvases-body-audience>,
     broadcast: option<bool>,
-    canvas-entry-properties: option<schedule-api-triggered-canvases-body-canvas-entry-properties>,
+    canvas-entry-properties: option<list<schedule-api-triggered-canvases-body-canvas-entry-properties-entry>>,
     canvas-id: option<string>,
     recipients: option<list<schedule-api-triggered-canvases-body-recipients-item>>,
     schedule: option<schedule-api-triggered-canvases-body-schedule>

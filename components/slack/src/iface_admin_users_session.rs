@@ -33,19 +33,13 @@ const OP_ADMIN_USERS_SESSION_RESET: OpSpec = OpSpec {
 
 fn iface_admin_users_session__invalidate_response__to_json(p: &iface_admin_users_session::InvalidateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users_session__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_users_session__defs_ok_true__to_json(p: &iface_admin_users_session::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users_session__reset_response__to_json(p: &iface_admin_users_session::ResetResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users_session__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -69,21 +63,14 @@ fn iface_admin_users_session__reset_params__to_json(p: &iface_admin_users_sessio
 fn iface_admin_users_session__invalidate_response__from_json(v: &Value) -> Option<iface_admin_users_session::InvalidateResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users_session::InvalidateResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users_session__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_users_session__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_users_session::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_users_session::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users_session__reset_response__from_json(v: &Value) -> Option<iface_admin_users_session::ResetResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users_session::ResetResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users_session__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

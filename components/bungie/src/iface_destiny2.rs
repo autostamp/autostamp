@@ -493,15 +493,16 @@ fn iface_destiny2__equip_item_response__to_json(p: &iface_destiny2::EquipItemRes
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__equip_item_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__equip_item_response_message_data__to_json(p: &iface_destiny2::EquipItemResponseMessageData) -> Value {
+fn iface_destiny2__equip_item_response_message_data_entry__to_json(p: &iface_destiny2::EquipItemResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -511,15 +512,16 @@ fn iface_destiny2__equip_items_response__to_json(p: &iface_destiny2::EquipItemsR
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__equip_items_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_destiny_equip_item_results__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__equip_items_response_message_data__to_json(p: &iface_destiny2::EquipItemsResponseMessageData) -> Value {
+fn iface_destiny2__equip_items_response_message_data_entry__to_json(p: &iface_destiny2::EquipItemsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -542,15 +544,16 @@ fn iface_destiny2__insert_socket_plug_response__to_json(p: &iface_destiny2::Inse
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__insert_socket_plug_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_item_change_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__insert_socket_plug_response_message_data__to_json(p: &iface_destiny2::InsertSocketPlugResponseMessageData) -> Value {
+fn iface_destiny2__insert_socket_plug_response_message_data_entry__to_json(p: &iface_destiny2::InsertSocketPlugResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -606,15 +609,16 @@ fn iface_destiny2__insert_socket_plug_free_response__to_json(p: &iface_destiny2:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__insert_socket_plug_free_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_item_change_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__insert_socket_plug_free_response_message_data__to_json(p: &iface_destiny2::InsertSocketPlugFreeResponseMessageData) -> Value {
+fn iface_destiny2__insert_socket_plug_free_response_message_data_entry__to_json(p: &iface_destiny2::InsertSocketPlugFreeResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -624,15 +628,16 @@ fn iface_destiny2__pull_from_postmaster_response__to_json(p: &iface_destiny2::Pu
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__pull_from_postmaster_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__pull_from_postmaster_response_message_data__to_json(p: &iface_destiny2::PullFromPostmasterResponseMessageData) -> Value {
+fn iface_destiny2__pull_from_postmaster_response_message_data_entry__to_json(p: &iface_destiny2::PullFromPostmasterResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -642,15 +647,16 @@ fn iface_destiny2__set_item_lock_state_response__to_json(p: &iface_destiny2::Set
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__set_item_lock_state_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__set_item_lock_state_response_message_data__to_json(p: &iface_destiny2::SetItemLockStateResponseMessageData) -> Value {
+fn iface_destiny2__set_item_lock_state_response_message_data_entry__to_json(p: &iface_destiny2::SetItemLockStateResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -660,15 +666,16 @@ fn iface_destiny2__set_quest_tracked_state_response__to_json(p: &iface_destiny2:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__set_quest_tracked_state_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__set_quest_tracked_state_response_message_data__to_json(p: &iface_destiny2::SetQuestTrackedStateResponseMessageData) -> Value {
+fn iface_destiny2__set_quest_tracked_state_response_message_data_entry__to_json(p: &iface_destiny2::SetQuestTrackedStateResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -678,15 +685,16 @@ fn iface_destiny2__transfer_item_response__to_json(p: &iface_destiny2::TransferI
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__transfer_item_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__transfer_item_response_message_data__to_json(p: &iface_destiny2::TransferItemResponseMessageData) -> Value {
+fn iface_destiny2__transfer_item_response_message_data_entry__to_json(p: &iface_destiny2::TransferItemResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -696,15 +704,16 @@ fn iface_destiny2__clear_loadout_response__to_json(p: &iface_destiny2::ClearLoad
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__clear_loadout_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__clear_loadout_response_message_data__to_json(p: &iface_destiny2::ClearLoadoutResponseMessageData) -> Value {
+fn iface_destiny2__clear_loadout_response_message_data_entry__to_json(p: &iface_destiny2::ClearLoadoutResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -714,15 +723,16 @@ fn iface_destiny2__equip_loadout_response__to_json(p: &iface_destiny2::EquipLoad
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__equip_loadout_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__equip_loadout_response_message_data__to_json(p: &iface_destiny2::EquipLoadoutResponseMessageData) -> Value {
+fn iface_destiny2__equip_loadout_response_message_data_entry__to_json(p: &iface_destiny2::EquipLoadoutResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -732,15 +742,16 @@ fn iface_destiny2__snapshot_loadout_response__to_json(p: &iface_destiny2::Snapsh
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__snapshot_loadout_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__snapshot_loadout_response_message_data__to_json(p: &iface_destiny2::SnapshotLoadoutResponseMessageData) -> Value {
+fn iface_destiny2__snapshot_loadout_response_message_data_entry__to_json(p: &iface_destiny2::SnapshotLoadoutResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -750,15 +761,16 @@ fn iface_destiny2__update_loadout_identifiers_response__to_json(p: &iface_destin
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__update_loadout_identifiers_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__update_loadout_identifiers_response_message_data__to_json(p: &iface_destiny2::UpdateLoadoutIdentifiersResponseMessageData) -> Value {
+fn iface_destiny2__update_loadout_identifiers_response_message_data_entry__to_json(p: &iface_destiny2::UpdateLoadoutIdentifiersResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -768,15 +780,16 @@ fn iface_destiny2__search_destiny_entities_response__to_json(p: &iface_destiny2:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__search_destiny_entities_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_definitions_destiny_entity_search_result__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__search_destiny_entities_response_message_data__to_json(p: &iface_destiny2::SearchDestinyEntitiesResponseMessageData) -> Value {
+fn iface_destiny2__search_destiny_entities_response_message_data_entry__to_json(p: &iface_destiny2::SearchDestinyEntitiesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -793,15 +806,16 @@ fn iface_destiny2__awa_provide_authorization_result_response__to_json(p: &iface_
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__awa_provide_authorization_result_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__awa_provide_authorization_result_response_message_data__to_json(p: &iface_destiny2::AwaProvideAuthorizationResultResponseMessageData) -> Value {
+fn iface_destiny2__awa_provide_authorization_result_response_message_data_entry__to_json(p: &iface_destiny2::AwaProvideAuthorizationResultResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -811,15 +825,16 @@ fn iface_destiny2__awa_get_action_token_response__to_json(p: &iface_destiny2::Aw
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__awa_get_action_token_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_advanced_awa_authorization_result__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__awa_get_action_token_response_message_data__to_json(p: &iface_destiny2::AwaGetActionTokenResponseMessageData) -> Value {
+fn iface_destiny2__awa_get_action_token_response_message_data_entry__to_json(p: &iface_destiny2::AwaGetActionTokenResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -842,15 +857,16 @@ fn iface_destiny2__awa_initialize_request_response__to_json(p: &iface_destiny2::
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__awa_initialize_request_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_advanced_awa_initialize_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__awa_initialize_request_response_message_data__to_json(p: &iface_destiny2::AwaInitializeRequestResponseMessageData) -> Value {
+fn iface_destiny2__awa_initialize_request_response_message_data_entry__to_json(p: &iface_destiny2::AwaInitializeRequestResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -867,21 +883,23 @@ fn iface_destiny2__get_clan_banner_source_response__to_json(p: &iface_destiny2::
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_clan_banner_source_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__config_clan_banner_clan_banner_source__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_clan_banner_source_response_message_data__to_json(p: &iface_destiny2::GetClanBannerSourceResponseMessageData) -> Value {
+fn iface_destiny2__get_clan_banner_source_response_message_data_entry__to_json(p: &iface_destiny2::GetClanBannerSourceResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__config_clan_banner_clan_banner_source__to_json(p: &iface_destiny2::ConfigClanBannerClanBannerSource) -> Value {
+fn iface_destiny2__config_clan_banner_clan_banner_source_entry__to_json(p: &iface_destiny2::ConfigClanBannerClanBannerSourceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -891,15 +909,16 @@ fn iface_destiny2__get_clan_weekly_reward_state_response__to_json(p: &iface_dest
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_clan_weekly_reward_state_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_milestones_destiny_milestone__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_clan_weekly_reward_state_response_message_data__to_json(p: &iface_destiny2::GetClanWeeklyRewardStateResponseMessageData) -> Value {
+fn iface_destiny2__get_clan_weekly_reward_state_response_message_data_entry__to_json(p: &iface_destiny2::GetClanWeeklyRewardStateResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -912,7 +931,7 @@ fn iface_destiny2__destiny_milestones_destiny_milestone__to_json(p: &iface_desti
     m.insert("order".into(), match (&p.order) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("rewards".into(), match (&p.rewards) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_milestones_destiny_milestone_reward_category__to_json(v)).collect()), None => Value::Null });
     m.insert("startDate".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_destiny2__destiny_milestones_destiny_milestone_values__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), serde_json::Number::from_f64(*(&e.value)).map(Value::Number).unwrap_or(Value::Null))).collect()), None => Value::Null });
     m.insert("vendorHashes".into(), match (&p.vendor_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     m.insert("vendors".into(), match (&p.vendors) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_milestones_destiny_milestone_vendor__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
@@ -921,7 +940,7 @@ fn iface_destiny2__destiny_milestones_destiny_milestone__to_json(p: &iface_desti
 fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity__to_json(p: &iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivity) -> Value {
     let mut m = Map::new();
     m.insert("activityHash".into(), match (&p.activity_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("booleanActivityOptions".into(), match (&p.boolean_activity_options) { Some(v) => iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity_boolean_activity_options__to_json(v), None => Value::Null });
+    m.insert("booleanActivityOptions".into(), match (&p.boolean_activity_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     m.insert("challenges".into(), match (&p.challenges) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_challenges_destiny_challenge_status__to_json(v)).collect()), None => Value::Null });
     m.insert("loadoutRequirementIndex".into(), match (&p.loadout_requirement_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("modifierHashes".into(), match (&p.modifier_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -929,9 +948,10 @@ fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity__to_j
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity_boolean_activity_options__to_json(p: &iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptions) -> Value {
+fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity_boolean_activity_options_entry__to_json(p: &iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -972,9 +992,10 @@ fn iface_destiny2__destiny_milestones_destiny_milestone_reward_entry__to_json(p:
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_milestones_destiny_milestone_values__to_json(p: &iface_destiny2::DestinyMilestonesDestinyMilestoneValues) -> Value {
+fn iface_destiny2__destiny_milestones_destiny_milestone_values_entry__to_json(p: &iface_destiny2::DestinyMilestonesDestinyMilestoneValuesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
@@ -991,28 +1012,29 @@ fn iface_destiny2__get_destiny_manifest_response__to_json(p: &iface_destiny2::Ge
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_destiny_manifest_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_config_destiny_manifest__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_destiny_manifest_response_message_data__to_json(p: &iface_destiny2::GetDestinyManifestResponseMessageData) -> Value {
+fn iface_destiny2__get_destiny_manifest_response_message_data_entry__to_json(p: &iface_destiny2::GetDestinyManifestResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_destiny2__destiny_config_destiny_manifest__to_json(p: &iface_destiny2::DestinyConfigDestinyManifest) -> Value {
     let mut m = Map::new();
     m.insert("iconImagePyramidInfo".into(), match (&p.icon_image_pyramid_info) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_config_image_pyramid_entry__to_json(v)).collect()), None => Value::Null });
-    m.insert("jsonWorldComponentContentPaths".into(), match (&p.json_world_component_content_paths) { Some(v) => iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths__to_json(v), None => Value::Null });
-    m.insert("jsonWorldContentPaths".into(), match (&p.json_world_content_paths) { Some(v) => iface_destiny2__destiny_config_destiny_manifest_json_world_content_paths__to_json(v), None => Value::Null });
+    m.insert("jsonWorldComponentContentPaths".into(), match (&p.json_world_component_content_paths) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
+    m.insert("jsonWorldContentPaths".into(), match (&p.json_world_content_paths) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("mobileAssetContentPath".into(), match (&p.mobile_asset_content_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mobileClanBannerDatabasePath".into(), match (&p.mobile_clan_banner_database_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mobileGearAssetDataBases".into(), match (&p.mobile_gear_asset_data_bases) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_config_gear_asset_data_base_definition__to_json(v)).collect()), None => Value::Null });
-    m.insert("mobileGearCDN".into(), match (&p.mobile_gear_cdn) { Some(v) => iface_destiny2__destiny_config_destiny_manifest_mobile_gear_cdn__to_json(v), None => Value::Null });
-    m.insert("mobileWorldContentPaths".into(), match (&p.mobile_world_content_paths) { Some(v) => iface_destiny2__destiny_config_destiny_manifest_mobile_world_content_paths__to_json(v), None => Value::Null });
+    m.insert("mobileGearCDN".into(), match (&p.mobile_gear_cdn) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("mobileWorldContentPaths".into(), match (&p.mobile_world_content_paths) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1024,15 +1046,24 @@ fn iface_destiny2__destiny_config_image_pyramid_entry__to_json(p: &iface_destiny
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPaths) -> Value {
+fn iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths_value_entry__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_json_world_content_paths__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPaths) -> Value {
+fn iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths_entry__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_config_destiny_manifest_json_world_content_paths_entry__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPathsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1043,15 +1074,17 @@ fn iface_destiny2__destiny_config_gear_asset_data_base_definition__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_mobile_gear_cdn__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestMobileGearCdn) -> Value {
+fn iface_destiny2__destiny_config_destiny_manifest_mobile_gear_cdn_entry__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestMobileGearCdnEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_mobile_world_content_paths__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPaths) -> Value {
+fn iface_destiny2__destiny_config_destiny_manifest_mobile_world_content_paths_entry__to_json(p: &iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPathsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1061,15 +1094,16 @@ fn iface_destiny2__get_destiny_entity_definition_response__to_json(p: &iface_des
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_destiny_entity_definition_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_definitions_destiny_definition__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_destiny_entity_definition_response_message_data__to_json(p: &iface_destiny2::GetDestinyEntityDefinitionResponseMessageData) -> Value {
+fn iface_destiny2__get_destiny_entity_definition_response_message_data_entry__to_json(p: &iface_destiny2::GetDestinyEntityDefinitionResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1087,21 +1121,76 @@ fn iface_destiny2__get_public_milestones_response__to_json(p: &iface_destiny2::G
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_public_milestones_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__get_public_milestones_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_milestones_destiny_public_milestone__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_public_milestones_response_message_data__to_json(p: &iface_destiny2::GetPublicMilestonesResponseMessageData) -> Value {
+fn iface_destiny2__get_public_milestones_response_message_data_entry__to_json(p: &iface_destiny2::GetPublicMilestonesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__get_public_milestones_response_response__to_json(p: &iface_destiny2::GetPublicMilestonesResponseResponse) -> Value {
+fn iface_destiny2__destiny_milestones_destiny_public_milestone__to_json(p: &iface_destiny2::DestinyMilestonesDestinyPublicMilestone) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("activities".into(), match (&p.activities) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_milestones_destiny_public_milestone_challenge_activity__to_json(v)).collect()), None => Value::Null });
+    m.insert("availableQuests".into(), match (&p.available_quests) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_milestones_destiny_public_milestone_quest__to_json(v)).collect()), None => Value::Null });
+    m.insert("endDate".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("milestoneHash".into(), match (&p.milestone_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("order".into(), match (&p.order) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("startDate".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vendorHashes".into(), match (&p.vendor_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("vendors".into(), match (&p.vendors) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_milestones_destiny_public_milestone_vendor__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_challenge_activity__to_json(p: &iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivity) -> Value {
+    let mut m = Map::new();
+    m.insert("activityHash".into(), match (&p.activity_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("booleanActivityOptions".into(), match (&p.boolean_activity_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
+    m.insert("challengeObjectiveHashes".into(), match (&p.challenge_objective_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("loadoutRequirementIndex".into(), match (&p.loadout_requirement_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("modifierHashes".into(), match (&p.modifier_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("phaseHashes".into(), match (&p.phase_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_challenge_activity_boolean_activity_options_entry__to_json(p: &iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivityBooleanActivityOptionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_quest__to_json(p: &iface_destiny2::DestinyMilestonesDestinyPublicMilestoneQuest) -> Value {
+    let mut m = Map::new();
+    m.insert("activity".into(), match (&p.activity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("challenges".into(), match (&p.challenges) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_milestones_destiny_public_milestone_challenge__to_json(v)).collect()), None => Value::Null });
+    m.insert("questItemHash".into(), match (&p.quest_item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_challenge__to_json(p: &iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallenge) -> Value {
+    let mut m = Map::new();
+    m.insert("activityHash".into(), match (&p.activity_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("objectiveHash".into(), match (&p.objective_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_vendor__to_json(p: &iface_destiny2::DestinyMilestonesDestinyPublicMilestoneVendor) -> Value {
+    let mut m = Map::new();
+    m.insert("previewItemHash".into(), match (&p.preview_item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("vendorHash".into(), match (&p.vendor_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_public_milestones_response_response_entry__to_json(p: &iface_destiny2::GetPublicMilestonesResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_milestones_destiny_public_milestone__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1111,15 +1200,16 @@ fn iface_destiny2__get_public_milestone_content_response__to_json(p: &iface_dest
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_public_milestone_content_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_milestones_destiny_milestone_content__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_public_milestone_content_response_message_data__to_json(p: &iface_destiny2::GetPublicMilestoneContentResponseMessageData) -> Value {
+fn iface_destiny2__get_public_milestone_content_response_message_data_entry__to_json(p: &iface_destiny2::GetPublicMilestoneContentResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1145,15 +1235,16 @@ fn iface_destiny2__search_destiny_player_by_bungie_name_response__to_json(p: &if
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__search_destiny_player_by_bungie_name_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__user_user_info_card__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__search_destiny_player_by_bungie_name_response_message_data__to_json(p: &iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageData) -> Value {
+fn iface_destiny2__search_destiny_player_by_bungie_name_response_message_data_entry__to_json(p: &iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1178,15 +1269,16 @@ fn iface_destiny2__get_clan_aggregate_stats_response__to_json(p: &iface_destiny2
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_clan_aggregate_stats_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_historical_stats_destiny_clan_aggregate_stat__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_clan_aggregate_stats_response_message_data__to_json(p: &iface_destiny2::GetClanAggregateStatsResponseMessageData) -> Value {
+fn iface_destiny2__get_clan_aggregate_stats_response_message_data_entry__to_json(p: &iface_destiny2::GetClanAggregateStatsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1204,21 +1296,42 @@ fn iface_destiny2__get_historical_stats_definition_response__to_json(p: &iface_d
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_historical_stats_definition_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__get_historical_stats_definition_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_definitions_destiny_historical_stats_definition__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_historical_stats_definition_response_message_data__to_json(p: &iface_destiny2::GetHistoricalStatsDefinitionResponseMessageData) -> Value {
+fn iface_destiny2__get_historical_stats_definition_response_message_data_entry__to_json(p: &iface_destiny2::GetHistoricalStatsDefinitionResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__get_historical_stats_definition_response_response__to_json(p: &iface_destiny2::GetHistoricalStatsDefinitionResponseResponse) -> Value {
+fn iface_destiny2__destiny_historical_stats_definitions_destiny_historical_stats_definition__to_json(p: &iface_destiny2::DestinyHistoricalStatsDefinitionsDestinyHistoricalStatsDefinition) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("group".into(), match (&p.group) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("iconImage".into(), match (&p.icon_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("medalTierHash".into(), match (&p.medal_tier_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("mergeMethod".into(), match (&p.merge_method) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("periodTypes".into(), match (&p.period_types) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("statDescription".into(), match (&p.stat_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statId".into(), match (&p.stat_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statName".into(), match (&p.stat_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statNameAbbr".into(), match (&p.stat_name_abbr) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unitLabel".into(), match (&p.unit_label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unitType".into(), match (&p.unit_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_historical_stats_definition_response_response_entry__to_json(p: &iface_destiny2::GetHistoricalStatsDefinitionResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_definitions_destiny_historical_stats_definition__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1228,21 +1341,46 @@ fn iface_destiny2__get_clan_leaderboards_response__to_json(p: &iface_destiny2::G
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_clan_leaderboards_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__get_clan_leaderboards_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&e.value))).collect()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_clan_leaderboards_response_message_data__to_json(p: &iface_destiny2::GetClanLeaderboardsResponseMessageData) -> Value {
+fn iface_destiny2__get_clan_leaderboards_response_message_data_entry__to_json(p: &iface_destiny2::GetClanLeaderboardsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__get_clan_leaderboards_response_response__to_json(p: &iface_destiny2::GetClanLeaderboardsResponseResponse) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyLeaderboard) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("entries".into(), match (&p.entries) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_historical_stats_destiny_leaderboard_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("statId".into(), match (&p.stat_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_leaderboard_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyLeaderboardEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("characterId".into(), match (&p.character_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("player".into(), match (&p.player) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_clan_leaderboards_response_response_value_entry__to_json(p: &iface_destiny2::GetClanLeaderboardsResponseResponseValueEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_clan_leaderboards_response_response_entry__to_json(p: &iface_destiny2::GetClanLeaderboardsResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&e.value))).collect()));
     Value::Object(m)
 }
 
@@ -1252,21 +1390,30 @@ fn iface_destiny2__get_leaderboards_for_character_response__to_json(p: &iface_de
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_leaderboards_for_character_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__get_leaderboards_for_character_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&e.value))).collect()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_leaderboards_for_character_response_message_data__to_json(p: &iface_destiny2::GetLeaderboardsForCharacterResponseMessageData) -> Value {
+fn iface_destiny2__get_leaderboards_for_character_response_message_data_entry__to_json(p: &iface_destiny2::GetLeaderboardsForCharacterResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__get_leaderboards_for_character_response_response__to_json(p: &iface_destiny2::GetLeaderboardsForCharacterResponseResponse) -> Value {
+fn iface_destiny2__get_leaderboards_for_character_response_response_value_entry__to_json(p: &iface_destiny2::GetLeaderboardsForCharacterResponseResponseValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_leaderboards_for_character_response_response_entry__to_json(p: &iface_destiny2::GetLeaderboardsForCharacterResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&e.value))).collect()));
     Value::Object(m)
 }
 
@@ -1276,15 +1423,16 @@ fn iface_destiny2__get_post_game_carnage_report_response__to_json(p: &iface_dest
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_post_game_carnage_report_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_data__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_post_game_carnage_report_response_message_data__to_json(p: &iface_destiny2::GetPostGameCarnageReportResponseMessageData) -> Value {
+fn iface_destiny2__get_post_game_carnage_report_response_message_data_entry__to_json(p: &iface_destiny2::GetPostGameCarnageReportResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1306,13 +1454,24 @@ fn iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_ent
     m.insert("player".into(), match (&p.player) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("score".into(), match (&p.score) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("standing".into(), match (&p.standing) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_entry_values__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_entry_values__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValues) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("activityId".into(), match (&p.activity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("basic".into(), match (&p.basic) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pga".into(), match (&p.pga) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statId".into(), match (&p.stat_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("weighted".into(), match (&p.weighted) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_entry_values_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValuesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1331,15 +1490,16 @@ fn iface_destiny2__report_offensive_post_game_carnage_report_player_response__to
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__report_offensive_post_game_carnage_report_player_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__report_offensive_post_game_carnage_report_player_response_message_data__to_json(p: &iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageData) -> Value {
+fn iface_destiny2__report_offensive_post_game_carnage_report_player_response_message_data_entry__to_json(p: &iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1349,15 +1509,16 @@ fn iface_destiny2__get_public_vendors_response__to_json(p: &iface_destiny2::GetP
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_public_vendors_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_public_vendors_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_public_vendors_response_message_data__to_json(p: &iface_destiny2::GetPublicVendorsResponseMessageData) -> Value {
+fn iface_destiny2__get_public_vendors_response_message_data_entry__to_json(p: &iface_destiny2::GetPublicVendorsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1377,21 +1538,77 @@ fn iface_destiny2__get_historical_stats_response__to_json(p: &iface_destiny2::Ge
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_historical_stats_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__get_historical_stats_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_historical_stats_response_message_data__to_json(p: &iface_destiny2::GetHistoricalStatsResponseMessageData) -> Value {
+fn iface_destiny2__get_historical_stats_response_message_data_entry__to_json(p: &iface_destiny2::GetHistoricalStatsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__get_historical_stats_response_response__to_json(p: &iface_destiny2::GetHistoricalStatsResponseResponse) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriod) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("allTime".into(), match (&p.all_time) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("allTimeTier1".into(), match (&p.all_time_tier1) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("allTimeTier2".into(), match (&p.all_time_tier2) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("allTimeTier3".into(), match (&p.all_time_tier3) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("daily".into(), match (&p.daily) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("monthly".into(), match (&p.monthly) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier1_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1Entry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier2_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2Entry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier3_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3Entry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("activityDetails".into(), match (&p.activity_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("period".into(), match (&p.period) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group_values_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValuesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_historical_stats_response_response_entry__to_json(p: &iface_destiny2::GetHistoricalStatsResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1401,15 +1618,16 @@ fn iface_destiny2__get_activity_history_response__to_json(p: &iface_destiny2::Ge
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_activity_history_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_activity_history_results__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_activity_history_response_message_data__to_json(p: &iface_destiny2::GetActivityHistoryResponseMessageData) -> Value {
+fn iface_destiny2__get_activity_history_response_message_data_entry__to_json(p: &iface_destiny2::GetActivityHistoryResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1419,35 +1637,22 @@ fn iface_destiny2__destiny_historical_stats_destiny_activity_history_results__to
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroup) -> Value {
-    let mut m = Map::new();
-    m.insert("activityDetails".into(), match (&p.activity_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("period".into(), match (&p.period) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group_values__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group_values__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValues) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
 fn iface_destiny2__get_destiny_aggregate_activity_stats_response__to_json(p: &iface_destiny2::GetDestinyAggregateActivityStatsResponse) -> Value {
     let mut m = Map::new();
     m.insert("DetailedErrorTrace".into(), match (&p.detailed_error_trace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_destiny_aggregate_activity_stats_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_results__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_destiny_aggregate_activity_stats_response_message_data__to_json(p: &iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageData) -> Value {
+fn iface_destiny2__get_destiny_aggregate_activity_stats_response_message_data_entry__to_json(p: &iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1460,13 +1665,14 @@ fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_results__
 fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStats) -> Value {
     let mut m = Map::new();
     m.insert("activityHash".into(), match (&p.activity_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats_values__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats_values__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValues) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats_values_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValuesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1476,15 +1682,16 @@ fn iface_destiny2__get_unique_weapon_history_response__to_json(p: &iface_destiny
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_unique_weapon_history_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_data__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_unique_weapon_history_response_message_data__to_json(p: &iface_destiny2::GetUniqueWeaponHistoryResponseMessageData) -> Value {
+fn iface_destiny2__get_unique_weapon_history_response_message_data_entry__to_json(p: &iface_destiny2::GetUniqueWeaponHistoryResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1497,13 +1704,14 @@ fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_data
 fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStats) -> Value {
     let mut m = Map::new();
     m.insert("referenceId".into(), match (&p.reference_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_values__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_values__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValues) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_values_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValuesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1513,15 +1721,16 @@ fn iface_destiny2__get_historical_stats_for_account_response__to_json(p: &iface_
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_historical_stats_for_account_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_account_result__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_historical_stats_for_account_response_message_data__to_json(p: &iface_destiny2::GetHistoricalStatsForAccountResponseMessageData) -> Value {
+fn iface_destiny2__get_historical_stats_for_account_response_message_data_entry__to_json(p: &iface_destiny2::GetHistoricalStatsForAccountResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1538,61 +1747,28 @@ fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_charact
     m.insert("characterId".into(), match (&p.character_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("deleted".into(), match (&p.deleted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("merged".into(), match (&p.merged) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_character_results__to_json(v), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriod) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_character_results_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResultsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("allTime".into(), match (&p.all_time) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time__to_json(v), None => Value::Null });
-    m.insert("allTimeTier1".into(), match (&p.all_time_tier1) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier1__to_json(v), None => Value::Null });
-    m.insert("allTimeTier2".into(), match (&p.all_time_tier2) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier2__to_json(v), None => Value::Null });
-    m.insert("allTimeTier3".into(), match (&p.all_time_tier3) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier3__to_json(v), None => Value::Null });
-    m.insert("daily".into(), match (&p.daily) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__to_json(v)).collect()), None => Value::Null });
-    m.insert("monthly".into(), match (&p.monthly) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTime) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier1__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier2__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier3__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_character_results__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResults) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(&p.value));
     Value::Object(m)
 }
 
 fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMerged) -> Value {
     let mut m = Map::new();
     m.insert("merged".into(), match (&p.merged) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged_results__to_json(v), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged_results__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResults) -> Value {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged_results_entry__to_json(p: &iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResultsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1602,21 +1778,30 @@ fn iface_destiny2__get_leaderboards_response__to_json(p: &iface_destiny2::GetLea
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_leaderboards_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__get_leaderboards_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&e.value))).collect()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_leaderboards_response_message_data__to_json(p: &iface_destiny2::GetLeaderboardsResponseMessageData) -> Value {
+fn iface_destiny2__get_leaderboards_response_message_data_entry__to_json(p: &iface_destiny2::GetLeaderboardsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__get_leaderboards_response_response__to_json(p: &iface_destiny2::GetLeaderboardsResponseResponse) -> Value {
+fn iface_destiny2__get_leaderboards_response_response_value_entry__to_json(p: &iface_destiny2::GetLeaderboardsResponseResponseValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__get_leaderboards_response_response_entry__to_json(p: &iface_destiny2::GetLeaderboardsResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_historical_stats_destiny_leaderboard__to_json(&e.value))).collect()));
     Value::Object(m)
 }
 
@@ -1626,15 +1811,16 @@ fn iface_destiny2__get_profile_response__to_json(p: &iface_destiny2::GetProfileR
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_profile_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_profile_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_profile_response_message_data__to_json(p: &iface_destiny2::GetProfileResponseMessageData) -> Value {
+fn iface_destiny2__get_profile_response_message_data_entry__to_json(p: &iface_destiny2::GetProfileResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1654,7 +1840,7 @@ fn iface_destiny2__destiny_responses_destiny_profile_response__to_json(p: &iface
     m.insert("characterRecords".into(), match (&p.character_records) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("characterRenderData".into(), match (&p.character_render_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("characterStringVariables".into(), match (&p.character_string_variables) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("characterUninstancedItemComponents".into(), match (&p.character_uninstanced_item_components) { Some(v) => iface_destiny2__destiny_responses_destiny_profile_response_character_uninstanced_item_components__to_json(v), None => Value::Null });
+    m.insert("characterUninstancedItemComponents".into(), match (&p.character_uninstanced_item_components) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_base_item_component_set_ofuint32__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("characters".into(), match (&p.characters) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("itemComponents".into(), match (&p.item_components) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("metrics".into(), match (&p.metrics) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1677,9 +1863,82 @@ fn iface_destiny2__destiny_responses_destiny_profile_response__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_responses_destiny_profile_response_character_uninstanced_item_components__to_json(p: &iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponents) -> Value {
+fn iface_destiny2__destiny_base_item_component_set_ofuint32__to_json(p: &iface_destiny2::DestinyBaseItemComponentSetOfuint32) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("objectives".into(), match (&p.objectives) { Some(v) => iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_objectives_component__to_json(v), None => Value::Null });
+    m.insert("perks".into(), match (&p.perks) { Some(v) => iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_perks_component__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_objectives_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_objectives_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_objectives_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemObjectivesComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("dateCompleted".into(), match (&p.date_completed) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("flavorObjective".into(), match (&p.flavor_objective) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("objectives".into(), match (&p.objectives) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_quests_destiny_objective_progress__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_quests_destiny_objective_progress__to_json(p: &iface_destiny2::DestinyQuestsDestinyObjectiveProgress) -> Value {
+    let mut m = Map::new();
+    m.insert("activityHash".into(), match (&p.activity_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complete".into(), match (&p.complete) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("completionValue".into(), match (&p.completion_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("destinationHash".into(), match (&p.destination_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("objectiveHash".into(), match (&p.objective_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("progress".into(), match (&p.progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("visible".into(), match (&p.visible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_objectives_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_objectives_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_perks_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_perks_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_perks_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemPerksComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("perks".into(), match (&p.perks) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_perks_destiny_perk_reference__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_perks_destiny_perk_reference__to_json(p: &iface_destiny2::DestinyPerksDestinyPerkReference) -> Value {
+    let mut m = Map::new();
+    m.insert("iconPath".into(), match (&p.icon_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isActive".into(), match (&p.is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("perkHash".into(), match (&p.perk_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("visible".into(), match (&p.visible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_perks_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_perks_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_responses_destiny_profile_response_character_uninstanced_item_components_entry__to_json(p: &iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponentsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_base_item_component_set_ofuint32__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1689,15 +1948,16 @@ fn iface_destiny2__get_character_response__to_json(p: &iface_destiny2::GetCharac
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_character_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_character_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_character_response_message_data__to_json(p: &iface_destiny2::GetCharacterResponseMessageData) -> Value {
+fn iface_destiny2__get_character_response_message_data_entry__to_json(p: &iface_destiny2::GetCharacterResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1727,15 +1987,16 @@ fn iface_destiny2__get_collectible_node_details_response__to_json(p: &iface_dest
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_collectible_node_details_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_collectible_node_detail_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_collectible_node_details_response_message_data__to_json(p: &iface_destiny2::GetCollectibleNodeDetailsResponseMessageData) -> Value {
+fn iface_destiny2__get_collectible_node_details_response_message_data_entry__to_json(p: &iface_destiny2::GetCollectibleNodeDetailsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1752,15 +2013,16 @@ fn iface_destiny2__get_vendors_response__to_json(p: &iface_destiny2::GetVendorsR
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_vendors_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_vendors_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_vendors_response_message_data__to_json(p: &iface_destiny2::GetVendorsResponseMessageData) -> Value {
+fn iface_destiny2__get_vendors_response_message_data_entry__to_json(p: &iface_destiny2::GetVendorsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1768,7 +2030,7 @@ fn iface_destiny2__destiny_responses_destiny_vendors_response__to_json(p: &iface
     let mut m = Map::new();
     m.insert("categories".into(), match (&p.categories) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("currencyLookups".into(), match (&p.currency_lookups) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("itemComponents".into(), match (&p.item_components) { Some(v) => iface_destiny2__destiny_responses_destiny_vendors_response_item_components__to_json(v), None => Value::Null });
+    m.insert("itemComponents".into(), match (&p.item_components) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_item_component_set_ofint32__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("sales".into(), match (&p.sales) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("stringVariables".into(), match (&p.string_variables) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vendorGroups".into(), match (&p.vendor_groups) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1776,9 +2038,323 @@ fn iface_destiny2__destiny_responses_destiny_vendors_response__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny_responses_destiny_vendors_response_item_components__to_json(p: &iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponents) -> Value {
+fn iface_destiny2__destiny_item_component_set_ofint32__to_json(p: &iface_destiny2::DestinyItemComponentSetOfint32) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("instances".into(), match (&p.instances) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_instance_component__to_json(v), None => Value::Null });
+    m.insert("objectives".into(), match (&p.objectives) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_objectives_component__to_json(v), None => Value::Null });
+    m.insert("perks".into(), match (&p.perks) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_perks_component__to_json(v), None => Value::Null });
+    m.insert("plugObjectives".into(), match (&p.plug_objectives) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_plug_objectives_component__to_json(v), None => Value::Null });
+    m.insert("plugStates".into(), match (&p.plug_states) { Some(v) => iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_plug_component__to_json(v), None => Value::Null });
+    m.insert("renderData".into(), match (&p.render_data) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_render_component__to_json(v), None => Value::Null });
+    m.insert("reusablePlugs".into(), match (&p.reusable_plugs) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_reusable_plugs_component__to_json(v), None => Value::Null });
+    m.insert("sockets".into(), match (&p.sockets) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_sockets_component__to_json(v), None => Value::Null });
+    m.insert("stats".into(), match (&p.stats) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_stats_component__to_json(v), None => Value::Null });
+    m.insert("talentGrids".into(), match (&p.talent_grids) { Some(v) => iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_talent_grid_component__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_instance_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_instance_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_instance_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemInstanceComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("breakerType".into(), match (&p.breaker_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("breakerTypeHash".into(), match (&p.breaker_type_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("canEquip".into(), match (&p.can_equip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cannotEquipReason".into(), match (&p.cannot_equip_reason) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("damageType".into(), match (&p.damage_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("damageTypeHash".into(), match (&p.damage_type_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("energy".into(), match (&p.energy) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("equipRequiredLevel".into(), match (&p.equip_required_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isEquipped".into(), match (&p.is_equipped) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("itemLevel".into(), match (&p.item_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("primaryStat".into(), match (&p.primary_stat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("quality".into(), match (&p.quality) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unlockHashesRequiredToEquip".into(), match (&p.unlock_hashes_required_to_equip) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_instance_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_instance_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_objectives_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_objectives_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_objectives_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_objectives_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_perks_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_perks_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_perks_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_perks_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_plug_objectives_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component__to_json(p: &iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("objectivesPerPlug".into(), match (&p.objectives_per_plug) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| iface_destiny2__destiny_quests_destiny_objective_progress__to_json(v)).collect()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component_objectives_per_plug_entry__to_json(p: &iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponentObjectivesPerPlugEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| iface_destiny2__destiny_quests_destiny_objective_progress__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_plug_objectives_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_plug_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_components_items_destiny_item_plug_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_plug_component__to_json(p: &iface_destiny2::DestinyComponentsItemsDestinyItemPlugComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("canInsert".into(), match (&p.can_insert) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("enableFailIndexes".into(), match (&p.enable_fail_indexes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("insertFailIndexes".into(), match (&p.insert_fail_indexes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("plugItemHash".into(), match (&p.plug_item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("plugObjectives".into(), match (&p.plug_objectives) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_quests_destiny_objective_progress__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_plug_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_components_items_destiny_item_plug_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_render_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_render_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_render_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("artRegions".into(), match (&p.art_regions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()), None => Value::Null });
+    m.insert("useCustomDyes".into(), match (&p.use_custom_dyes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_render_component_art_regions_entry__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponentArtRegionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_render_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_render_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_reusable_plugs_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component__to_json(p: &iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("plugs".into(), match (&p.plugs) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| iface_destiny2__destiny_sockets_destiny_item_plug_base__to_json(v)).collect()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_sockets_destiny_item_plug_base__to_json(p: &iface_destiny2::DestinySocketsDestinyItemPlugBase) -> Value {
+    let mut m = Map::new();
+    m.insert("canInsert".into(), match (&p.can_insert) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("enableFailIndexes".into(), match (&p.enable_fail_indexes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("insertFailIndexes".into(), match (&p.insert_fail_indexes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("plugItemHash".into(), match (&p.plug_item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component_plugs_entry__to_json(p: &iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponentPlugsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| iface_destiny2__destiny_sockets_destiny_item_plug_base__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_reusable_plugs_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_sockets_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_sockets_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_sockets_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemSocketsComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("sockets".into(), match (&p.sockets) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_entities_items_destiny_item_socket_state__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_socket_state__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemSocketState) -> Value {
+    let mut m = Map::new();
+    m.insert("enableFailIndexes".into(), match (&p.enable_fail_indexes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("isEnabled".into(), match (&p.is_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isVisible".into(), match (&p.is_visible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("plugHash".into(), match (&p.plug_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_sockets_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_sockets_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_stats_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_stats_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_stats_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("stats".into(), match (&p.stats) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_destiny_stat__to_json(&e.value))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_destiny_stat__to_json(p: &iface_destiny2::DestinyDestinyStat) -> Value {
+    let mut m = Map::new();
+    m.insert("statHash".into(), match (&p.stat_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_stats_component_stats_entry__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponentStatsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_destiny_stat__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_stats_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_stats_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_talent_grid_component__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_destiny2__destiny_entities_items_destiny_item_talent_grid_component__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("privacy".into(), match (&p.privacy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_talent_grid_component__to_json(p: &iface_destiny2::DestinyEntitiesItemsDestinyItemTalentGridComponent) -> Value {
+    let mut m = Map::new();
+    m.insert("gridProgression".into(), match (&p.grid_progression) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isGridComplete".into(), match (&p.is_grid_complete) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("nodes".into(), match (&p.nodes) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_destiny_talent_node__to_json(v)).collect()), None => Value::Null });
+    m.insert("talentGridHash".into(), match (&p.talent_grid_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_destiny_talent_node__to_json(p: &iface_destiny2::DestinyDestinyTalentNode) -> Value {
+    let mut m = Map::new();
+    m.insert("activationGridLevel".into(), match (&p.activation_grid_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hidden".into(), match (&p.hidden) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isActivated".into(), match (&p.is_activated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("materialsToUpgrade".into(), match (&p.materials_to_upgrade) { Some(v) => Value::Array((v).iter().map(|v| iface_destiny2__destiny_definitions_destiny_material_requirement__to_json(v)).collect()), None => Value::Null });
+    m.insert("nodeHash".into(), match (&p.node_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("nodeIndex".into(), match (&p.node_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("nodeStatsBlock".into(), match (&p.node_stats_block) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("progressPercent".into(), match (&p.progress_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("stepIndex".into(), match (&p.step_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_definitions_destiny_material_requirement__to_json(p: &iface_destiny2::DestinyDefinitionsDestinyMaterialRequirement) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("countIsConstant".into(), match (&p.count_is_constant) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("deleteOnAction".into(), match (&p.delete_on_action) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("itemHash".into(), match (&p.item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("omitFromRequirements".into(), match (&p.omit_from_requirements) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_talent_grid_component_data_entry__to_json(p: &iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponentDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_entities_items_destiny_item_talent_grid_component__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_destiny2__destiny_responses_destiny_vendors_response_item_components_entry__to_json(p: &iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponentsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_destiny2__destiny_item_component_set_ofint32__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -1788,15 +2364,16 @@ fn iface_destiny2__get_vendor_response__to_json(p: &iface_destiny2::GetVendorRes
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_vendor_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_vendor_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_vendor_response_message_data__to_json(p: &iface_destiny2::GetVendorResponseMessageData) -> Value {
+fn iface_destiny2__get_vendor_response_message_data_entry__to_json(p: &iface_destiny2::GetVendorResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1817,15 +2394,16 @@ fn iface_destiny2__get_item_response__to_json(p: &iface_destiny2::GetItemRespons
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_item_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_item_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_item_response_message_data__to_json(p: &iface_destiny2::GetItemResponseMessageData) -> Value {
+fn iface_destiny2__get_item_response_message_data_entry__to_json(p: &iface_destiny2::GetItemResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1835,15 +2413,16 @@ fn iface_destiny2__get_linked_profiles_response__to_json(p: &iface_destiny2::Get
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_destiny2__get_linked_profiles_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_destiny2__destiny_responses_destiny_linked_profiles_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__get_linked_profiles_response_message_data__to_json(p: &iface_destiny2::GetLinkedProfilesResponseMessageData) -> Value {
+fn iface_destiny2__get_linked_profiles_response_message_data_entry__to_json(p: &iface_destiny2::GetLinkedProfilesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2095,16 +2674,17 @@ fn iface_destiny2__equip_item_response__from_json(v: &Value) -> Option<iface_des
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__equip_item_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::EquipItemResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__equip_item_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::EquipItemResponseMessageData> {
+fn iface_destiny2__equip_item_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::EquipItemResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::EquipItemResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::EquipItemResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2115,16 +2695,17 @@ fn iface_destiny2__equip_items_response__from_json(v: &Value) -> Option<iface_de
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__equip_items_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::EquipItemsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_destiny_equip_item_results__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__equip_items_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::EquipItemsResponseMessageData> {
+fn iface_destiny2__equip_items_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::EquipItemsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::EquipItemsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::EquipItemsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2150,16 +2731,17 @@ fn iface_destiny2__insert_socket_plug_response__from_json(v: &Value) -> Option<i
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__insert_socket_plug_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::InsertSocketPlugResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_item_change_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__insert_socket_plug_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::InsertSocketPlugResponseMessageData> {
+fn iface_destiny2__insert_socket_plug_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::InsertSocketPlugResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::InsertSocketPlugResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::InsertSocketPlugResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2219,16 +2801,17 @@ fn iface_destiny2__insert_socket_plug_free_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__insert_socket_plug_free_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::InsertSocketPlugFreeResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_item_change_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__insert_socket_plug_free_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::InsertSocketPlugFreeResponseMessageData> {
+fn iface_destiny2__insert_socket_plug_free_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::InsertSocketPlugFreeResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::InsertSocketPlugFreeResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::InsertSocketPlugFreeResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2239,16 +2822,17 @@ fn iface_destiny2__pull_from_postmaster_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__pull_from_postmaster_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::PullFromPostmasterResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__pull_from_postmaster_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::PullFromPostmasterResponseMessageData> {
+fn iface_destiny2__pull_from_postmaster_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::PullFromPostmasterResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::PullFromPostmasterResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::PullFromPostmasterResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2259,16 +2843,17 @@ fn iface_destiny2__set_item_lock_state_response__from_json(v: &Value) -> Option<
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__set_item_lock_state_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::SetItemLockStateResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__set_item_lock_state_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::SetItemLockStateResponseMessageData> {
+fn iface_destiny2__set_item_lock_state_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::SetItemLockStateResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::SetItemLockStateResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::SetItemLockStateResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2279,16 +2864,17 @@ fn iface_destiny2__set_quest_tracked_state_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__set_quest_tracked_state_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::SetQuestTrackedStateResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__set_quest_tracked_state_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::SetQuestTrackedStateResponseMessageData> {
+fn iface_destiny2__set_quest_tracked_state_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::SetQuestTrackedStateResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::SetQuestTrackedStateResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::SetQuestTrackedStateResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2299,16 +2885,17 @@ fn iface_destiny2__transfer_item_response__from_json(v: &Value) -> Option<iface_
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__transfer_item_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::TransferItemResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__transfer_item_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::TransferItemResponseMessageData> {
+fn iface_destiny2__transfer_item_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::TransferItemResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::TransferItemResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::TransferItemResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2319,16 +2906,17 @@ fn iface_destiny2__clear_loadout_response__from_json(v: &Value) -> Option<iface_
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__clear_loadout_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::ClearLoadoutResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__clear_loadout_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::ClearLoadoutResponseMessageData> {
+fn iface_destiny2__clear_loadout_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::ClearLoadoutResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::ClearLoadoutResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::ClearLoadoutResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2339,16 +2927,17 @@ fn iface_destiny2__equip_loadout_response__from_json(v: &Value) -> Option<iface_
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__equip_loadout_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::EquipLoadoutResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__equip_loadout_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::EquipLoadoutResponseMessageData> {
+fn iface_destiny2__equip_loadout_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::EquipLoadoutResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::EquipLoadoutResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::EquipLoadoutResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2359,16 +2948,17 @@ fn iface_destiny2__snapshot_loadout_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__snapshot_loadout_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::SnapshotLoadoutResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__snapshot_loadout_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::SnapshotLoadoutResponseMessageData> {
+fn iface_destiny2__snapshot_loadout_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::SnapshotLoadoutResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::SnapshotLoadoutResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::SnapshotLoadoutResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2379,16 +2969,17 @@ fn iface_destiny2__update_loadout_identifiers_response__from_json(v: &Value) -> 
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__update_loadout_identifiers_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::UpdateLoadoutIdentifiersResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__update_loadout_identifiers_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::UpdateLoadoutIdentifiersResponseMessageData> {
+fn iface_destiny2__update_loadout_identifiers_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::UpdateLoadoutIdentifiersResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::UpdateLoadoutIdentifiersResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::UpdateLoadoutIdentifiersResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2399,16 +2990,17 @@ fn iface_destiny2__search_destiny_entities_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__search_destiny_entities_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::SearchDestinyEntitiesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_definitions_destiny_entity_search_result__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__search_destiny_entities_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::SearchDestinyEntitiesResponseMessageData> {
+fn iface_destiny2__search_destiny_entities_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::SearchDestinyEntitiesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::SearchDestinyEntitiesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::SearchDestinyEntitiesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2427,16 +3019,17 @@ fn iface_destiny2__awa_provide_authorization_result_response__from_json(v: &Valu
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__awa_provide_authorization_result_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::AwaProvideAuthorizationResultResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__awa_provide_authorization_result_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::AwaProvideAuthorizationResultResponseMessageData> {
+fn iface_destiny2__awa_provide_authorization_result_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::AwaProvideAuthorizationResultResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::AwaProvideAuthorizationResultResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::AwaProvideAuthorizationResultResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2447,16 +3040,17 @@ fn iface_destiny2__awa_get_action_token_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__awa_get_action_token_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::AwaGetActionTokenResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_advanced_awa_authorization_result__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__awa_get_action_token_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::AwaGetActionTokenResponseMessageData> {
+fn iface_destiny2__awa_get_action_token_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::AwaGetActionTokenResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::AwaGetActionTokenResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::AwaGetActionTokenResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2481,16 +3075,17 @@ fn iface_destiny2__awa_initialize_request_response__from_json(v: &Value) -> Opti
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__awa_initialize_request_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::AwaInitializeRequestResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_advanced_awa_initialize_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__awa_initialize_request_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::AwaInitializeRequestResponseMessageData> {
+fn iface_destiny2__awa_initialize_request_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::AwaInitializeRequestResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::AwaInitializeRequestResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::AwaInitializeRequestResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2509,23 +3104,25 @@ fn iface_destiny2__get_clan_banner_source_response__from_json(v: &Value) -> Opti
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_clan_banner_source_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__config_clan_banner_clan_banner_source__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetClanBannerSourceResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::ConfigClanBannerClanBannerSourceEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_clan_banner_source_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetClanBannerSourceResponseMessageData> {
+fn iface_destiny2__get_clan_banner_source_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetClanBannerSourceResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetClanBannerSourceResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetClanBannerSourceResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__config_clan_banner_clan_banner_source__from_json(v: &Value) -> Option<iface_destiny2::ConfigClanBannerClanBannerSource> {
+fn iface_destiny2__config_clan_banner_clan_banner_source_entry__from_json(v: &Value) -> Option<iface_destiny2::ConfigClanBannerClanBannerSourceEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::ConfigClanBannerClanBannerSource {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::ConfigClanBannerClanBannerSourceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2536,16 +3133,17 @@ fn iface_destiny2__get_clan_weekly_reward_state_response__from_json(v: &Value) -
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_clan_weekly_reward_state_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetClanWeeklyRewardStateResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_milestones_destiny_milestone__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_clan_weekly_reward_state_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetClanWeeklyRewardStateResponseMessageData> {
+fn iface_destiny2__get_clan_weekly_reward_state_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetClanWeeklyRewardStateResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetClanWeeklyRewardStateResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetClanWeeklyRewardStateResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2559,7 +3157,7 @@ fn iface_destiny2__destiny_milestones_destiny_milestone__from_json(v: &Value) ->
         order: m.get("order").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         rewards: m.get("rewards").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_milestones_destiny_milestone_reward_category__from_json(x)).collect())),
         start_date: m.get("startDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_milestones_destiny_milestone_values__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_f64()).map(|val| iface_destiny2::DestinyMilestonesDestinyMilestoneValuesEntry { key: k.clone(), value: val })).collect())),
         vendor_hashes: m.get("vendorHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
         vendors: m.get("vendors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_milestones_destiny_milestone_vendor__from_json(x)).collect())),
     })
@@ -2569,7 +3167,7 @@ fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity__from
     let m = v.as_object()?;
     Some(iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivity {
         activity_hash: m.get("activityHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        boolean_activity_options: m.get("booleanActivityOptions").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity_boolean_activity_options__from_json(v)),
+        boolean_activity_options: m.get("booleanActivityOptions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_bool()).map(|val| iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptionsEntry { key: k.clone(), value: val })).collect())),
         challenges: m.get("challenges").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_challenges_destiny_challenge_status__from_json(x)).collect())),
         loadout_requirement_index: m.get("loadoutRequirementIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         modifier_hashes: m.get("modifierHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
@@ -2577,10 +3175,11 @@ fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity__from
     })
 }
 
-fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity_boolean_activity_options__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptions> {
+fn iface_destiny2__destiny_milestones_destiny_milestone_challenge_activity_boolean_activity_options_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyMilestonesDestinyMilestoneChallengeActivityBooleanActivityOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -2626,10 +3225,11 @@ fn iface_destiny2__destiny_milestones_destiny_milestone_reward_entry__from_json(
     })
 }
 
-fn iface_destiny2__destiny_milestones_destiny_milestone_values__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyMilestoneValues> {
+fn iface_destiny2__destiny_milestones_destiny_milestone_values_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyMilestoneValuesEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyMilestonesDestinyMilestoneValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyMilestonesDestinyMilestoneValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
     })
 }
 
@@ -2648,16 +3248,17 @@ fn iface_destiny2__get_destiny_manifest_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_destiny_manifest_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetDestinyManifestResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_config_destiny_manifest__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_destiny_manifest_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyManifestResponseMessageData> {
+fn iface_destiny2__get_destiny_manifest_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyManifestResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetDestinyManifestResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetDestinyManifestResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2665,13 +3266,13 @@ fn iface_destiny2__destiny_config_destiny_manifest__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_destiny2::DestinyConfigDestinyManifest {
         icon_image_pyramid_info: m.get("iconImagePyramidInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_config_image_pyramid_entry__from_json(x)).collect())),
-        json_world_component_content_paths: m.get("jsonWorldComponentContentPaths").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths__from_json(v)),
-        json_world_content_paths: m.get("jsonWorldContentPaths").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_config_destiny_manifest_json_world_content_paths__from_json(v)),
+        json_world_component_content_paths: m.get("jsonWorldComponentContentPaths").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsEntry { key: k.clone(), value: val })).collect())),
+        json_world_content_paths: m.get("jsonWorldContentPaths").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPathsEntry { key: k.clone(), value: val })).collect())),
         mobile_asset_content_path: m.get("mobileAssetContentPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         mobile_clan_banner_database_path: m.get("mobileClanBannerDatabasePath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         mobile_gear_asset_data_bases: m.get("mobileGearAssetDataBases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_config_gear_asset_data_base_definition__from_json(x)).collect())),
-        mobile_gear_cdn: m.get("mobileGearCDN").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_config_destiny_manifest_mobile_gear_cdn__from_json(v)),
-        mobile_world_content_paths: m.get("mobileWorldContentPaths").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_config_destiny_manifest_mobile_world_content_paths__from_json(v)),
+        mobile_gear_cdn: m.get("mobileGearCDN").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::DestinyConfigDestinyManifestMobileGearCdnEntry { key: k.clone(), value: val })).collect())),
+        mobile_world_content_paths: m.get("mobileWorldContentPaths").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPathsEntry { key: k.clone(), value: val })).collect())),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -2684,17 +3285,27 @@ fn iface_destiny2__destiny_config_image_pyramid_entry__from_json(v: &Value) -> O
     })
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPaths> {
+fn iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths_value_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsValueEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPaths {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_json_world_content_paths__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPaths> {
+fn iface_destiny2__destiny_config_destiny_manifest_json_world_component_content_paths_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPaths {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::DestinyConfigDestinyManifestJsonWorldComponentContentPathsValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_destiny2__destiny_config_destiny_manifest_json_world_content_paths_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPathsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyConfigDestinyManifestJsonWorldContentPathsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2706,17 +3317,19 @@ fn iface_destiny2__destiny_config_gear_asset_data_base_definition__from_json(v: 
     })
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_mobile_gear_cdn__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestMobileGearCdn> {
+fn iface_destiny2__destiny_config_destiny_manifest_mobile_gear_cdn_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestMobileGearCdnEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyConfigDestinyManifestMobileGearCdn {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyConfigDestinyManifestMobileGearCdnEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__destiny_config_destiny_manifest_mobile_world_content_paths__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPaths> {
+fn iface_destiny2__destiny_config_destiny_manifest_mobile_world_content_paths_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPathsEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPaths {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyConfigDestinyManifestMobileWorldContentPathsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2727,16 +3340,17 @@ fn iface_destiny2__get_destiny_entity_definition_response__from_json(v: &Value) 
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_destiny_entity_definition_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetDestinyEntityDefinitionResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_definitions_destiny_definition__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_destiny_entity_definition_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyEntityDefinitionResponseMessageData> {
+fn iface_destiny2__get_destiny_entity_definition_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyEntityDefinitionResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetDestinyEntityDefinitionResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetDestinyEntityDefinitionResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2756,23 +3370,84 @@ fn iface_destiny2__get_public_milestones_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_public_milestones_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_public_milestones_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetPublicMilestonesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_milestones_destiny_public_milestone__from_json(x)).map(|val| iface_destiny2::GetPublicMilestonesResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_public_milestones_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetPublicMilestonesResponseMessageData> {
+fn iface_destiny2__get_public_milestones_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetPublicMilestonesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetPublicMilestonesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetPublicMilestonesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__get_public_milestones_response_response__from_json(v: &Value) -> Option<iface_destiny2::GetPublicMilestonesResponseResponse> {
+fn iface_destiny2__destiny_milestones_destiny_public_milestone__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyPublicMilestone> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetPublicMilestonesResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyMilestonesDestinyPublicMilestone {
+        activities: m.get("activities").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_milestones_destiny_public_milestone_challenge_activity__from_json(x)).collect())),
+        available_quests: m.get("availableQuests").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_milestones_destiny_public_milestone_quest__from_json(x)).collect())),
+        end_date: m.get("endDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        milestone_hash: m.get("milestoneHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        order: m.get("order").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        start_date: m.get("startDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vendor_hashes: m.get("vendorHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        vendors: m.get("vendors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_milestones_destiny_public_milestone_vendor__from_json(x)).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_challenge_activity__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivity> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivity {
+        activity_hash: m.get("activityHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        boolean_activity_options: m.get("booleanActivityOptions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_bool()).map(|val| iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivityBooleanActivityOptionsEntry { key: k.clone(), value: val })).collect())),
+        challenge_objective_hashes: m.get("challengeObjectiveHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        loadout_requirement_index: m.get("loadoutRequirementIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        modifier_hashes: m.get("modifierHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        phase_hashes: m.get("phaseHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_challenge_activity_boolean_activity_options_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivityBooleanActivityOptionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallengeActivityBooleanActivityOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_quest__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyPublicMilestoneQuest> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyMilestonesDestinyPublicMilestoneQuest {
+        activity: m.get("activity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        challenges: m.get("challenges").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_milestones_destiny_public_milestone_challenge__from_json(x)).collect())),
+        quest_item_hash: m.get("questItemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_challenge__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallenge> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyMilestonesDestinyPublicMilestoneChallenge {
+        activity_hash: m.get("activityHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        objective_hash: m.get("objectiveHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_milestones_destiny_public_milestone_vendor__from_json(v: &Value) -> Option<iface_destiny2::DestinyMilestonesDestinyPublicMilestoneVendor> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyMilestonesDestinyPublicMilestoneVendor {
+        preview_item_hash: m.get("previewItemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        vendor_hash: m.get("vendorHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__get_public_milestones_response_response_entry__from_json(v: &Value) -> Option<iface_destiny2::GetPublicMilestonesResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetPublicMilestonesResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_milestones_destiny_public_milestone__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -2783,16 +3458,17 @@ fn iface_destiny2__get_public_milestone_content_response__from_json(v: &Value) -
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_public_milestone_content_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetPublicMilestoneContentResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_milestones_destiny_milestone_content__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_public_milestone_content_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetPublicMilestoneContentResponseMessageData> {
+fn iface_destiny2__get_public_milestone_content_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetPublicMilestoneContentResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetPublicMilestoneContentResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetPublicMilestoneContentResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2821,16 +3497,17 @@ fn iface_destiny2__search_destiny_player_by_bungie_name_response__from_json(v: &
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__search_destiny_player_by_bungie_name_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__user_user_info_card__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__search_destiny_player_by_bungie_name_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageData> {
+fn iface_destiny2__search_destiny_player_by_bungie_name_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::SearchDestinyPlayerByBungieNameResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2857,16 +3534,17 @@ fn iface_destiny2__get_clan_aggregate_stats_response__from_json(v: &Value) -> Op
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_clan_aggregate_stats_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetClanAggregateStatsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_historical_stats_destiny_clan_aggregate_stat__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_clan_aggregate_stats_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetClanAggregateStatsResponseMessageData> {
+fn iface_destiny2__get_clan_aggregate_stats_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetClanAggregateStatsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetClanAggregateStatsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetClanAggregateStatsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2886,23 +3564,45 @@ fn iface_destiny2__get_historical_stats_definition_response__from_json(v: &Value
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_historical_stats_definition_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_historical_stats_definition_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetHistoricalStatsDefinitionResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_definitions_destiny_historical_stats_definition__from_json(x)).map(|val| iface_destiny2::GetHistoricalStatsDefinitionResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_historical_stats_definition_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsDefinitionResponseMessageData> {
+fn iface_destiny2__get_historical_stats_definition_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsDefinitionResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetHistoricalStatsDefinitionResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetHistoricalStatsDefinitionResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__get_historical_stats_definition_response_response__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsDefinitionResponseResponse> {
+fn iface_destiny2__destiny_historical_stats_definitions_destiny_historical_stats_definition__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDefinitionsDestinyHistoricalStatsDefinition> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetHistoricalStatsDefinitionResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDefinitionsDestinyHistoricalStatsDefinition {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        group: m.get("group").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        icon_image: m.get("iconImage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        medal_tier_hash: m.get("medalTierHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        merge_method: m.get("mergeMethod").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modes: m.get("modes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        period_types: m.get("periodTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        stat_description: m.get("statDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stat_id: m.get("statId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stat_name: m.get("statName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stat_name_abbr: m.get("statNameAbbr").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unit_label: m.get("unitLabel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unit_type: m.get("unitType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weight: m.get("weight").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__get_historical_stats_definition_response_response_entry__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsDefinitionResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetHistoricalStatsDefinitionResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_definitions_destiny_historical_stats_definition__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -2913,23 +3613,51 @@ fn iface_destiny2__get_clan_leaderboards_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_clan_leaderboards_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_clan_leaderboards_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetClanLeaderboardsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(x)).map(|val| iface_destiny2::GetClanLeaderboardsResponseResponseValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_destiny2::GetClanLeaderboardsResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_clan_leaderboards_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetClanLeaderboardsResponseMessageData> {
+fn iface_destiny2__get_clan_leaderboards_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetClanLeaderboardsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetClanLeaderboardsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetClanLeaderboardsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__get_clan_leaderboards_response_response__from_json(v: &Value) -> Option<iface_destiny2::GetClanLeaderboardsResponseResponse> {
+fn iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyLeaderboard> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetClanLeaderboardsResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyLeaderboard {
+        entries: m.get("entries").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_historical_stats_destiny_leaderboard_entry__from_json(x)).collect())),
+        stat_id: m.get("statId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_leaderboard_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyLeaderboardEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyLeaderboardEntry {
+        character_id: m.get("characterId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        player: m.get("player").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_destiny2__get_clan_leaderboards_response_response_value_entry__from_json(v: &Value) -> Option<iface_destiny2::GetClanLeaderboardsResponseResponseValueEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetClanLeaderboardsResponseResponseValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__get_clan_leaderboards_response_response_entry__from_json(v: &Value) -> Option<iface_destiny2::GetClanLeaderboardsResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetClanLeaderboardsResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(x)).map(|val| iface_destiny2::GetClanLeaderboardsResponseResponseValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
@@ -2940,23 +3668,33 @@ fn iface_destiny2__get_leaderboards_for_character_response__from_json(v: &Value)
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_leaderboards_for_character_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_leaderboards_for_character_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetLeaderboardsForCharacterResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(x)).map(|val| iface_destiny2::GetLeaderboardsForCharacterResponseResponseValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_destiny2::GetLeaderboardsForCharacterResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_leaderboards_for_character_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsForCharacterResponseMessageData> {
+fn iface_destiny2__get_leaderboards_for_character_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsForCharacterResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetLeaderboardsForCharacterResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetLeaderboardsForCharacterResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__get_leaderboards_for_character_response_response__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsForCharacterResponseResponse> {
+fn iface_destiny2__get_leaderboards_for_character_response_response_value_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsForCharacterResponseResponseValueEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetLeaderboardsForCharacterResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetLeaderboardsForCharacterResponseResponseValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__get_leaderboards_for_character_response_response_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsForCharacterResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetLeaderboardsForCharacterResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(x)).map(|val| iface_destiny2::GetLeaderboardsForCharacterResponseResponseValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
@@ -2967,16 +3705,17 @@ fn iface_destiny2__get_post_game_carnage_report_response__from_json(v: &Value) -
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_post_game_carnage_report_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetPostGameCarnageReportResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_data__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_post_game_carnage_report_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetPostGameCarnageReportResponseMessageData> {
+fn iface_destiny2__get_post_game_carnage_report_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetPostGameCarnageReportResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetPostGameCarnageReportResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetPostGameCarnageReportResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3000,14 +3739,26 @@ fn iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_ent
         player: m.get("player").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         standing: m.get("standing").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_entry_values__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValuesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_entry_values__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValues> {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsValue> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsValue {
+        activity_id: m.get("activityId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        basic: m.get("basic").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pga: m.get("pga").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stat_id: m.get("statId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        weighted: m.get("weighted").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_post_game_carnage_report_entry_values_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValuesEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyPostGameCarnageReportEntryValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3028,16 +3779,17 @@ fn iface_destiny2__report_offensive_post_game_carnage_report_player_response__fr
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__report_offensive_post_game_carnage_report_player_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__report_offensive_post_game_carnage_report_player_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageData> {
+fn iface_destiny2__report_offensive_post_game_carnage_report_player_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::ReportOffensivePostGameCarnageReportPlayerResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3048,16 +3800,17 @@ fn iface_destiny2__get_public_vendors_response__from_json(v: &Value) -> Option<i
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_public_vendors_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetPublicVendorsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_public_vendors_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_public_vendors_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetPublicVendorsResponseMessageData> {
+fn iface_destiny2__get_public_vendors_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetPublicVendorsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetPublicVendorsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetPublicVendorsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3079,23 +3832,86 @@ fn iface_destiny2__get_historical_stats_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_historical_stats_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_historical_stats_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetHistoricalStatsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(x)).map(|val| iface_destiny2::GetHistoricalStatsResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_historical_stats_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsResponseMessageData> {
+fn iface_destiny2__get_historical_stats_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetHistoricalStatsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetHistoricalStatsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__get_historical_stats_response_response__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsResponseResponse> {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriod> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetHistoricalStatsResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriod {
+        all_time: m.get("allTime").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeEntry { key: k.clone(), value: val })).collect())),
+        all_time_tier1: m.get("allTimeTier1").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1Entry { key: k.clone(), value: val })).collect())),
+        all_time_tier2: m.get("allTimeTier2").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2Entry { key: k.clone(), value: val })).collect())),
+        all_time_tier3: m.get("allTimeTier3").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3Entry { key: k.clone(), value: val })).collect())),
+        daily: m.get("daily").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__from_json(x)).collect())),
+        monthly: m.get("monthly").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__from_json(x)).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier1_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1Entry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1Entry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier2_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2Entry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2Entry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier3_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3Entry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3Entry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroup> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroup {
+        activity_details: m.get("activityDetails").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        period: m.get("period").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValuesEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group_values_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValuesEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__get_historical_stats_response_response_entry__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetHistoricalStatsResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3106,16 +3922,17 @@ fn iface_destiny2__get_activity_history_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_activity_history_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetActivityHistoryResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_activity_history_results__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_activity_history_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetActivityHistoryResponseMessageData> {
+fn iface_destiny2__get_activity_history_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetActivityHistoryResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetActivityHistoryResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetActivityHistoryResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3126,22 +3943,6 @@ fn iface_destiny2__destiny_historical_stats_destiny_activity_history_results__fr
     })
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroup> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroup {
-        activity_details: m.get("activityDetails").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        period: m.get("period").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group_values__from_json(v)),
-    })
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group_values__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValues> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPeriodGroupValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
 fn iface_destiny2__get_destiny_aggregate_activity_stats_response__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyAggregateActivityStatsResponse> {
     let m = v.as_object()?;
     Some(iface_destiny2::GetDestinyAggregateActivityStatsResponse {
@@ -3149,16 +3950,17 @@ fn iface_destiny2__get_destiny_aggregate_activity_stats_response__from_json(v: &
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_destiny_aggregate_activity_stats_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_results__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_destiny_aggregate_activity_stats_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageData> {
+fn iface_destiny2__get_destiny_aggregate_activity_stats_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetDestinyAggregateActivityStatsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3173,14 +3975,15 @@ fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats__fr
     let m = v.as_object()?;
     Some(iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStats {
         activity_hash: m.get("activityHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats_values__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValuesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats_values__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValues> {
+fn iface_destiny2__destiny_historical_stats_destiny_aggregate_activity_stats_values_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValuesEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyAggregateActivityStatsValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3191,16 +3994,17 @@ fn iface_destiny2__get_unique_weapon_history_response__from_json(v: &Value) -> O
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_unique_weapon_history_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetUniqueWeaponHistoryResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_data__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_unique_weapon_history_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetUniqueWeaponHistoryResponseMessageData> {
+fn iface_destiny2__get_unique_weapon_history_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetUniqueWeaponHistoryResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetUniqueWeaponHistoryResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetUniqueWeaponHistoryResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3215,14 +4019,15 @@ fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats__fro
     let m = v.as_object()?;
     Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStats {
         reference_id: m.get("referenceId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_values__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValuesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_values__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValues> {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_weapon_stats_values_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValuesEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalWeaponStatsValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3233,16 +4038,17 @@ fn iface_destiny2__get_historical_stats_for_account_response__from_json(v: &Valu
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_historical_stats_for_account_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetHistoricalStatsForAccountResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_account_result__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_historical_stats_for_account_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsForAccountResponseMessageData> {
+fn iface_destiny2__get_historical_stats_for_account_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetHistoricalStatsForAccountResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetHistoricalStatsForAccountResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetHistoricalStatsForAccountResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3261,54 +4067,15 @@ fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_charact
         character_id: m.get("characterId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         deleted: m.get("deleted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         merged: m.get("merged").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_character_results__from_json(v)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResultsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriod> {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_character_results_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResultsEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriod {
-        all_time: m.get("allTime").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time__from_json(v)),
-        all_time_tier1: m.get("allTimeTier1").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier1__from_json(v)),
-        all_time_tier2: m.get("allTimeTier2").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier2__from_json(v)),
-        all_time_tier3: m.get("allTimeTier3").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier3__from_json(v)),
-        daily: m.get("daily").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__from_json(x)).collect())),
-        monthly: m.get("monthly").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_historical_stats_destiny_historical_stats_period_group__from_json(x)).collect())),
-    })
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTime> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTime {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier1__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier1 {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier2__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier2 {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period_all_time_tier3__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsByPeriodAllTimeTier3 {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_per_character_results__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResults> {
-    let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResults {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsPerCharacterResultsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3316,14 +4083,15 @@ fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged
     let m = v.as_object()?;
     Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMerged {
         merged: m.get("merged").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged_results__from_json(v)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(x)).map(|val| iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResultsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged_results__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResults> {
+fn iface_destiny2__destiny_historical_stats_destiny_historical_stats_with_merged_results_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResultsEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResults {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyHistoricalStatsDestinyHistoricalStatsWithMergedResultsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_historical_stats_by_period__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3334,23 +4102,33 @@ fn iface_destiny2__get_leaderboards_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_leaderboards_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_leaderboards_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetLeaderboardsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(x)).map(|val| iface_destiny2::GetLeaderboardsResponseResponseValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_destiny2::GetLeaderboardsResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_leaderboards_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsResponseMessageData> {
+fn iface_destiny2__get_leaderboards_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetLeaderboardsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetLeaderboardsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_destiny2__get_leaderboards_response_response__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsResponseResponse> {
+fn iface_destiny2__get_leaderboards_response_response_value_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsResponseResponseValueEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetLeaderboardsResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetLeaderboardsResponseResponseValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__get_leaderboards_response_response_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLeaderboardsResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::GetLeaderboardsResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_historical_stats_destiny_leaderboard__from_json(x)).map(|val| iface_destiny2::GetLeaderboardsResponseResponseValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
@@ -3361,16 +4139,17 @@ fn iface_destiny2__get_profile_response__from_json(v: &Value) -> Option<iface_de
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_profile_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetProfileResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_profile_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_profile_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetProfileResponseMessageData> {
+fn iface_destiny2__get_profile_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetProfileResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetProfileResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetProfileResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3391,7 +4170,7 @@ fn iface_destiny2__destiny_responses_destiny_profile_response__from_json(v: &Val
         character_records: m.get("characterRecords").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         character_render_data: m.get("characterRenderData").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         character_string_variables: m.get("characterStringVariables").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        character_uninstanced_item_components: m.get("characterUninstancedItemComponents").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_profile_response_character_uninstanced_item_components__from_json(v)),
+        character_uninstanced_item_components: m.get("characterUninstancedItemComponents").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_base_item_component_set_ofuint32__from_json(x)).map(|val| iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponentsEntry { key: k.clone(), value: val })).collect())),
         characters: m.get("characters").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         item_components: m.get("itemComponents").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         metrics: m.get("metrics").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3414,10 +4193,92 @@ fn iface_destiny2__destiny_responses_destiny_profile_response__from_json(v: &Val
     })
 }
 
-fn iface_destiny2__destiny_responses_destiny_profile_response_character_uninstanced_item_components__from_json(v: &Value) -> Option<iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponents> {
+fn iface_destiny2__destiny_base_item_component_set_ofuint32__from_json(v: &Value) -> Option<iface_destiny2::DestinyBaseItemComponentSetOfuint32> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponents {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyBaseItemComponentSetOfuint32 {
+        objectives: m.get("objectives").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_objectives_component__from_json(v)),
+        perks: m.get("perks").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_perks_component__from_json(v)),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_objectives_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_objectives_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_objectives_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemObjectivesComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemObjectivesComponent {
+        date_completed: m.get("dateCompleted").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        flavor_objective: m.get("flavorObjective").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        objectives: m.get("objectives").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_quests_destiny_objective_progress__from_json(x)).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_quests_destiny_objective_progress__from_json(v: &Value) -> Option<iface_destiny2::DestinyQuestsDestinyObjectiveProgress> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyQuestsDestinyObjectiveProgress {
+        activity_hash: m.get("activityHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complete: m.get("complete").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        completion_value: m.get("completionValue").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        destination_hash: m.get("destinationHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        objective_hash: m.get("objectiveHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        progress: m.get("progress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        visible: m.get("visible").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_objectives_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemObjectivesComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_objectives_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_perks_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_perks_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_perks_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemPerksComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemPerksComponent {
+        perks: m.get("perks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_perks_destiny_perk_reference__from_json(x)).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_perks_destiny_perk_reference__from_json(v: &Value) -> Option<iface_destiny2::DestinyPerksDestinyPerkReference> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyPerksDestinyPerkReference {
+        icon_path: m.get("iconPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_active: m.get("isActive").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        perk_hash: m.get("perkHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        visible: m.get("visible").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_perks_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPerksComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_perks_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__destiny_responses_destiny_profile_response_character_uninstanced_item_components_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponentsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyResponsesDestinyProfileResponseCharacterUninstancedItemComponentsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_base_item_component_set_ofuint32__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3428,16 +4289,17 @@ fn iface_destiny2__get_character_response__from_json(v: &Value) -> Option<iface_
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_character_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetCharacterResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_character_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_character_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetCharacterResponseMessageData> {
+fn iface_destiny2__get_character_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetCharacterResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetCharacterResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetCharacterResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3469,16 +4331,17 @@ fn iface_destiny2__get_collectible_node_details_response__from_json(v: &Value) -
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_collectible_node_details_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetCollectibleNodeDetailsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_collectible_node_detail_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_collectible_node_details_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetCollectibleNodeDetailsResponseMessageData> {
+fn iface_destiny2__get_collectible_node_details_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetCollectibleNodeDetailsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetCollectibleNodeDetailsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetCollectibleNodeDetailsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3497,16 +4360,17 @@ fn iface_destiny2__get_vendors_response__from_json(v: &Value) -> Option<iface_de
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_vendors_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetVendorsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_vendors_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_vendors_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetVendorsResponseMessageData> {
+fn iface_destiny2__get_vendors_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetVendorsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetVendorsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetVendorsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3515,7 +4379,7 @@ fn iface_destiny2__destiny_responses_destiny_vendors_response__from_json(v: &Val
     Some(iface_destiny2::DestinyResponsesDestinyVendorsResponse {
         categories: m.get("categories").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         currency_lookups: m.get("currencyLookups").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        item_components: m.get("itemComponents").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_vendors_response_item_components__from_json(v)),
+        item_components: m.get("itemComponents").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_item_component_set_ofint32__from_json(x)).map(|val| iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponentsEntry { key: k.clone(), value: val })).collect())),
         sales: m.get("sales").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         string_variables: m.get("stringVariables").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         vendor_groups: m.get("vendorGroups").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3523,10 +4387,362 @@ fn iface_destiny2__destiny_responses_destiny_vendors_response__from_json(v: &Val
     })
 }
 
-fn iface_destiny2__destiny_responses_destiny_vendors_response_item_components__from_json(v: &Value) -> Option<iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponents> {
+fn iface_destiny2__destiny_item_component_set_ofint32__from_json(v: &Value) -> Option<iface_destiny2::DestinyItemComponentSetOfint32> {
     let m = v.as_object()?;
-    Some(iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponents {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::DestinyItemComponentSetOfint32 {
+        instances: m.get("instances").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_instance_component__from_json(v)),
+        objectives: m.get("objectives").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_objectives_component__from_json(v)),
+        perks: m.get("perks").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_perks_component__from_json(v)),
+        plug_objectives: m.get("plugObjectives").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_plug_objectives_component__from_json(v)),
+        plug_states: m.get("plugStates").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_plug_component__from_json(v)),
+        render_data: m.get("renderData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_render_component__from_json(v)),
+        reusable_plugs: m.get("reusablePlugs").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_reusable_plugs_component__from_json(v)),
+        sockets: m.get("sockets").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_sockets_component__from_json(v)),
+        stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_stats_component__from_json(v)),
+        talent_grids: m.get("talentGrids").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_talent_grid_component__from_json(v)),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_instance_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_instance_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_instance_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemInstanceComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemInstanceComponent {
+        breaker_type: m.get("breakerType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        breaker_type_hash: m.get("breakerTypeHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        can_equip: m.get("canEquip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        cannot_equip_reason: m.get("cannotEquipReason").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        damage_type: m.get("damageType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        damage_type_hash: m.get("damageTypeHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        energy: m.get("energy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        equip_required_level: m.get("equipRequiredLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_equipped: m.get("isEquipped").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_level: m.get("itemLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        primary_stat: m.get("primaryStat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        quality: m.get("quality").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unlock_hashes_required_to_equip: m.get("unlockHashesRequiredToEquip").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_instance_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemInstanceComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_instance_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_objectives_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_objectives_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_objectives_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemObjectivesComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_objectives_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_perks_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_perks_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_perks_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPerksComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_perks_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_plug_objectives_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponent {
+        objectives_per_plug: m.get("objectivesPerPlug").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_quests_destiny_objective_progress__from_json(x)).collect())).map(|val| iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponentObjectivesPerPlugEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component_objectives_per_plug_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponentObjectivesPerPlugEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyComponentsItemsDestinyItemPlugObjectivesComponentObjectivesPerPlugEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_quests_destiny_objective_progress__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_plug_objectives_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemPlugObjectivesComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_components_items_destiny_item_plug_objectives_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_plug_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_components_items_destiny_item_plug_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_plug_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyComponentsItemsDestinyItemPlugComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyComponentsItemsDestinyItemPlugComponent {
+        can_insert: m.get("canInsert").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        enable_fail_indexes: m.get("enableFailIndexes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        insert_fail_indexes: m.get("insertFailIndexes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        plug_item_hash: m.get("plugItemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        plug_objectives: m.get("plugObjectives").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_quests_destiny_objective_progress__from_json(x)).collect())),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofuint32_and_destiny_item_plug_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfuint32AndDestinyItemPlugComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_components_items_destiny_item_plug_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_render_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_render_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_render_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponent {
+        art_regions: m.get("artRegions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponentArtRegionsEntry { key: k.clone(), value: val })).collect())),
+        use_custom_dyes: m.get("useCustomDyes").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_render_component_art_regions_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponentArtRegionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemRenderComponentArtRegionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_render_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemRenderComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_render_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_reusable_plugs_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponent {
+        plugs: m.get("plugs").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_sockets_destiny_item_plug_base__from_json(x)).collect())).map(|val| iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponentPlugsEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_sockets_destiny_item_plug_base__from_json(v: &Value) -> Option<iface_destiny2::DestinySocketsDestinyItemPlugBase> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinySocketsDestinyItemPlugBase {
+        can_insert: m.get("canInsert").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        enable_fail_indexes: m.get("enableFailIndexes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        insert_fail_indexes: m.get("insertFailIndexes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        plug_item_hash: m.get("plugItemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component_plugs_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponentPlugsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyComponentsItemsDestinyItemReusablePlugsComponentPlugsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_sockets_destiny_item_plug_base__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_reusable_plugs_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemReusablePlugsComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_components_items_destiny_item_reusable_plugs_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_sockets_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_sockets_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_sockets_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemSocketsComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemSocketsComponent {
+        sockets: m.get("sockets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_entities_items_destiny_item_socket_state__from_json(x)).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_socket_state__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemSocketState> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemSocketState {
+        enable_fail_indexes: m.get("enableFailIndexes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        is_enabled: m.get("isEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_visible: m.get("isVisible").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        plug_hash: m.get("plugHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_sockets_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemSocketsComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_sockets_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_stats_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_stats_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_stats_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponent {
+        stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_destiny_stat__from_json(x)).map(|val| iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponentStatsEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_destiny2__destiny_destiny_stat__from_json(v: &Value) -> Option<iface_destiny2::DestinyDestinyStat> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyDestinyStat {
+        stat_hash: m.get("statHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_stats_component_stats_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponentStatsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemStatsComponentStatsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_destiny_stat__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_stats_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemStatsComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_stats_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_talent_grid_component__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_destiny2__destiny_entities_items_destiny_item_talent_grid_component__from_json(x)).map(|val| iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponentDataEntry { key: k.clone(), value: val })).collect())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        privacy: m.get("privacy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_entities_items_destiny_item_talent_grid_component__from_json(v: &Value) -> Option<iface_destiny2::DestinyEntitiesItemsDestinyItemTalentGridComponent> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyEntitiesItemsDestinyItemTalentGridComponent {
+        grid_progression: m.get("gridProgression").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_grid_complete: m.get("isGridComplete").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        nodes: m.get("nodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_destiny_talent_node__from_json(x)).collect())),
+        talent_grid_hash: m.get("talentGridHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_destiny_talent_node__from_json(v: &Value) -> Option<iface_destiny2::DestinyDestinyTalentNode> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyDestinyTalentNode {
+        activation_grid_level: m.get("activationGridLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hidden: m.get("hidden").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_activated: m.get("isActivated").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        materials_to_upgrade: m.get("materialsToUpgrade").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_destiny2__destiny_definitions_destiny_material_requirement__from_json(x)).collect())),
+        node_hash: m.get("nodeHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        node_index: m.get("nodeIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        node_stats_block: m.get("nodeStatsBlock").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        progress_percent: m.get("progressPercent").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        step_index: m.get("stepIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_destiny2__destiny_definitions_destiny_material_requirement__from_json(v: &Value) -> Option<iface_destiny2::DestinyDefinitionsDestinyMaterialRequirement> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyDefinitionsDestinyMaterialRequirement {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        count_is_constant: m.get("countIsConstant").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        delete_on_action: m.get("deleteOnAction").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_hash: m.get("itemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        omit_from_requirements: m.get("omitFromRequirements").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_destiny2__dictionary_component_response_ofint32_and_destiny_item_talent_grid_component_data_entry__from_json(v: &Value) -> Option<iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponentDataEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DictionaryComponentResponseOfint32AndDestinyItemTalentGridComponentDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_entities_items_destiny_item_talent_grid_component__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_destiny2__destiny_responses_destiny_vendors_response_item_components_entry__from_json(v: &Value) -> Option<iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponentsEntry> {
+    let m = v.as_object()?;
+    Some(iface_destiny2::DestinyResponsesDestinyVendorsResponseItemComponentsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_destiny2__destiny_item_component_set_ofint32__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -3537,16 +4753,17 @@ fn iface_destiny2__get_vendor_response__from_json(v: &Value) -> Option<iface_des
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_vendor_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetVendorResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_vendor_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_vendor_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetVendorResponseMessageData> {
+fn iface_destiny2__get_vendor_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetVendorResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetVendorResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetVendorResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3569,16 +4786,17 @@ fn iface_destiny2__get_item_response__from_json(v: &Value) -> Option<iface_desti
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_item_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetItemResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_item_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_item_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetItemResponseMessageData> {
+fn iface_destiny2__get_item_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetItemResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetItemResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetItemResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3589,16 +4807,17 @@ fn iface_destiny2__get_linked_profiles_response__from_json(v: &Value) -> Option<
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__get_linked_profiles_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_destiny2::GetLinkedProfilesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_destiny2__destiny_responses_destiny_linked_profiles_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_destiny2__get_linked_profiles_response_message_data__from_json(v: &Value) -> Option<iface_destiny2::GetLinkedProfilesResponseMessageData> {
+fn iface_destiny2__get_linked_profiles_response_message_data_entry__from_json(v: &Value) -> Option<iface_destiny2::GetLinkedProfilesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_destiny2::GetLinkedProfilesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_destiny2::GetLinkedProfilesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

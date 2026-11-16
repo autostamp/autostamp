@@ -205,6 +205,13 @@ fn iface_profiles__get_collection_fields_bundle_ids_item_enum__to_str(e: &iface_
     }
 }
 
+fn iface_profiles__bundle_id_platform__to_str(e: &iface_profiles::BundleIdPlatform) -> &'static str {
+    match e {
+        iface_profiles::BundleIdPlatform::Ios => "IOS",
+        iface_profiles::BundleIdPlatform::MacOs => "MAC_OS",
+    }
+}
+
 fn iface_profiles__profile_relationships_bundle_id_data_type_op_enum__to_str(e: &iface_profiles::ProfileRelationshipsBundleIdDataTypeOpEnum) -> &'static str {
     match e {
         iface_profiles::ProfileRelationshipsBundleIdDataTypeOpEnum::BundleIds => "bundleIds",
@@ -238,6 +245,20 @@ fn iface_profiles__bundle_id_relationships_app_data_type_op_enum__to_str(e: &ifa
 fn iface_profiles__bundle_id_relationships_bundle_id_capabilities_data_item_type_op_enum__to_str(e: &iface_profiles::BundleIdRelationshipsBundleIdCapabilitiesDataItemTypeOpEnum) -> &'static str {
     match e {
         iface_profiles::BundleIdRelationshipsBundleIdCapabilitiesDataItemTypeOpEnum::BundleIdCapabilities => "bundleIdCapabilities",
+    }
+}
+
+fn iface_profiles__certificate_type__to_str(e: &iface_profiles::CertificateType) -> &'static str {
+    match e {
+        iface_profiles::CertificateType::IosDevelopment => "IOS_DEVELOPMENT",
+        iface_profiles::CertificateType::IosDistribution => "IOS_DISTRIBUTION",
+        iface_profiles::CertificateType::MacAppDistribution => "MAC_APP_DISTRIBUTION",
+        iface_profiles::CertificateType::MacInstallerDistribution => "MAC_INSTALLER_DISTRIBUTION",
+        iface_profiles::CertificateType::MacAppDevelopment => "MAC_APP_DEVELOPMENT",
+        iface_profiles::CertificateType::DeveloperIdKext => "DEVELOPER_ID_KEXT",
+        iface_profiles::CertificateType::DeveloperIdApplication => "DEVELOPER_ID_APPLICATION",
+        iface_profiles::CertificateType::Development => "DEVELOPMENT",
+        iface_profiles::CertificateType::Distribution => "DISTRIBUTION",
     }
 }
 
@@ -283,17 +304,11 @@ fn iface_profiles__profile_attributes__to_json(p: &iface_profiles::ProfileAttrib
     m.insert("createdDate".into(), match (&p.created_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_profiles__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_profiles__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("profileContent".into(), match (&p.profile_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("profileState".into(), match (&p.profile_state) { Some(v) => Value::String(iface_profiles__get_collection_filter_profile_state_item_enum__to_str(v).into()), None => Value::Null });
     m.insert("profileType".into(), match (&p.profile_type) { Some(v) => Value::String(iface_profiles__get_collection_filter_profile_type_item_enum__to_str(v).into()), None => Value::Null });
     m.insert("uuid".into(), match (&p.uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_profiles__bundle_id_platform__to_json(p: &iface_profiles::BundleIdPlatform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -495,7 +510,7 @@ fn iface_profiles__bundle_id_attributes__to_json(p: &iface_profiles::BundleIdAtt
     let mut m = Map::new();
     m.insert("identifier".into(), match (&p.identifier) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_profiles__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_profiles__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("seedId".into(), match (&p.seed_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -593,18 +608,12 @@ fn iface_profiles__certificate__to_json(p: &iface_profiles::Certificate) -> Valu
 fn iface_profiles__certificate_attributes__to_json(p: &iface_profiles::CertificateAttributes) -> Value {
     let mut m = Map::new();
     m.insert("certificateContent".into(), match (&p.certificate_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("certificateType".into(), match (&p.certificate_type) { Some(v) => iface_profiles__certificate_type__to_json(v), None => Value::Null });
+    m.insert("certificateType".into(), match (&p.certificate_type) { Some(v) => Value::String(iface_profiles__certificate_type__to_str(v).into()), None => Value::Null });
     m.insert("displayName".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_profiles__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_profiles__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("serialNumber".into(), match (&p.serial_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_profiles__certificate_type__to_json(p: &iface_profiles::CertificateType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -631,7 +640,7 @@ fn iface_profiles__device_attributes__to_json(p: &iface_profiles::DeviceAttribut
     m.insert("deviceClass".into(), match (&p.device_class) { Some(v) => Value::String(iface_profiles__device_attributes_device_class_enum__to_str(v).into()), None => Value::Null });
     m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_profiles__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_profiles__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_profiles__device_attributes_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("udid".into(), match (&p.udid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -730,18 +739,11 @@ fn iface_profiles__profile_attributes__from_json(v: &Value) -> Option<iface_prof
         created_date: m.get("createdDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_profiles__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__bundle_id_platform__from_str)),
         profile_content: m.get("profileContent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         profile_state: m.get("profileState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__get_collection_filter_profile_state_item_enum__from_str)),
         profile_type: m.get("profileType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__get_collection_filter_profile_type_item_enum__from_str)),
         uuid: m.get("uuid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_profiles__bundle_id_platform__from_json(v: &Value) -> Option<iface_profiles::BundleIdPlatform> {
-    let m = v.as_object()?;
-    Some(iface_profiles::BundleIdPlatform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -900,7 +902,7 @@ fn iface_profiles__bundle_id_attributes__from_json(v: &Value) -> Option<iface_pr
     Some(iface_profiles::BundleIdAttributes {
         identifier: m.get("identifier").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_profiles__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__bundle_id_platform__from_str)),
         seed_id: m.get("seedId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -1011,19 +1013,12 @@ fn iface_profiles__certificate_attributes__from_json(v: &Value) -> Option<iface_
     let m = v.as_object()?;
     Some(iface_profiles::CertificateAttributes {
         certificate_content: m.get("certificateContent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        certificate_type: m.get("certificateType").filter(|v| !v.is_null()).and_then(|v| iface_profiles__certificate_type__from_json(v)),
+        certificate_type: m.get("certificateType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__certificate_type__from_str)),
         display_name: m.get("displayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_profiles__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__bundle_id_platform__from_str)),
         serial_number: m.get("serialNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_profiles__certificate_type__from_json(v: &Value) -> Option<iface_profiles::CertificateType> {
-    let m = v.as_object()?;
-    Some(iface_profiles::CertificateType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1053,7 +1048,7 @@ fn iface_profiles__device_attributes__from_json(v: &Value) -> Option<iface_profi
         device_class: m.get("deviceClass").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__device_attributes_device_class_enum__from_str)),
         model: m.get("model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_profiles__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__bundle_id_platform__from_str)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_profiles__device_attributes_status_enum__from_str)),
         udid: m.get("udid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -1083,6 +1078,14 @@ fn iface_profiles__get_collection_filter_profile_type_item_enum__from_str(s: &st
         "MAC_CATALYST_APP_DEVELOPMENT" => Some(iface_profiles::GetCollectionFilterProfileTypeItemEnum::MacCatalystAppDevelopment),
         "MAC_CATALYST_APP_STORE" => Some(iface_profiles::GetCollectionFilterProfileTypeItemEnum::MacCatalystAppStore),
         "MAC_CATALYST_APP_DIRECT" => Some(iface_profiles::GetCollectionFilterProfileTypeItemEnum::MacCatalystAppDirect),
+        _ => None,
+    }
+}
+
+fn iface_profiles__bundle_id_platform__from_str(s: &str) -> Option<iface_profiles::BundleIdPlatform> {
+    match s {
+        "IOS" => Some(iface_profiles::BundleIdPlatform::Ios),
+        "MAC_OS" => Some(iface_profiles::BundleIdPlatform::MacOs),
         _ => None,
     }
 }
@@ -1125,6 +1128,21 @@ fn iface_profiles__bundle_id_relationships_app_data_type_op_enum__from_str(s: &s
 fn iface_profiles__bundle_id_relationships_bundle_id_capabilities_data_item_type_op_enum__from_str(s: &str) -> Option<iface_profiles::BundleIdRelationshipsBundleIdCapabilitiesDataItemTypeOpEnum> {
     match s {
         "bundleIdCapabilities" => Some(iface_profiles::BundleIdRelationshipsBundleIdCapabilitiesDataItemTypeOpEnum::BundleIdCapabilities),
+        _ => None,
+    }
+}
+
+fn iface_profiles__certificate_type__from_str(s: &str) -> Option<iface_profiles::CertificateType> {
+    match s {
+        "IOS_DEVELOPMENT" => Some(iface_profiles::CertificateType::IosDevelopment),
+        "IOS_DISTRIBUTION" => Some(iface_profiles::CertificateType::IosDistribution),
+        "MAC_APP_DISTRIBUTION" => Some(iface_profiles::CertificateType::MacAppDistribution),
+        "MAC_INSTALLER_DISTRIBUTION" => Some(iface_profiles::CertificateType::MacInstallerDistribution),
+        "MAC_APP_DEVELOPMENT" => Some(iface_profiles::CertificateType::MacAppDevelopment),
+        "DEVELOPER_ID_KEXT" => Some(iface_profiles::CertificateType::DeveloperIdKext),
+        "DEVELOPER_ID_APPLICATION" => Some(iface_profiles::CertificateType::DeveloperIdApplication),
+        "DEVELOPMENT" => Some(iface_profiles::CertificateType::Development),
+        "DISTRIBUTION" => Some(iface_profiles::CertificateType::Distribution),
         _ => None,
     }
 }

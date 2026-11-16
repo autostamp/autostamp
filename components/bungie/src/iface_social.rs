@@ -96,15 +96,16 @@ fn iface_social__get_friend_list_response__to_json(p: &iface_social::GetFriendLi
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__get_friend_list_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_social__friends_bungie_friend_list_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__get_friend_list_response_message_data__to_json(p: &iface_social::GetFriendListResponseMessageData) -> Value {
+fn iface_social__get_friend_list_response_message_data_entry__to_json(p: &iface_social::GetFriendListResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -189,15 +190,16 @@ fn iface_social__issue_friend_request_response__to_json(p: &iface_social::IssueF
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__issue_friend_request_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__issue_friend_request_response_message_data__to_json(p: &iface_social::IssueFriendRequestResponseMessageData) -> Value {
+fn iface_social__issue_friend_request_response_message_data_entry__to_json(p: &iface_social::IssueFriendRequestResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -207,15 +209,16 @@ fn iface_social__remove_friend_response__to_json(p: &iface_social::RemoveFriendR
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__remove_friend_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__remove_friend_response_message_data__to_json(p: &iface_social::RemoveFriendResponseMessageData) -> Value {
+fn iface_social__remove_friend_response_message_data_entry__to_json(p: &iface_social::RemoveFriendResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -225,15 +228,16 @@ fn iface_social__get_friend_request_list_response__to_json(p: &iface_social::Get
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__get_friend_request_list_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_social__friends_bungie_friend_request_list_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__get_friend_request_list_response_message_data__to_json(p: &iface_social::GetFriendRequestListResponseMessageData) -> Value {
+fn iface_social__get_friend_request_list_response_message_data_entry__to_json(p: &iface_social::GetFriendRequestListResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -250,15 +254,16 @@ fn iface_social__accept_friend_request_response__to_json(p: &iface_social::Accep
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__accept_friend_request_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__accept_friend_request_response_message_data__to_json(p: &iface_social::AcceptFriendRequestResponseMessageData) -> Value {
+fn iface_social__accept_friend_request_response_message_data_entry__to_json(p: &iface_social::AcceptFriendRequestResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -268,15 +273,16 @@ fn iface_social__decline_friend_request_response__to_json(p: &iface_social::Decl
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__decline_friend_request_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__decline_friend_request_response_message_data__to_json(p: &iface_social::DeclineFriendRequestResponseMessageData) -> Value {
+fn iface_social__decline_friend_request_response_message_data_entry__to_json(p: &iface_social::DeclineFriendRequestResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -286,15 +292,16 @@ fn iface_social__remove_friend_request_response__to_json(p: &iface_social::Remov
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__remove_friend_request_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__remove_friend_request_response_message_data__to_json(p: &iface_social::RemoveFriendRequestResponseMessageData) -> Value {
+fn iface_social__remove_friend_request_response_message_data_entry__to_json(p: &iface_social::RemoveFriendRequestResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -304,15 +311,16 @@ fn iface_social__get_platform_friend_list_response__to_json(p: &iface_social::Ge
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_social__get_platform_friend_list_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_social__friends_platform_friend_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_social__get_platform_friend_list_response_message_data__to_json(p: &iface_social::GetPlatformFriendListResponseMessageData) -> Value {
+fn iface_social__get_platform_friend_list_response_message_data_entry__to_json(p: &iface_social::GetPlatformFriendListResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -381,16 +389,17 @@ fn iface_social__get_friend_list_response__from_json(v: &Value) -> Option<iface_
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__get_friend_list_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::GetFriendListResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_social__friends_bungie_friend_list_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__get_friend_list_response_message_data__from_json(v: &Value) -> Option<iface_social::GetFriendListResponseMessageData> {
+fn iface_social__get_friend_list_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::GetFriendListResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::GetFriendListResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::GetFriendListResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -481,16 +490,17 @@ fn iface_social__issue_friend_request_response__from_json(v: &Value) -> Option<i
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__issue_friend_request_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::IssueFriendRequestResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__issue_friend_request_response_message_data__from_json(v: &Value) -> Option<iface_social::IssueFriendRequestResponseMessageData> {
+fn iface_social__issue_friend_request_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::IssueFriendRequestResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::IssueFriendRequestResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::IssueFriendRequestResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -501,16 +511,17 @@ fn iface_social__remove_friend_response__from_json(v: &Value) -> Option<iface_so
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__remove_friend_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::RemoveFriendResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__remove_friend_response_message_data__from_json(v: &Value) -> Option<iface_social::RemoveFriendResponseMessageData> {
+fn iface_social__remove_friend_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::RemoveFriendResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::RemoveFriendResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::RemoveFriendResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -521,16 +532,17 @@ fn iface_social__get_friend_request_list_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__get_friend_request_list_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::GetFriendRequestListResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_social__friends_bungie_friend_request_list_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__get_friend_request_list_response_message_data__from_json(v: &Value) -> Option<iface_social::GetFriendRequestListResponseMessageData> {
+fn iface_social__get_friend_request_list_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::GetFriendRequestListResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::GetFriendRequestListResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::GetFriendRequestListResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -549,16 +561,17 @@ fn iface_social__accept_friend_request_response__from_json(v: &Value) -> Option<
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__accept_friend_request_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::AcceptFriendRequestResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__accept_friend_request_response_message_data__from_json(v: &Value) -> Option<iface_social::AcceptFriendRequestResponseMessageData> {
+fn iface_social__accept_friend_request_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::AcceptFriendRequestResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::AcceptFriendRequestResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::AcceptFriendRequestResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -569,16 +582,17 @@ fn iface_social__decline_friend_request_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__decline_friend_request_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::DeclineFriendRequestResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__decline_friend_request_response_message_data__from_json(v: &Value) -> Option<iface_social::DeclineFriendRequestResponseMessageData> {
+fn iface_social__decline_friend_request_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::DeclineFriendRequestResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::DeclineFriendRequestResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::DeclineFriendRequestResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -589,16 +603,17 @@ fn iface_social__remove_friend_request_response__from_json(v: &Value) -> Option<
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__remove_friend_request_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::RemoveFriendRequestResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__remove_friend_request_response_message_data__from_json(v: &Value) -> Option<iface_social::RemoveFriendRequestResponseMessageData> {
+fn iface_social__remove_friend_request_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::RemoveFriendRequestResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::RemoveFriendRequestResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::RemoveFriendRequestResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -609,16 +624,17 @@ fn iface_social__get_platform_friend_list_response__from_json(v: &Value) -> Opti
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_social__get_platform_friend_list_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_social::GetPlatformFriendListResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_social__friends_platform_friend_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_social__get_platform_friend_list_response_message_data__from_json(v: &Value) -> Option<iface_social::GetPlatformFriendListResponseMessageData> {
+fn iface_social__get_platform_friend_list_response_message_data_entry__from_json(v: &Value) -> Option<iface_social::GetPlatformFriendListResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_social::GetPlatformFriendListResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_social::GetPlatformFriendListResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

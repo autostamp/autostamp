@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `BasicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:adyen@0.5.0;
+package autostamp:adyen@0.6.0;
 
 interface accounts {
   enum close-account-response-status-enum {
@@ -505,7 +505,7 @@ interface account-holders {
     merchant-category-code: option<string>,
     /// A set of key and value pairs for general use by the account holder or merchant.
     /// The keys do not have specific names and may be used for storing miscellaneous data as desired.
-    metadata: option<account-holder-details-metadata>,
+    metadata: option<list<account-holder-details-metadata-entry>>,
     principal-business-address: option<vias-address>,
     /// The URL of the website of the account holder.
     web-address: option<string>
@@ -762,13 +762,10 @@ interface account-holders {
     personal-data: option<vias-personal-data>
   }
 
-  /// A set of key and value pairs for general use by the account holder or merchant.
-  /// The keys do not have specific names and may be used for storing miscellaneous data as desired.
-  /// > The values being stored have a maximum length of eighty (80) characters and will be truncated if necessary.
-  /// > Note that during an update of metadata, the omission of existing key-value pairs will result in the deletion of those key-value pairs.
-  record account-holder-details-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record account-holder-details-metadata-entry {
+    key: string,
+    value: string
   }
 
   record create-account-holder-response {
@@ -1472,7 +1469,7 @@ interface verification {
     merchant-category-code: option<string>,
     /// A set of key and value pairs for general use by the account holder or merchant.
     /// The keys do not have specific names and may be used for storing miscellaneous data as desired.
-    metadata: option<account-holder-details-metadata>,
+    metadata: option<list<account-holder-details-metadata-entry>>,
     principal-business-address: option<vias-address>,
     /// The URL of the website of the account holder.
     web-address: option<string>
@@ -1729,13 +1726,10 @@ interface verification {
     personal-data: option<vias-personal-data>
   }
 
-  /// A set of key and value pairs for general use by the account holder or merchant.
-  /// The keys do not have specific names and may be used for storing miscellaneous data as desired.
-  /// > The values being stored have a maximum length of eighty (80) characters and will be truncated if necessary.
-  /// > Note that during an update of metadata, the omission of existing key-value pairs will result in the deletion of those key-value pairs.
-  record account-holder-details-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record account-holder-details-metadata-entry {
+    key: string,
+    value: string
   }
 
   record account-holder-status {

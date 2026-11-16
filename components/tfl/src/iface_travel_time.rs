@@ -56,9 +56,17 @@ fn iface_travel_time__get_compare_overlay_direction_enum__to_str(e: &iface_trave
     }
 }
 
-fn iface_travel_time__system_object__to_json(p: &iface_travel_time::SystemObject) -> Value {
+fn iface_travel_time__system_object_entry__to_json(p: &iface_travel_time::SystemObjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_travel_time__system_object_entry_v2__to_json(p: &iface_travel_time::SystemObjectEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -98,19 +106,28 @@ fn iface_travel_time__get_overlay_params__to_json(p: &iface_travel_time::GetOver
     Value::Object(m)
 }
 
-fn iface_travel_time__system_object__from_json(v: &Value) -> Option<iface_travel_time::SystemObject> {
+fn iface_travel_time__system_object_entry__from_json(v: &Value) -> Option<iface_travel_time::SystemObjectEntry> {
     let m = v.as_object()?;
-    Some(iface_travel_time::SystemObject {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_travel_time::SystemObjectEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_travel_time__get_compare_overlay__ok(body: String) -> Result<iface_travel_time::SystemObject, crate::runtime::DispatchError> {
+fn iface_travel_time__system_object_entry_v2__from_json(v: &Value) -> Option<iface_travel_time::SystemObjectEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_travel_time::SystemObjectEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_travel_time__get_compare_overlay__ok(body: String) -> Result<Vec<iface_travel_time::SystemObjectEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_travel_time__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_travel_time::SystemObjectEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -123,12 +140,12 @@ fn iface_travel_time__get_compare_overlay__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_travel_time__get_overlay__ok(body: String) -> Result<iface_travel_time::SystemObject, crate::runtime::DispatchError> {
+fn iface_travel_time__get_overlay__ok(body: String) -> Result<Vec<iface_travel_time::SystemObjectEntryV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_travel_time__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_travel_time::SystemObjectEntryV2 { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -142,14 +159,14 @@ fn iface_travel_time__get_overlay__err(e: crate::runtime::DispatchError) -> Stri
 }
 
 impl iface_travel_time::Guest for crate::Component {
-    fn get_compare_overlay(params: iface_travel_time::GetCompareOverlayParams) -> Result<iface_travel_time::SystemObject, String> {
+    fn get_compare_overlay(params: iface_travel_time::GetCompareOverlayParams) -> Result<Vec<iface_travel_time::SystemObjectEntry>, String> {
         let json = iface_travel_time__get_compare_overlay_params__to_json(&params);
         match dispatch(&OP_TRAVEL_TIME_GET_COMPARE_OVERLAY, json).and_then(iface_travel_time__get_compare_overlay__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_travel_time__get_compare_overlay__err(e)),
         }
     }
-    fn get_overlay(params: iface_travel_time::GetOverlayParams) -> Result<iface_travel_time::SystemObject, String> {
+    fn get_overlay(params: iface_travel_time::GetOverlayParams) -> Result<Vec<iface_travel_time::SystemObjectEntryV2>, String> {
         let json = iface_travel_time__get_overlay_params__to_json(&params);
         match dispatch(&OP_TRAVEL_TIME_GET_OVERLAY, json).and_then(iface_travel_time__get_overlay__ok) {
             Ok(v) => Ok(v),

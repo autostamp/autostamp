@@ -102,7 +102,7 @@ fn iface_programmable_fax_commands__fax_status_enum__to_str(e: &iface_programmab
 fn iface_programmable_fax_commands__list_faxes_response__to_json(p: &iface_programmable_fax_commands::ListFaxesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_programmable_fax_commands__fax__to_json(v)).collect()), None => Value::Null });
-    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_programmable_fax_commands__list_faxes_response_meta__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -127,9 +127,10 @@ fn iface_programmable_fax_commands__fax__to_json(p: &iface_programmable_fax_comm
     Value::Object(m)
 }
 
-fn iface_programmable_fax_commands__list_faxes_response_meta__to_json(p: &iface_programmable_fax_commands::ListFaxesResponseMeta) -> Value {
+fn iface_programmable_fax_commands__list_faxes_response_meta_entry__to_json(p: &iface_programmable_fax_commands::ListFaxesResponseMetaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -198,7 +199,7 @@ fn iface_programmable_fax_commands__list_faxes_response__from_json(v: &Value) ->
     let m = v.as_object()?;
     Some(iface_programmable_fax_commands::ListFaxesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_programmable_fax_commands__fax__from_json(x)).collect())),
-        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_commands__list_faxes_response_meta__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_programmable_fax_commands::ListFaxesResponseMetaEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -224,10 +225,11 @@ fn iface_programmable_fax_commands__fax__from_json(v: &Value) -> Option<iface_pr
     })
 }
 
-fn iface_programmable_fax_commands__list_faxes_response_meta__from_json(v: &Value) -> Option<iface_programmable_fax_commands::ListFaxesResponseMeta> {
+fn iface_programmable_fax_commands__list_faxes_response_meta_entry__from_json(v: &Value) -> Option<iface_programmable_fax_commands::ListFaxesResponseMetaEntry> {
     let m = v.as_object()?;
-    Some(iface_programmable_fax_commands::ListFaxesResponseMeta {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_programmable_fax_commands::ListFaxesResponseMetaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -75,18 +75,12 @@ fn iface_custom_roles__link__to_json(p: &iface_custom_roles::Link) -> Value {
 
 fn iface_custom_roles__custom_role__to_json(p: &iface_custom_roles::CustomRole) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_custom_roles__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_custom_roles__links__to_json(v), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("policy".into(), match (&p.policy) { Some(v) => Value::Array((v).iter().map(|v| iface_custom_roles__policy__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_custom_roles__id__to_json(p: &iface_custom_roles::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -145,19 +139,12 @@ fn iface_custom_roles__link__from_json(v: &Value) -> Option<iface_custom_roles::
 fn iface_custom_roles__custom_role__from_json(v: &Value) -> Option<iface_custom_roles::CustomRole> {
     let m = v.as_object()?;
     Some(iface_custom_roles::CustomRole {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__links__from_json(v)),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         policy: m.get("policy").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_custom_roles__policy__from_json(x)).collect())),
-    })
-}
-
-fn iface_custom_roles__id__from_json(v: &Value) -> Option<iface_custom_roles::Id> {
-    let m = v.as_object()?;
-    Some(iface_custom_roles::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

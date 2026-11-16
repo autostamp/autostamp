@@ -238,7 +238,7 @@ fn iface_billing_portal__configuration__to_json(p: &iface_billing_portal::Config
     m.insert("is_default".into(), Value::Bool(*(&p.is_default)));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("login_page".into(), iface_billing_portal__portal_login_page__to_json(&p.login_page));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_billing_portal__configuration_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_billing_portal__configuration_object_enum__to_str(&p.object).into()));
     m.insert("updated".into(), Value::Number(serde_json::Number::from(*(&p.updated))));
     Value::Object(m)
@@ -327,9 +327,10 @@ fn iface_billing_portal__portal_login_page__to_json(p: &iface_billing_portal::Po
     Value::Object(m)
 }
 
-fn iface_billing_portal__configuration_metadata__to_json(p: &iface_billing_portal::ConfigurationMetadata) -> Value {
+fn iface_billing_portal__configuration_metadata_entry__to_json(p: &iface_billing_portal::ConfigurationMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -408,9 +409,10 @@ fn iface_billing_portal__post_billing_portal_configurations_body_login_page__to_
     Value::Object(m)
 }
 
-fn iface_billing_portal__post_billing_portal_configurations_body_metadata__to_json(p: &iface_billing_portal::PostBillingPortalConfigurationsBodyMetadata) -> Value {
+fn iface_billing_portal__post_billing_portal_configurations_body_metadata_entry__to_json(p: &iface_billing_portal::PostBillingPortalConfigurationsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -558,7 +560,7 @@ fn iface_billing_portal__post_billing_portal_configurations_params__to_json(p: &
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("features".into(), iface_billing_portal__post_billing_portal_configurations_body_features__to_json(&p.features));
     m.insert("login_page".into(), match (&p.login_page) { Some(v) => iface_billing_portal__post_billing_portal_configurations_body_login_page__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_billing_portal__post_billing_portal_configurations_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -618,7 +620,7 @@ fn iface_billing_portal__configuration__from_json(v: &Value) -> Option<iface_bil
         is_default: m.get("is_default").and_then(|v| (v).as_bool()).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         login_page: match m.get("login_page").and_then(|v| iface_billing_portal__portal_login_page__from_json(v)) { Some(x) => x, None => return None },
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_billing_portal__configuration_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_billing_portal::ConfigurationMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_billing_portal__configuration_object_enum__from_str)) { Some(x) => x, None => return None },
         updated: m.get("updated").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
@@ -718,10 +720,11 @@ fn iface_billing_portal__portal_login_page__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_billing_portal__configuration_metadata__from_json(v: &Value) -> Option<iface_billing_portal::ConfigurationMetadata> {
+fn iface_billing_portal__configuration_metadata_entry__from_json(v: &Value) -> Option<iface_billing_portal::ConfigurationMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_billing_portal::ConfigurationMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_billing_portal::ConfigurationMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -161,6 +161,116 @@ const OP_PAYMENTS_SUBMIT_CREATE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_payments__address_country_enum__to_str(e: &iface_payments::AddressCountryEnum) -> &'static str {
+    match e {
+        iface_payments::AddressCountryEnum::At => "AT",
+        iface_payments::AddressCountryEnum::Be => "BE",
+        iface_payments::AddressCountryEnum::Bg => "BG",
+        iface_payments::AddressCountryEnum::Hr => "HR",
+        iface_payments::AddressCountryEnum::Cy => "CY",
+        iface_payments::AddressCountryEnum::Cz => "CZ",
+        iface_payments::AddressCountryEnum::Dk => "DK",
+        iface_payments::AddressCountryEnum::Ee => "EE",
+        iface_payments::AddressCountryEnum::Fi => "FI",
+        iface_payments::AddressCountryEnum::Fr => "FR",
+        iface_payments::AddressCountryEnum::De => "DE",
+        iface_payments::AddressCountryEnum::Gr => "GR",
+        iface_payments::AddressCountryEnum::Hu => "HU",
+        iface_payments::AddressCountryEnum::Is => "IS",
+        iface_payments::AddressCountryEnum::Ie => "IE",
+        iface_payments::AddressCountryEnum::It => "IT",
+        iface_payments::AddressCountryEnum::Lv => "LV",
+        iface_payments::AddressCountryEnum::Li => "LI",
+        iface_payments::AddressCountryEnum::Lt => "LT",
+        iface_payments::AddressCountryEnum::Lu => "LU",
+        iface_payments::AddressCountryEnum::Mt => "MT",
+        iface_payments::AddressCountryEnum::Nl => "NL",
+        iface_payments::AddressCountryEnum::No => "NO",
+        iface_payments::AddressCountryEnum::Pl => "PL",
+        iface_payments::AddressCountryEnum::Pt => "PT",
+        iface_payments::AddressCountryEnum::Ro => "RO",
+        iface_payments::AddressCountryEnum::Sk => "SK",
+        iface_payments::AddressCountryEnum::Si => "SI",
+        iface_payments::AddressCountryEnum::Es => "ES",
+        iface_payments::AddressCountryEnum::Se => "SE",
+        iface_payments::AddressCountryEnum::Gb => "GB",
+        iface_payments::AddressCountryEnum::Us => "US",
+    }
+}
+
+fn iface_payments__type_enum__to_str(e: &iface_payments::TypeEnum) -> &'static str {
+    match e {
+        iface_payments::TypeEnum::Iban => "IBAN",
+        iface_payments::TypeEnum::Scan => "SCAN",
+    }
+}
+
+fn iface_payments__payment_product_enum__to_str(e: &iface_payments::PaymentProductEnum) -> &'static str {
+    match e {
+        iface_payments::PaymentProductEnum::T2p => "T2P",
+        iface_payments::PaymentProductEnum::Sct => "SCT",
+        iface_payments::PaymentProductEnum::Isct => "ISCT",
+        iface_payments::PaymentProductEnum::Cbct => "CBCT",
+        iface_payments::PaymentProductEnum::Bacs => "BACS",
+        iface_payments::PaymentProductEnum::Chaps => "CHAPS",
+        iface_payments::PaymentProductEnum::Fps => "FPS",
+        iface_payments::PaymentProductEnum::Swift => "SWIFT",
+        iface_payments::PaymentProductEnum::Bt => "BT",
+        iface_payments::PaymentProductEnum::Mt => "MT",
+    }
+}
+
+fn iface_payments__payment_status_enum__to_str(e: &iface_payments::PaymentStatusEnum) -> &'static str {
+    match e {
+        iface_payments::PaymentStatusEnum::Init => "INIT",
+        iface_payments::PaymentStatusEnum::Erre => "ERRE",
+        iface_payments::PaymentStatusEnum::Errs => "ERRS",
+        iface_payments::PaymentStatusEnum::Accc => "ACCC",
+        iface_payments::PaymentStatusEnum::Accp => "ACCP",
+        iface_payments::PaymentStatusEnum::Acsc => "ACSC",
+        iface_payments::PaymentStatusEnum::Acsp => "ACSP",
+        iface_payments::PaymentStatusEnum::Actc => "ACTC",
+        iface_payments::PaymentStatusEnum::Acwc => "ACWC",
+        iface_payments::PaymentStatusEnum::Acwp => "ACWP",
+        iface_payments::PaymentStatusEnum::Rcvd => "RCVD",
+        iface_payments::PaymentStatusEnum::Pdng => "PDNG",
+        iface_payments::PaymentStatusEnum::Rjct => "RJCT",
+        iface_payments::PaymentStatusEnum::Canc => "CANC",
+        iface_payments::PaymentStatusEnum::Acfc => "ACFC",
+        iface_payments::PaymentStatusEnum::Patc => "PATC",
+        iface_payments::PaymentStatusEnum::Part => "PART",
+    }
+}
+
+fn iface_payments__payment_type_enum__to_str(e: &iface_payments::PaymentTypeEnum) -> &'static str {
+    match e {
+        iface_payments::PaymentTypeEnum::SinglePayment => "single-payment",
+        iface_payments::PaymentTypeEnum::BulkPayment => "bulk-payment",
+        iface_payments::PaymentTypeEnum::PeriodicPayment => "periodic-payment",
+    }
+}
+
+fn iface_payments__execution_rule_enum__to_str(e: &iface_payments::ExecutionRuleEnum) -> &'static str {
+    match e {
+        iface_payments::ExecutionRuleEnum::Following => "following",
+        iface_payments::ExecutionRuleEnum::Preceding => "preceding",
+    }
+}
+
+fn iface_payments__frequency_enum__to_str(e: &iface_payments::FrequencyEnum) -> &'static str {
+    match e {
+        iface_payments::FrequencyEnum::Daily => "Daily",
+        iface_payments::FrequencyEnum::Weekly => "Weekly",
+        iface_payments::FrequencyEnum::EveryTwoWeeks => "EveryTwoWeeks",
+        iface_payments::FrequencyEnum::Monthly => "Monthly",
+        iface_payments::FrequencyEnum::EveryTwoMonths => "EveryTwoMonths",
+        iface_payments::FrequencyEnum::Quarterly => "Quarterly",
+        iface_payments::FrequencyEnum::SemiAnnual => "SemiAnnual",
+        iface_payments::FrequencyEnum::Annual => "Annual",
+        iface_payments::FrequencyEnum::MonthlyVariable => "MonthlyVariable",
+    }
+}
+
 fn iface_payments__paginated_payment_read_list__to_json(p: &iface_payments::PaginatedPaymentReadList) -> Value {
     let mut m = Map::new();
     m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -179,9 +289,9 @@ fn iface_payments__payment_read__to_json(p: &iface_payments::PaymentRead) -> Val
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("instructed_amount".into(), iface_payments__instructed_amount__to_json(&p.instructed_amount));
     m.insert("payment_id".into(), match (&p.payment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => iface_payments__payment_product_enum__to_json(v), None => Value::Null });
-    m.insert("payment_status".into(), match (&p.payment_status) { Some(v) => iface_payments__payment_status_enum__to_json(v), None => Value::Null });
-    m.insert("payment_type".into(), match (&p.payment_type) { Some(v) => iface_payments__payment_type_enum__to_json(v), None => Value::Null });
+    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => Value::String(iface_payments__payment_product_enum__to_str(v).into()), None => Value::Null });
+    m.insert("payment_status".into(), match (&p.payment_status) { Some(v) => Value::String(iface_payments__payment_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("payment_type".into(), match (&p.payment_type) { Some(v) => Value::String(iface_payments__payment_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("redirect".into(), Value::String((&p.redirect).clone()));
     Value::Object(m)
 }
@@ -189,7 +299,7 @@ fn iface_payments__payment_read__to_json(p: &iface_payments::PaymentRead) -> Val
 fn iface_payments__creditor_account_write__to_json(p: &iface_payments::CreditorAccountWrite) -> Value {
     let mut m = Map::new();
     m.insert("account".into(), Value::String((&p.account).clone()));
-    m.insert("address_country".into(), match (&p.address_country) { Some(v) => iface_payments__address_country_enum__to_json(v), None => Value::Null });
+    m.insert("address_country".into(), match (&p.address_country) { Some(v) => Value::String(iface_payments__address_country_enum__to_str(v).into()), None => Value::Null });
     m.insert("address_street".into(), match (&p.address_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("agent_name".into(), match (&p.agent_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -198,19 +308,7 @@ fn iface_payments__creditor_account_write__to_json(p: &iface_payments::CreditorA
     m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_payments__type_enum__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_payments__address_country_enum__to_json(p: &iface_payments::AddressCountryEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__type_enum__to_json(p: &iface_payments::TypeEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_payments__type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -222,7 +320,7 @@ fn iface_payments__debtor_account_write__to_json(p: &iface_payments::DebtorAccou
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_payments__type_enum__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_payments__type_enum__to_str(v).into()), None => Value::Null });
     m.insert("type_number".into(), match (&p.type_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -234,28 +332,10 @@ fn iface_payments__instructed_amount__to_json(p: &iface_payments::InstructedAmou
     Value::Object(m)
 }
 
-fn iface_payments__payment_product_enum__to_json(p: &iface_payments::PaymentProductEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__payment_status_enum__to_json(p: &iface_payments::PaymentStatusEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__payment_type_enum__to_json(p: &iface_payments::PaymentTypeEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_payments__creditor_account_write_request__to_json(p: &iface_payments::CreditorAccountWriteRequest) -> Value {
     let mut m = Map::new();
     m.insert("account".into(), Value::String((&p.account).clone()));
-    m.insert("address_country".into(), match (&p.address_country) { Some(v) => iface_payments__address_country_enum__to_json(v), None => Value::Null });
+    m.insert("address_country".into(), match (&p.address_country) { Some(v) => Value::String(iface_payments__address_country_enum__to_str(v).into()), None => Value::Null });
     m.insert("address_street".into(), match (&p.address_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("agent_name".into(), match (&p.agent_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -263,7 +343,7 @@ fn iface_payments__creditor_account_write_request__to_json(p: &iface_payments::C
     m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_payments__type_enum__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_payments__type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -275,7 +355,7 @@ fn iface_payments__debtor_account_write_request__to_json(p: &iface_payments::Deb
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_payments__type_enum__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_payments__type_enum__to_str(v).into()), None => Value::Null });
     m.insert("type_number".into(), match (&p.type_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -291,21 +371,9 @@ fn iface_payments__periodic_payment_request__to_json(p: &iface_payments::Periodi
     let mut m = Map::new();
     m.insert("day_of_execution".into(), match (&p.day_of_execution) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("execution_rule".into(), match (&p.execution_rule) { Some(v) => iface_payments__execution_rule_enum__to_json(v), None => Value::Null });
-    m.insert("frequency".into(), match (&p.frequency) { Some(v) => iface_payments__frequency_enum__to_json(v), None => Value::Null });
+    m.insert("execution_rule".into(), match (&p.execution_rule) { Some(v) => Value::String(iface_payments__execution_rule_enum__to_str(v).into()), None => Value::Null });
+    m.insert("frequency".into(), match (&p.frequency) { Some(v) => Value::String(iface_payments__frequency_enum__to_str(v).into()), None => Value::Null });
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__execution_rule_enum__to_json(p: &iface_payments::ExecutionRuleEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__frequency_enum__to_json(p: &iface_payments::FrequencyEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -318,9 +386,9 @@ fn iface_payments__payment_write__to_json(p: &iface_payments::PaymentWrite) -> V
     m.insert("instructed_amount".into(), iface_payments__instructed_amount__to_json(&p.instructed_amount));
     m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), match (&p.payment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => iface_payments__payment_product_enum__to_json(v), None => Value::Null });
-    m.insert("payment_status".into(), match (&p.payment_status) { Some(v) => iface_payments__payment_status_enum__to_json(v), None => Value::Null });
-    m.insert("payment_type".into(), match (&p.payment_type) { Some(v) => iface_payments__payment_type_enum__to_json(v), None => Value::Null });
+    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => Value::String(iface_payments__payment_product_enum__to_str(v).into()), None => Value::Null });
+    m.insert("payment_status".into(), match (&p.payment_status) { Some(v) => Value::String(iface_payments__payment_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("payment_type".into(), match (&p.payment_type) { Some(v) => Value::String(iface_payments__payment_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("periodic_payment".into(), match (&p.periodic_payment) { Some(v) => iface_payments__periodic_payment__to_json(v), None => Value::Null });
     m.insert("redirect".into(), Value::String((&p.redirect).clone()));
     m.insert("requested_execution_date".into(), match (&p.requested_execution_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -332,8 +400,8 @@ fn iface_payments__periodic_payment__to_json(p: &iface_payments::PeriodicPayment
     let mut m = Map::new();
     m.insert("day_of_execution".into(), match (&p.day_of_execution) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("execution_rule".into(), match (&p.execution_rule) { Some(v) => iface_payments__execution_rule_enum__to_json(v), None => Value::Null });
-    m.insert("frequency".into(), match (&p.frequency) { Some(v) => iface_payments__frequency_enum__to_json(v), None => Value::Null });
+    m.insert("execution_rule".into(), match (&p.execution_rule) { Some(v) => Value::String(iface_payments__execution_rule_enum__to_str(v).into()), None => Value::Null });
+    m.insert("frequency".into(), match (&p.frequency) { Some(v) => Value::String(iface_payments__frequency_enum__to_str(v).into()), None => Value::Null });
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     Value::Object(m)
 }
@@ -345,7 +413,7 @@ fn iface_payments__creditor_account__to_json(p: &iface_payments::CreditorAccount
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_payments__type_enum__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_payments__type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -358,15 +426,17 @@ fn iface_payments__paginated_creditor_account_list__to_json(p: &iface_payments::
     Value::Object(m)
 }
 
-fn iface_payments__list_minimum_required_fields_for_institution_response__to_json(p: &iface_payments::ListMinimumRequiredFieldsForInstitutionResponse) -> Value {
+fn iface_payments__list_minimum_required_fields_for_institution_response_entry__to_json(p: &iface_payments::ListMinimumRequiredFieldsForInstitutionResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_payments__delete_periodic_payment_response__to_json(p: &iface_payments::DeletePeriodicPaymentResponse) -> Value {
+fn iface_payments__delete_periodic_payment_response_entry__to_json(p: &iface_payments::DeletePeriodicPaymentResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -386,7 +456,7 @@ fn iface_payments__create_payment_params__to_json(p: &iface_payments::CreatePaym
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("instructed_amount".into(), iface_payments__instructed_amount_request__to_json(&p.instructed_amount));
-    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => iface_payments__payment_product_enum__to_json(v), None => Value::Null });
+    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => Value::String(iface_payments__payment_product_enum__to_str(v).into()), None => Value::Null });
     m.insert("periodic_payment".into(), match (&p.periodic_payment) { Some(v) => iface_payments__periodic_payment_request__to_json(v), None => Value::Null });
     m.insert("redirect".into(), Value::String((&p.redirect).clone()));
     m.insert("requested_execution_date".into(), match (&p.requested_execution_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -410,7 +480,7 @@ fn iface_payments__creditors_list_params__to_json(p: &iface_payments::CreditorsL
 fn iface_payments__creditors_create_params__to_json(p: &iface_payments::CreditorsCreateParams) -> Value {
     let mut m = Map::new();
     m.insert("account".into(), Value::String((&p.account).clone()));
-    m.insert("address_country".into(), match (&p.address_country) { Some(v) => iface_payments__address_country_enum__to_json(v), None => Value::Null });
+    m.insert("address_country".into(), match (&p.address_country) { Some(v) => Value::String(iface_payments__address_country_enum__to_str(v).into()), None => Value::Null });
     m.insert("address_street".into(), match (&p.address_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("agent_name".into(), match (&p.agent_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -418,7 +488,7 @@ fn iface_payments__creditors_create_params__to_json(p: &iface_payments::Creditor
     m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_payments__type_enum__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_payments__type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -462,7 +532,7 @@ fn iface_payments__submit_create_params__to_json(p: &iface_payments::SubmitCreat
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("instructed_amount".into(), iface_payments__instructed_amount_request__to_json(&p.instructed_amount));
-    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => iface_payments__payment_product_enum__to_json(v), None => Value::Null });
+    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => Value::String(iface_payments__payment_product_enum__to_str(v).into()), None => Value::Null });
     m.insert("redirect".into(), Value::String((&p.redirect).clone()));
     Value::Object(m)
 }
@@ -487,9 +557,9 @@ fn iface_payments__payment_read__from_json(v: &Value) -> Option<iface_payments::
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         instructed_amount: match m.get("instructed_amount").and_then(|v| iface_payments__instructed_amount__from_json(v)) { Some(x) => x, None => return None },
         payment_id: m.get("payment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        payment_product: m.get("payment_product").filter(|v| !v.is_null()).and_then(|v| iface_payments__payment_product_enum__from_json(v)),
-        payment_status: m.get("payment_status").filter(|v| !v.is_null()).and_then(|v| iface_payments__payment_status_enum__from_json(v)),
-        payment_type: m.get("payment_type").filter(|v| !v.is_null()).and_then(|v| iface_payments__payment_type_enum__from_json(v)),
+        payment_product: m.get("payment_product").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__payment_product_enum__from_str)),
+        payment_status: m.get("payment_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__payment_status_enum__from_str)),
+        payment_type: m.get("payment_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__payment_type_enum__from_str)),
         redirect: m.get("redirect").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -498,7 +568,7 @@ fn iface_payments__creditor_account_write__from_json(v: &Value) -> Option<iface_
     let m = v.as_object()?;
     Some(iface_payments::CreditorAccountWrite {
         account: m.get("account").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        address_country: m.get("address_country").filter(|v| !v.is_null()).and_then(|v| iface_payments__address_country_enum__from_json(v)),
+        address_country: m.get("address_country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__address_country_enum__from_str)),
         address_street: m.get("address_street").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         agent: m.get("agent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         agent_name: m.get("agent_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -507,21 +577,7 @@ fn iface_payments__creditor_account_write__from_json(v: &Value) -> Option<iface_
         institution_id: m.get("institution_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         post_code: m.get("post_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_payments__type_enum__from_json(v)),
-    })
-}
-
-fn iface_payments__address_country_enum__from_json(v: &Value) -> Option<iface_payments::AddressCountryEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::AddressCountryEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_payments__type_enum__from_json(v: &Value) -> Option<iface_payments::TypeEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::TypeEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__type_enum__from_str)),
     })
 }
 
@@ -534,7 +590,7 @@ fn iface_payments__debtor_account_write__from_json(v: &Value) -> Option<iface_pa
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         post_code: m.get("post_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_payments__type_enum__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__type_enum__from_str)),
         type_number: m.get("type_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -544,41 +600,6 @@ fn iface_payments__instructed_amount__from_json(v: &Value) -> Option<iface_payme
     Some(iface_payments::InstructedAmount {
         amount: m.get("amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_payments__payment_product_enum__from_json(v: &Value) -> Option<iface_payments::PaymentProductEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::PaymentProductEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_payments__payment_status_enum__from_json(v: &Value) -> Option<iface_payments::PaymentStatusEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::PaymentStatusEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_payments__payment_type_enum__from_json(v: &Value) -> Option<iface_payments::PaymentTypeEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::PaymentTypeEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_payments__execution_rule_enum__from_json(v: &Value) -> Option<iface_payments::ExecutionRuleEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::ExecutionRuleEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_payments__frequency_enum__from_json(v: &Value) -> Option<iface_payments::FrequencyEnum> {
-    let m = v.as_object()?;
-    Some(iface_payments::FrequencyEnum {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -592,9 +613,9 @@ fn iface_payments__payment_write__from_json(v: &Value) -> Option<iface_payments:
         instructed_amount: match m.get("instructed_amount").and_then(|v| iface_payments__instructed_amount__from_json(v)) { Some(x) => x, None => return None },
         link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         payment_id: m.get("payment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        payment_product: m.get("payment_product").filter(|v| !v.is_null()).and_then(|v| iface_payments__payment_product_enum__from_json(v)),
-        payment_status: m.get("payment_status").filter(|v| !v.is_null()).and_then(|v| iface_payments__payment_status_enum__from_json(v)),
-        payment_type: m.get("payment_type").filter(|v| !v.is_null()).and_then(|v| iface_payments__payment_type_enum__from_json(v)),
+        payment_product: m.get("payment_product").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__payment_product_enum__from_str)),
+        payment_status: m.get("payment_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__payment_status_enum__from_str)),
+        payment_type: m.get("payment_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__payment_type_enum__from_str)),
         periodic_payment: m.get("periodic_payment").filter(|v| !v.is_null()).and_then(|v| iface_payments__periodic_payment__from_json(v)),
         redirect: m.get("redirect").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         requested_execution_date: m.get("requested_execution_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -607,8 +628,8 @@ fn iface_payments__periodic_payment__from_json(v: &Value) -> Option<iface_paymen
     Some(iface_payments::PeriodicPayment {
         day_of_execution: m.get("day_of_execution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         end_date: m.get("end_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        execution_rule: m.get("execution_rule").filter(|v| !v.is_null()).and_then(|v| iface_payments__execution_rule_enum__from_json(v)),
-        frequency: m.get("frequency").filter(|v| !v.is_null()).and_then(|v| iface_payments__frequency_enum__from_json(v)),
+        execution_rule: m.get("execution_rule").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__execution_rule_enum__from_str)),
+        frequency: m.get("frequency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__frequency_enum__from_str)),
         start_date: m.get("start_date").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -621,7 +642,7 @@ fn iface_payments__creditor_account__from_json(v: &Value) -> Option<iface_paymen
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_payments__type_enum__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_payments__type_enum__from_str)),
     })
 }
 
@@ -635,18 +656,137 @@ fn iface_payments__paginated_creditor_account_list__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_payments__list_minimum_required_fields_for_institution_response__from_json(v: &Value) -> Option<iface_payments::ListMinimumRequiredFieldsForInstitutionResponse> {
+fn iface_payments__list_minimum_required_fields_for_institution_response_entry__from_json(v: &Value) -> Option<iface_payments::ListMinimumRequiredFieldsForInstitutionResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_payments::ListMinimumRequiredFieldsForInstitutionResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payments::ListMinimumRequiredFieldsForInstitutionResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_payments__delete_periodic_payment_response__from_json(v: &Value) -> Option<iface_payments::DeletePeriodicPaymentResponse> {
+fn iface_payments__delete_periodic_payment_response_entry__from_json(v: &Value) -> Option<iface_payments::DeletePeriodicPaymentResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_payments::DeletePeriodicPaymentResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payments::DeletePeriodicPaymentResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_payments__address_country_enum__from_str(s: &str) -> Option<iface_payments::AddressCountryEnum> {
+    match s {
+        "AT" => Some(iface_payments::AddressCountryEnum::At),
+        "BE" => Some(iface_payments::AddressCountryEnum::Be),
+        "BG" => Some(iface_payments::AddressCountryEnum::Bg),
+        "HR" => Some(iface_payments::AddressCountryEnum::Hr),
+        "CY" => Some(iface_payments::AddressCountryEnum::Cy),
+        "CZ" => Some(iface_payments::AddressCountryEnum::Cz),
+        "DK" => Some(iface_payments::AddressCountryEnum::Dk),
+        "EE" => Some(iface_payments::AddressCountryEnum::Ee),
+        "FI" => Some(iface_payments::AddressCountryEnum::Fi),
+        "FR" => Some(iface_payments::AddressCountryEnum::Fr),
+        "DE" => Some(iface_payments::AddressCountryEnum::De),
+        "GR" => Some(iface_payments::AddressCountryEnum::Gr),
+        "HU" => Some(iface_payments::AddressCountryEnum::Hu),
+        "IS" => Some(iface_payments::AddressCountryEnum::Is),
+        "IE" => Some(iface_payments::AddressCountryEnum::Ie),
+        "IT" => Some(iface_payments::AddressCountryEnum::It),
+        "LV" => Some(iface_payments::AddressCountryEnum::Lv),
+        "LI" => Some(iface_payments::AddressCountryEnum::Li),
+        "LT" => Some(iface_payments::AddressCountryEnum::Lt),
+        "LU" => Some(iface_payments::AddressCountryEnum::Lu),
+        "MT" => Some(iface_payments::AddressCountryEnum::Mt),
+        "NL" => Some(iface_payments::AddressCountryEnum::Nl),
+        "NO" => Some(iface_payments::AddressCountryEnum::No),
+        "PL" => Some(iface_payments::AddressCountryEnum::Pl),
+        "PT" => Some(iface_payments::AddressCountryEnum::Pt),
+        "RO" => Some(iface_payments::AddressCountryEnum::Ro),
+        "SK" => Some(iface_payments::AddressCountryEnum::Sk),
+        "SI" => Some(iface_payments::AddressCountryEnum::Si),
+        "ES" => Some(iface_payments::AddressCountryEnum::Es),
+        "SE" => Some(iface_payments::AddressCountryEnum::Se),
+        "GB" => Some(iface_payments::AddressCountryEnum::Gb),
+        "US" => Some(iface_payments::AddressCountryEnum::Us),
+        _ => None,
+    }
+}
+
+fn iface_payments__type_enum__from_str(s: &str) -> Option<iface_payments::TypeEnum> {
+    match s {
+        "IBAN" => Some(iface_payments::TypeEnum::Iban),
+        "SCAN" => Some(iface_payments::TypeEnum::Scan),
+        _ => None,
+    }
+}
+
+fn iface_payments__payment_product_enum__from_str(s: &str) -> Option<iface_payments::PaymentProductEnum> {
+    match s {
+        "T2P" => Some(iface_payments::PaymentProductEnum::T2p),
+        "SCT" => Some(iface_payments::PaymentProductEnum::Sct),
+        "ISCT" => Some(iface_payments::PaymentProductEnum::Isct),
+        "CBCT" => Some(iface_payments::PaymentProductEnum::Cbct),
+        "BACS" => Some(iface_payments::PaymentProductEnum::Bacs),
+        "CHAPS" => Some(iface_payments::PaymentProductEnum::Chaps),
+        "FPS" => Some(iface_payments::PaymentProductEnum::Fps),
+        "SWIFT" => Some(iface_payments::PaymentProductEnum::Swift),
+        "BT" => Some(iface_payments::PaymentProductEnum::Bt),
+        "MT" => Some(iface_payments::PaymentProductEnum::Mt),
+        _ => None,
+    }
+}
+
+fn iface_payments__payment_status_enum__from_str(s: &str) -> Option<iface_payments::PaymentStatusEnum> {
+    match s {
+        "INIT" => Some(iface_payments::PaymentStatusEnum::Init),
+        "ERRE" => Some(iface_payments::PaymentStatusEnum::Erre),
+        "ERRS" => Some(iface_payments::PaymentStatusEnum::Errs),
+        "ACCC" => Some(iface_payments::PaymentStatusEnum::Accc),
+        "ACCP" => Some(iface_payments::PaymentStatusEnum::Accp),
+        "ACSC" => Some(iface_payments::PaymentStatusEnum::Acsc),
+        "ACSP" => Some(iface_payments::PaymentStatusEnum::Acsp),
+        "ACTC" => Some(iface_payments::PaymentStatusEnum::Actc),
+        "ACWC" => Some(iface_payments::PaymentStatusEnum::Acwc),
+        "ACWP" => Some(iface_payments::PaymentStatusEnum::Acwp),
+        "RCVD" => Some(iface_payments::PaymentStatusEnum::Rcvd),
+        "PDNG" => Some(iface_payments::PaymentStatusEnum::Pdng),
+        "RJCT" => Some(iface_payments::PaymentStatusEnum::Rjct),
+        "CANC" => Some(iface_payments::PaymentStatusEnum::Canc),
+        "ACFC" => Some(iface_payments::PaymentStatusEnum::Acfc),
+        "PATC" => Some(iface_payments::PaymentStatusEnum::Patc),
+        "PART" => Some(iface_payments::PaymentStatusEnum::Part),
+        _ => None,
+    }
+}
+
+fn iface_payments__payment_type_enum__from_str(s: &str) -> Option<iface_payments::PaymentTypeEnum> {
+    match s {
+        "single-payment" => Some(iface_payments::PaymentTypeEnum::SinglePayment),
+        "bulk-payment" => Some(iface_payments::PaymentTypeEnum::BulkPayment),
+        "periodic-payment" => Some(iface_payments::PaymentTypeEnum::PeriodicPayment),
+        _ => None,
+    }
+}
+
+fn iface_payments__execution_rule_enum__from_str(s: &str) -> Option<iface_payments::ExecutionRuleEnum> {
+    match s {
+        "following" => Some(iface_payments::ExecutionRuleEnum::Following),
+        "preceding" => Some(iface_payments::ExecutionRuleEnum::Preceding),
+        _ => None,
+    }
+}
+
+fn iface_payments__frequency_enum__from_str(s: &str) -> Option<iface_payments::FrequencyEnum> {
+    match s {
+        "Daily" => Some(iface_payments::FrequencyEnum::Daily),
+        "Weekly" => Some(iface_payments::FrequencyEnum::Weekly),
+        "EveryTwoWeeks" => Some(iface_payments::FrequencyEnum::EveryTwoWeeks),
+        "Monthly" => Some(iface_payments::FrequencyEnum::Monthly),
+        "EveryTwoMonths" => Some(iface_payments::FrequencyEnum::EveryTwoMonths),
+        "Quarterly" => Some(iface_payments::FrequencyEnum::Quarterly),
+        "SemiAnnual" => Some(iface_payments::FrequencyEnum::SemiAnnual),
+        "Annual" => Some(iface_payments::FrequencyEnum::Annual),
+        "MonthlyVariable" => Some(iface_payments::FrequencyEnum::MonthlyVariable),
+        _ => None,
+    }
 }
 
 fn iface_payments__list_payments__ok(body: String) -> Result<iface_payments::PaginatedPaymentReadList, crate::runtime::DispatchError> {
@@ -783,12 +923,12 @@ fn iface_payments__creditors_destroy__err(e: crate::runtime::DispatchError) -> S
     }
 }
 
-fn iface_payments__list_minimum_required_fields_for_institution__ok(body: String) -> Result<iface_payments::ListMinimumRequiredFieldsForInstitutionResponse, crate::runtime::DispatchError> {
+fn iface_payments__list_minimum_required_fields_for_institution__ok(body: String) -> Result<Vec<iface_payments::ListMinimumRequiredFieldsForInstitutionResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_payments__list_minimum_required_fields_for_institution_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_payments::ListMinimumRequiredFieldsForInstitutionResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -830,12 +970,12 @@ fn iface_payments__retrieve_payment__err(e: crate::runtime::DispatchError) -> if
     }
 }
 
-fn iface_payments__delete_periodic_payment__ok(body: String) -> Result<iface_payments::DeletePeriodicPaymentResponse, crate::runtime::DispatchError> {
+fn iface_payments__delete_periodic_payment__ok(body: String) -> Result<Vec<iface_payments::DeletePeriodicPaymentResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_payments__delete_periodic_payment_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_payments::DeletePeriodicPaymentResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -922,7 +1062,7 @@ impl iface_payments::Guest for crate::Component {
             Err(e) => Err(iface_payments__creditors_destroy__err(e)),
         }
     }
-    fn list_minimum_required_fields_for_institution(params: iface_payments::ListMinimumRequiredFieldsForInstitutionParams) -> Result<iface_payments::ListMinimumRequiredFieldsForInstitutionResponse, iface_payments::ListMinimumRequiredFieldsForInstitutionError> {
+    fn list_minimum_required_fields_for_institution(params: iface_payments::ListMinimumRequiredFieldsForInstitutionParams) -> Result<Vec<iface_payments::ListMinimumRequiredFieldsForInstitutionResponseEntry>, iface_payments::ListMinimumRequiredFieldsForInstitutionError> {
         let json = iface_payments__list_minimum_required_fields_for_institution_params__to_json(&params);
         match dispatch(&OP_PAYMENTS_LIST_MINIMUM_REQUIRED_FIELDS_FOR_INSTITUTION, json).and_then(iface_payments__list_minimum_required_fields_for_institution__ok) {
             Ok(v) => Ok(v),
@@ -936,7 +1076,7 @@ impl iface_payments::Guest for crate::Component {
             Err(e) => Err(iface_payments__retrieve_payment__err(e)),
         }
     }
-    fn delete_periodic_payment(params: iface_payments::DeletePeriodicPaymentParams) -> Result<iface_payments::DeletePeriodicPaymentResponse, iface_payments::DeletePeriodicPaymentError> {
+    fn delete_periodic_payment(params: iface_payments::DeletePeriodicPaymentParams) -> Result<Vec<iface_payments::DeletePeriodicPaymentResponseEntry>, iface_payments::DeletePeriodicPaymentError> {
         let json = iface_payments__delete_periodic_payment_params__to_json(&params);
         match dispatch(&OP_PAYMENTS_DELETE_PERIODIC_PAYMENT, json).and_then(iface_payments__delete_periodic_payment__ok) {
             Ok(v) => Ok(v),

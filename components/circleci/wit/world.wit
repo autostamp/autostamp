@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apikey` | query `circle-token` |
-package autostamp:circleci@0.5.0;
+package autostamp:circleci@0.6.0;
 
 interface me {
   record user {
@@ -29,24 +29,26 @@ interface me {
     in-beta-program: option<bool>,
     login: option<string>,
     name: option<string>,
-    organization-prefs: option<user-organization-prefs>,
+    organization-prefs: option<list<user-organization-prefs-entry>>,
     parallelism: option<s32>,
     plan: option<string>,
-    projects: option<user-projects>,
+    projects: option<list<user-projects-entry>>,
     pusher-id: option<string>,
     selected-email: option<string>,
     sign-in-count: option<s32>,
     trial-end: option<string>
   }
 
-  record user-organization-prefs {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record user-organization-prefs-entry {
+    key: string,
+    value: string
   }
 
-  record user-projects {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record user-projects-entry {
+    key: string,
+    value: string
   }
 
   get-me: func() -> result<user, string>;
@@ -62,7 +64,41 @@ interface project {
     running,
   }
 
-  enum post-project-username-project-checkout-key-body-enum {
+  enum lifecycle {
+    queued,
+    scheduled,
+    not-run,
+    not-running,
+    running,
+    finished,
+  }
+
+  enum status {
+    retried,
+    canceled,
+    infrastructure-fail,
+    timedout,
+    not-run,
+    running,
+    failed,
+    queued,
+    scheduled,
+    not-running,
+    no-tests,
+    fixed,
+    success,
+  }
+
+  enum outcome {
+    canceled,
+    infrastructure-fail,
+    timedout,
+    failed,
+    no-tests,
+    success,
+  }
+
+  enum key-type-op-enum {
     deploy-key,
     github-user-key,
   }
@@ -73,97 +109,6 @@ interface project {
 
   enum post-project-username-project-ssh-key-content-type-enum {
     application-json,
-  }
-
-  record builds {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Additional environment variables to inject into the build environment. A map of names to values.
-  record build-parameters {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// The number of containers to use to run the build. Default is null and the project default is used.
-  record parallel {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The specific revision to build.
-  /// Default is null and the head of the branch is used. Cannot be used with tag parameter.
-  record revision {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The tag to build. Default is null. Cannot be used with revision parameter.
-  record tag {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record build-summary {
-    added-at: option<string>,
-    build-num: option<s32>,
-    outcome: option<outcome>,
-    pushed-at: option<string>,
-    status: option<status>,
-    vcs-revision: option<sha1>
-  }
-
-  record outcome {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record sha1 {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-project-username-project-build-cache-response {
-    status: option<string>
-  }
-
-  record keys {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record key {
-    fingerprint: option<string>,
-    preferred: option<bool>,
-    public-key: option<string>,
-    /// when the key was issued
-    time: option<string>,
-    /// can be "deploy-key" or "github-user-key"
-    type-op: option<post-project-username-project-checkout-key-body-enum>
-  }
-
-  record delete-project-username-project-checkout-key-fingerprint-response {
-    message: option<delete-project-username-project-checkout-key-fingerprint-response-message-enum>
-  }
-
-  record envvars {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record envvar {
-    name: option<string>,
-    value: option<string>
-  }
-
-  record delete-project-username-project-envvar-name-response {
-    message: option<delete-project-username-project-checkout-key-fingerprint-response-message-enum>
   }
 
   record build {
@@ -194,11 +139,6 @@ interface project {
     why: option<string>
   }
 
-  record lifecycle {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// previous build
   record previous-build {
     build-num: option<s32>,
@@ -206,9 +146,57 @@ interface project {
     status: option<status>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record build-parameters-entry {
+    key: string,
+    value: string
+  }
+
+  record build-summary {
+    added-at: option<string>,
+    build-num: option<s32>,
+    outcome: option<outcome>,
+    pushed-at: option<string>,
+    status: option<status>,
+    vcs-revision: option<string>
+  }
+
+  record delete-project-username-project-build-cache-response {
+    status: option<string>
+  }
+
+  record key {
+    fingerprint: option<string>,
+    preferred: option<bool>,
+    public-key: option<string>,
+    /// when the key was issued
+    time: option<string>,
+    /// can be "deploy-key" or "github-user-key"
+    type-op: option<key-type-op-enum>
+  }
+
+  record delete-project-username-project-checkout-key-fingerprint-response {
+    message: option<delete-project-username-project-checkout-key-fingerprint-response-message-enum>
+  }
+
+  record envvar {
+    name: option<string>,
+    value: option<string>
+  }
+
+  record delete-project-username-project-envvar-name-response {
+    message: option<delete-project-username-project-checkout-key-fingerprint-response-message-enum>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record build-parameters-entry-v2 {
+    key: string,
+    value: string
+  }
+
   /// previous build
   record build-detail {
-    all-commit-details: option<commit-details>,
+    all-commit-details: option<list<commit-detail>>,
     compare: option<string>,
     job-name: option<string>,
     node: option<string>,
@@ -220,9 +208,19 @@ interface project {
     user: option<user>
   }
 
-  record commit-details {
-    /// opaque schema; raw JSON
-    value: string
+  record commit-detail {
+    author-date: option<string>,
+    author-email: option<string>,
+    author-login: option<string>,
+    author-name: option<string>,
+    body: option<string>,
+    commit: option<string>,
+    commit-url: option<string>,
+    committer-date: option<string>,
+    committer-email: option<string>,
+    committer-login: option<string>,
+    committer-name: option<string>,
+    subject: option<string>
   }
 
   record user {
@@ -245,29 +243,33 @@ interface project {
     in-beta-program: option<bool>,
     login: option<string>,
     name: option<string>,
-    organization-prefs: option<user-organization-prefs>,
+    organization-prefs: option<list<user-organization-prefs-entry>>,
     parallelism: option<s32>,
     plan: option<string>,
-    projects: option<user-projects>,
+    projects: option<list<user-projects-entry>>,
     pusher-id: option<string>,
     selected-email: option<string>,
     sign-in-count: option<s32>,
     trial-end: option<string>
   }
 
-  record user-organization-prefs {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record user-projects {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record artifacts {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record user-organization-prefs-entry {
+    key: string,
     value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record user-projects-entry {
+    key: string,
+    value: string
+  }
+
+  record artifact {
+    node-index: option<s32>,
+    path: option<string>,
+    pretty-path: option<string>,
+    url: option<string>
   }
 
   record tests {
@@ -297,17 +299,17 @@ interface project {
     /// Set to "completed", "successful", "failed", "running", or defaults to no filter.
     filter: option<get-project-username-project-filter-enum>
   }
-  get-project-username-project: func(params: get-project-username-project-params) -> result<builds, string>;
+  get-project-username-project: func(params: get-project-username-project-params) -> result<list<build>, string>;
 
   record post-project-username-project-params {
     /// XXXXXXXXX
     username: string,
     /// XXXXXXXXX
     project: string,
-    build-parameters: option<build-parameters>,
-    parallel: option<parallel>,
-    revision: option<revision>,
-    tag: option<tag>
+    build-parameters: option<list<build-parameters-entry>>,
+    parallel: option<string>,
+    revision: option<string>,
+    tag: option<string>
   }
   post-project-username-project: func(params: post-project-username-project-params) -> result<build-summary, string>;
 
@@ -325,7 +327,7 @@ interface project {
     /// XXXXXXXXX
     project: string
   }
-  get-project-username-project-checkout-key: func(params: get-project-username-project-checkout-key-params) -> result<keys, string>;
+  get-project-username-project-checkout-key: func(params: get-project-username-project-checkout-key-params) -> result<list<key>, string>;
 
   record post-project-username-project-checkout-key-params {
     /// XXXXXXXXX
@@ -361,7 +363,7 @@ interface project {
     /// XXXXXXXXX
     project: string
   }
-  get-project-username-project-envvar: func(params: get-project-username-project-envvar-params) -> result<envvars, string>;
+  get-project-username-project-envvar: func(params: get-project-username-project-envvar-params) -> result<list<envvar>, string>;
 
   record post-project-username-project-envvar-params {
     /// XXXXXXXXX
@@ -409,9 +411,9 @@ interface project {
     project: string,
     /// The branch name should be url-encoded.
     branch: string,
-    build-parameters: option<build-parameters>,
-    parallel: option<parallel>,
-    revision: option<revision>
+    build-parameters: option<list<build-parameters-entry-v2>>,
+    parallel: option<string>,
+    revision: option<string>
   }
   post-project-username-project-tree-branch: func(params: post-project-username-project-tree-branch-params) -> result<build, string>;
 
@@ -433,7 +435,7 @@ interface project {
     /// XXXXXXXXXX
     build-num: string
   }
-  get-project-username-project-build-num-artifacts: func(params: get-project-username-project-build-num-artifacts-params) -> result<artifacts, string>;
+  get-project-username-project-build-num-artifacts: func(params: get-project-username-project-build-num-artifacts-params) -> result<list<artifact>, string>;
 
   record post-project-username-project-build-num-cancel-params {
     /// XXXXXXXXX
@@ -468,19 +470,144 @@ interface project {
 }
 
 interface projects {
-  record projects {
-    /// opaque schema; raw JSON
+  enum scope {
+    write-settings,
+    view-builds,
+    read-settings,
+    trigger-builds,
+    all,
+    status,
+    none,
+  }
+
+  record project {
+    aws: option<aws>,
+    branches: option<list<project-branches-entry>>,
+    campfire-notify-prefs: option<string>,
+    campfire-room: option<string>,
+    campfire-subdomain: option<string>,
+    campfire-token: option<string>,
+    compile: option<string>,
+    default-branch: option<string>,
+    dependencies: option<string>,
+    extra: option<string>,
+    feature-flags: option<project-feature-flags>,
+    flowdock-api-token: option<string>,
+    followed: option<bool>,
+    has-usable-key: option<bool>,
+    heroku-deploy-user: option<string>,
+    hipchat-api-token: option<string>,
+    hipchat-notify: option<string>,
+    hipchat-notify-prefs: option<string>,
+    hipchat-room: option<string>,
+    irc-channel: option<string>,
+    irc-keyword: option<string>,
+    irc-notify-prefs: option<string>,
+    irc-password: option<string>,
+    irc-server: option<string>,
+    irc-username: option<string>,
+    language: option<string>,
+    oss: option<bool>,
+    parallel: option<s32>,
+    reponame: option<string>,
+    scopes: option<list<scope>>,
+    setup: option<string>,
+    slack-api-token: option<string>,
+    slack-channel: option<string>,
+    slack-channel-override: option<string>,
+    slack-notify-prefs: option<string>,
+    slack-subdomain: option<string>,
+    slack-webhook-url: option<string>,
+    ssh-keys: option<list<string>>,
+    test: option<string>,
+    username: option<string>,
+    vcs-type: option<string>,
+    vcs-url: option<string>
+  }
+
+  record aws {
+    keypair: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record project-branches-entry {
+    key: string,
     value: string
   }
 
-  get-projects: func() -> result<projects, string>;
+  record project-feature-flags {
+    build-fork-prs: option<bool>,
+    fleet: option<bool>,
+    junit: option<bool>,
+    oss: option<bool>,
+    osx: option<bool>,
+    set-github-status: option<bool>,
+    trusty-beta: option<bool>
+  }
+
+  get-projects: func() -> result<list<project>, string>;
 
 }
 
 interface recent-builds {
-  record builds {
-    /// opaque schema; raw JSON
-    value: string
+  enum lifecycle {
+    queued,
+    scheduled,
+    not-run,
+    not-running,
+    running,
+    finished,
+  }
+
+  enum status {
+    retried,
+    canceled,
+    infrastructure-fail,
+    timedout,
+    not-run,
+    running,
+    failed,
+    queued,
+    scheduled,
+    not-running,
+    no-tests,
+    fixed,
+    success,
+  }
+
+  record build {
+    /// commit message body
+    body: option<string>,
+    branch: option<string>,
+    build-time-millis: option<s32>,
+    build-url: option<string>,
+    committer-email: option<string>,
+    committer-name: option<string>,
+    /// reason why we didn't build, if we didn't build
+    dont-build: option<string>,
+    lifecycle: option<lifecycle>,
+    previous: option<previous-build>,
+    /// time build was queued
+    queued-at: option<string>,
+    reponame: option<string>,
+    /// build_num of the build this is a retry of
+    retry-of: option<s32>,
+    /// time build started
+    start-time: option<string>,
+    /// time build finished
+    stop-time: option<string>,
+    subject: option<string>,
+    username: option<string>,
+    vcs-url: option<string>,
+    /// short string explaining the reason we built
+    why: option<string>
+  }
+
+  /// previous build
+  record previous-build {
+    build-num: option<s32>,
+    build-time-millis: option<s32>,
+    status: option<status>
   }
 
   record get-recent-builds-params {
@@ -489,7 +616,7 @@ interface recent-builds {
     /// The API returns builds starting from this offset, defaults to 0.
     offset: option<s32>
   }
-  get-recent-builds: func(params: get-recent-builds-params) -> result<builds, string>;
+  get-recent-builds: func(params: get-recent-builds-params) -> result<list<build>, string>;
 
 }
 

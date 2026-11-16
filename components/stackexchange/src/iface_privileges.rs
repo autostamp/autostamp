@@ -18,9 +18,11 @@ const OP_PRIVILEGES_GET_PRIVILEGES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_privileges__privileges__to_json(p: &iface_privileges::Privileges) -> Value {
+fn iface_privileges__privileges_item__to_json(p: &iface_privileges::PrivilegesItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("short_description".into(), match (&p.short_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -34,19 +36,21 @@ fn iface_privileges__get_privileges_params__to_json(p: &iface_privileges::GetPri
     Value::Object(m)
 }
 
-fn iface_privileges__privileges__from_json(v: &Value) -> Option<iface_privileges::Privileges> {
+fn iface_privileges__privileges_item__from_json(v: &Value) -> Option<iface_privileges::PrivilegesItem> {
     let m = v.as_object()?;
-    Some(iface_privileges::Privileges {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_privileges::PrivilegesItem {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        short_description: m.get("short_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_privileges__get_privileges__ok(body: String) -> Result<iface_privileges::Privileges, crate::runtime::DispatchError> {
+fn iface_privileges__get_privileges__ok(body: String) -> Result<Vec<iface_privileges::PrivilegesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_privileges__privileges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_privileges__privileges_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -72,7 +76,7 @@ fn iface_privileges__get_privileges__err(e: crate::runtime::DispatchError) -> if
 }
 
 impl iface_privileges::Guest for crate::Component {
-    fn get_privileges(params: iface_privileges::GetPrivilegesParams) -> Result<iface_privileges::Privileges, iface_privileges::GetPrivilegesError> {
+    fn get_privileges(params: iface_privileges::GetPrivilegesParams) -> Result<Vec<iface_privileges::PrivilegesItem>, iface_privileges::GetPrivilegesError> {
         let json = iface_privileges__get_privileges_params__to_json(&params);
         match dispatch(&OP_PRIVILEGES_GET_PRIVILEGES, json).and_then(iface_privileges__get_privileges__ok) {
             Ok(v) => Ok(v),

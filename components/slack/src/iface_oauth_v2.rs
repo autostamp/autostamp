@@ -20,13 +20,7 @@ const OP_OAUTH_V2_ACCESS: OpSpec = OpSpec {
 
 fn iface_oauth_v2__access_response__to_json(p: &iface_oauth_v2::AccessResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_oauth_v2__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_oauth_v2__defs_ok_true__to_json(p: &iface_oauth_v2::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -42,14 +36,7 @@ fn iface_oauth_v2__access_params__to_json(p: &iface_oauth_v2::AccessParams) -> V
 fn iface_oauth_v2__access_response__from_json(v: &Value) -> Option<iface_oauth_v2::AccessResponse> {
     let m = v.as_object()?;
     Some(iface_oauth_v2::AccessResponse {
-        ok: match m.get("ok").and_then(|v| iface_oauth_v2__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_oauth_v2__defs_ok_true__from_json(v: &Value) -> Option<iface_oauth_v2::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_oauth_v2::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

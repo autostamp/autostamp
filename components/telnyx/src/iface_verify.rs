@@ -181,10 +181,57 @@ const OP_VERIFY_DELETE_VERIFY_PROFILE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_verify__verification_record_type__to_str(e: &iface_verify::VerificationRecordType) -> &'static str {
+    match e {
+        iface_verify::VerificationRecordType::Verification => "verification",
+    }
+}
+
+fn iface_verify__verification_status__to_str(e: &iface_verify::VerificationStatus) -> &'static str {
+    match e {
+        iface_verify::VerificationStatus::Pending => "pending",
+        iface_verify::VerificationStatus::SmsDeliveryFailed => "sms_delivery_failed",
+        iface_verify::VerificationStatus::Accepted => "accepted",
+        iface_verify::VerificationStatus::Expired => "expired",
+        iface_verify::VerificationStatus::NotEnoughCredit => "not_enough_credit",
+        iface_verify::VerificationStatus::NetworkError => "network_error",
+        iface_verify::VerificationStatus::NumberUnreachable => "number_unreachable",
+        iface_verify::VerificationStatus::InternalError => "internal_error",
+        iface_verify::VerificationStatus::InvalidDestination => "invalid_destination",
+        iface_verify::VerificationStatus::TimedOut => "timed_out",
+    }
+}
+
+fn iface_verify__verification_type__to_str(e: &iface_verify::VerificationType) -> &'static str {
+    match e {
+        iface_verify::VerificationType::SmsVerification => "sms_verification",
+        iface_verify::VerificationType::Psd2Verification => "psd2_verification",
+        iface_verify::VerificationType::WhatsappVerification => "whatsapp_verification",
+        iface_verify::VerificationType::CallVerification => "call_verification",
+        iface_verify::VerificationType::FlashcallVerification => "flashcall_verification",
+    }
+}
+
 fn iface_verify__verification_code_response_data_response_code_enum__to_str(e: &iface_verify::VerificationCodeResponseDataResponseCodeEnum) -> &'static str {
     match e {
         iface_verify::VerificationCodeResponseDataResponseCodeEnum::Accepted => "accepted",
         iface_verify::VerificationCodeResponseDataResponseCodeEnum::Rejected => "rejected",
+    }
+}
+
+fn iface_verify__currencies__to_str(e: &iface_verify::Currencies) -> &'static str {
+    match e {
+        iface_verify::Currencies::Usd => "USD",
+        iface_verify::Currencies::Eur => "EUR",
+        iface_verify::Currencies::Gbp => "GBP",
+        iface_verify::Currencies::Aud => "AUD",
+        iface_verify::Currencies::Cad => "CAD",
+    }
+}
+
+fn iface_verify__verification_profile_record_type__to_str(e: &iface_verify::VerificationProfileRecordType) -> &'static str {
+    match e {
+        iface_verify::VerificationProfileRecordType::VerificationProfile => "verification_profile",
     }
 }
 
@@ -201,30 +248,12 @@ fn iface_verify__verification__to_json(p: &iface_verify::Verification) -> Value 
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("record_type".into(), match (&p.record_type) { Some(v) => iface_verify__verification_record_type__to_json(v), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_verify__verification_status__to_json(v), None => Value::Null });
+    m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String(iface_verify__verification_record_type__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_verify__verification_status__to_str(v).into()), None => Value::Null });
     m.insert("timeout_secs".into(), match (&p.timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("verification_type".into(), match (&p.verification_type) { Some(v) => iface_verify__verification_type__to_json(v), None => Value::Null });
+    m.insert("verification_type".into(), match (&p.verification_type) { Some(v) => Value::String(iface_verify__verification_type__to_str(v).into()), None => Value::Null });
     m.insert("verify_profile_id".into(), match (&p.verify_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_verify__verification_record_type__to_json(p: &iface_verify::VerificationRecordType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_verify__verification_status__to_json(p: &iface_verify::VerificationStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_verify__verification_type__to_json(p: &iface_verify::VerificationType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -256,12 +285,6 @@ fn iface_verify__create_verification_response__to_json(p: &iface_verify::CreateV
     Value::Object(m)
 }
 
-fn iface_verify__currencies__to_json(p: &iface_verify::Currencies) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_verify__retrieve_verification_response__to_json(p: &iface_verify::RetrieveVerificationResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), iface_verify__verification__to_json(&p.data));
@@ -284,7 +307,7 @@ fn iface_verify__profile_response__to_json(p: &iface_verify::ProfileResponse) ->
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("psd2".into(), match (&p.psd2) { Some(v) => iface_verify__profile_psd2_response__to_json(v), None => Value::Null });
-    m.insert("record_type".into(), match (&p.record_type) { Some(v) => iface_verify__verification_profile_record_type__to_json(v), None => Value::Null });
+    m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String(iface_verify__verification_profile_record_type__to_str(v).into()), None => Value::Null });
     m.insert("sms".into(), match (&p.sms) { Some(v) => iface_verify__profile_sms_response__to_json(v), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_failover_url".into(), match (&p.webhook_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -310,12 +333,6 @@ fn iface_verify__profile_flashcall_response__to_json(p: &iface_verify::ProfileFl
 fn iface_verify__profile_psd2_response__to_json(p: &iface_verify::ProfilePsd2Response) -> Value {
     let mut m = Map::new();
     m.insert("default_verification_timeout_secs".into(), match (&p.default_verification_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_verify__verification_profile_record_type__to_json(p: &iface_verify::VerificationProfileRecordType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -449,7 +466,7 @@ fn iface_verify__create_verification_flashcall_params__to_json(p: &iface_verify:
 fn iface_verify__create_verification_psd2_params__to_json(p: &iface_verify::CreateVerificationPsd2Params) -> Value {
     let mut m = Map::new();
     m.insert("amount".into(), Value::String((&p.amount).clone()));
-    m.insert("currency".into(), iface_verify__currencies__to_json(&p.currency));
+    m.insert("currency".into(), Value::String(iface_verify__currencies__to_str(&p.currency).into()));
     m.insert("payee".into(), Value::String((&p.payee).clone()));
     m.insert("phone_number".into(), Value::String((&p.phone_number).clone()));
     m.insert("timeout_secs".into(), match (&p.timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -543,33 +560,12 @@ fn iface_verify__verification__from_json(v: &Value) -> Option<iface_verify::Veri
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| iface_verify__verification_record_type__from_json(v)),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_verify__verification_status__from_json(v)),
+        record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verify__verification_record_type__from_str)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verify__verification_status__from_str)),
         timeout_secs: m.get("timeout_secs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        verification_type: m.get("verification_type").filter(|v| !v.is_null()).and_then(|v| iface_verify__verification_type__from_json(v)),
+        verification_type: m.get("verification_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verify__verification_type__from_str)),
         verify_profile_id: m.get("verify_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_verify__verification_record_type__from_json(v: &Value) -> Option<iface_verify::VerificationRecordType> {
-    let m = v.as_object()?;
-    Some(iface_verify::VerificationRecordType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_verify__verification_status__from_json(v: &Value) -> Option<iface_verify::VerificationStatus> {
-    let m = v.as_object()?;
-    Some(iface_verify::VerificationStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_verify__verification_type__from_json(v: &Value) -> Option<iface_verify::VerificationType> {
-    let m = v.as_object()?;
-    Some(iface_verify::VerificationType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -630,7 +626,7 @@ fn iface_verify__profile_response__from_json(v: &Value) -> Option<iface_verify::
         language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         psd2: m.get("psd2").filter(|v| !v.is_null()).and_then(|v| iface_verify__profile_psd2_response__from_json(v)),
-        record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| iface_verify__verification_profile_record_type__from_json(v)),
+        record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verify__verification_profile_record_type__from_str)),
         sms: m.get("sms").filter(|v| !v.is_null()).and_then(|v| iface_verify__profile_sms_response__from_json(v)),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_failover_url: m.get("webhook_failover_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -662,13 +658,6 @@ fn iface_verify__profile_psd2_response__from_json(v: &Value) -> Option<iface_ver
     })
 }
 
-fn iface_verify__verification_profile_record_type__from_json(v: &Value) -> Option<iface_verify::VerificationProfileRecordType> {
-    let m = v.as_object()?;
-    Some(iface_verify::VerificationProfileRecordType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_verify__profile_sms_response__from_json(v: &Value) -> Option<iface_verify::ProfileSmsResponse> {
     let m = v.as_object()?;
     Some(iface_verify::ProfileSmsResponse {
@@ -695,10 +684,51 @@ fn iface_verify__profile_response_data_wrapper__from_json(v: &Value) -> Option<i
     })
 }
 
+fn iface_verify__verification_record_type__from_str(s: &str) -> Option<iface_verify::VerificationRecordType> {
+    match s {
+        "verification" => Some(iface_verify::VerificationRecordType::Verification),
+        _ => None,
+    }
+}
+
+fn iface_verify__verification_status__from_str(s: &str) -> Option<iface_verify::VerificationStatus> {
+    match s {
+        "pending" => Some(iface_verify::VerificationStatus::Pending),
+        "sms_delivery_failed" => Some(iface_verify::VerificationStatus::SmsDeliveryFailed),
+        "accepted" => Some(iface_verify::VerificationStatus::Accepted),
+        "expired" => Some(iface_verify::VerificationStatus::Expired),
+        "not_enough_credit" => Some(iface_verify::VerificationStatus::NotEnoughCredit),
+        "network_error" => Some(iface_verify::VerificationStatus::NetworkError),
+        "number_unreachable" => Some(iface_verify::VerificationStatus::NumberUnreachable),
+        "internal_error" => Some(iface_verify::VerificationStatus::InternalError),
+        "invalid_destination" => Some(iface_verify::VerificationStatus::InvalidDestination),
+        "timed_out" => Some(iface_verify::VerificationStatus::TimedOut),
+        _ => None,
+    }
+}
+
+fn iface_verify__verification_type__from_str(s: &str) -> Option<iface_verify::VerificationType> {
+    match s {
+        "sms_verification" => Some(iface_verify::VerificationType::SmsVerification),
+        "psd2_verification" => Some(iface_verify::VerificationType::Psd2Verification),
+        "whatsapp_verification" => Some(iface_verify::VerificationType::WhatsappVerification),
+        "call_verification" => Some(iface_verify::VerificationType::CallVerification),
+        "flashcall_verification" => Some(iface_verify::VerificationType::FlashcallVerification),
+        _ => None,
+    }
+}
+
 fn iface_verify__verification_code_response_data_response_code_enum__from_str(s: &str) -> Option<iface_verify::VerificationCodeResponseDataResponseCodeEnum> {
     match s {
         "accepted" => Some(iface_verify::VerificationCodeResponseDataResponseCodeEnum::Accepted),
         "rejected" => Some(iface_verify::VerificationCodeResponseDataResponseCodeEnum::Rejected),
+        _ => None,
+    }
+}
+
+fn iface_verify__verification_profile_record_type__from_str(s: &str) -> Option<iface_verify::VerificationProfileRecordType> {
+    match s {
+        "verification_profile" => Some(iface_verify::VerificationProfileRecordType::VerificationProfile),
         _ => None,
     }
 }

@@ -22,7 +22,7 @@ fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_inter
     m.insert("creator_id".into(), Value::Number(serde_json::Number::from(*(&p.creator_id))));
     m.insert("creator_type".into(), Value::Number(serde_json::Number::from(*(&p.creator_type))));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_decline".into(), Value::Number(serde_json::Number::from(*(&p.is_decline))));
     m.insert("is_draft".into(), Value::Number(serde_json::Number::from(*(&p.is_draft))));
     m.insert("parent_id".into(), Value::Number(serde_json::Number::from(*(&p.parent_id))));
@@ -33,22 +33,24 @@ fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attac
     let mut m = Map::new();
     m.insert("attachment_id".into(), Value::Number(serde_json::Number::from(*(&p.attachment_id))));
     m.insert("comment_id".into(), Value::Number(serde_json::Number::from(*(&p.comment_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attachment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("file_name".into(), Value::String((&p.file_name).clone()));
     m.insert("file_path".into(), Value::String((&p.file_path).clone()));
     m.insert("file_type".into(), Value::String((&p.file_type).clone()));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attachment_extension_interface__to_json(p: &iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attachment_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_extension_interface__to_json(p: &iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -67,7 +69,7 @@ fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_inter
         creator_id: m.get("creator_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         creator_type: m.get("creator_type").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_decline: m.get("is_decline").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         is_draft: m.get("is_draft").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -79,24 +81,26 @@ fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attac
     Some(iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentInterface {
         attachment_id: m.get("attachment_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         comment_id: m.get("comment_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attachment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         file_name: m.get("file_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         file_path: m.get("file_path").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         file_type: m.get("file_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attachment_extension_interface__from_json(v: &Value) -> Option<iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterface> {
+fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_attachment_extension_interface_entry__from_json(v: &Value) -> Option<iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentAttachmentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_extension_interface__from_json(v: &Value) -> Option<iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterface> {
+fn iface_negotiable_quote_quote_id_comments__negotiable_quote_data_comment_extension_interface_entry__from_json(v: &Value) -> Option<iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_negotiable_quote_quote_id_comments::NegotiableQuoteDataCommentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

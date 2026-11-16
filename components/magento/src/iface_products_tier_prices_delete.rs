@@ -17,7 +17,7 @@ const OP_PRODUCTS_TIER_PRICES_DELETE_CATALOG_TIER_PRICE_STORAGE_V1_DELETE_POST: 
 fn iface_products_tier_prices_delete__catalog_data_tier_price_interface__to_json(p: &iface_products_tier_prices_delete::CatalogDataTierPriceInterface) -> Value {
     let mut m = Map::new();
     m.insert("customer_group".into(), Value::String((&p.customer_group).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_tier_prices_delete__catalog_data_tier_price_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), serde_json::Number::from_f64(*(&p.price)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("price_type".into(), Value::String((&p.price_type).clone()));
     m.insert("quantity".into(), serde_json::Number::from_f64(*(&p.quantity)).map(Value::Number).unwrap_or(Value::Null));
@@ -26,23 +26,25 @@ fn iface_products_tier_prices_delete__catalog_data_tier_price_interface__to_json
     Value::Object(m)
 }
 
-fn iface_products_tier_prices_delete__catalog_data_tier_price_extension_interface__to_json(p: &iface_products_tier_prices_delete::CatalogDataTierPriceExtensionInterface) -> Value {
+fn iface_products_tier_prices_delete__catalog_data_tier_price_extension_interface_entry__to_json(p: &iface_products_tier_prices_delete::CatalogDataTierPriceExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_products_tier_prices_delete__catalog_data_price_update_result_interface__to_json(p: &iface_products_tier_prices_delete::CatalogDataPriceUpdateResultInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_tier_prices_delete__catalog_data_price_update_result_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("parameters".into(), Value::Array((&p.parameters).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
-fn iface_products_tier_prices_delete__catalog_data_price_update_result_extension_interface__to_json(p: &iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterface) -> Value {
+fn iface_products_tier_prices_delete__catalog_data_price_update_result_extension_interface_entry__to_json(p: &iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -55,16 +57,17 @@ fn iface_products_tier_prices_delete__catalog_tier_price_storage_v1_delete_post_
 fn iface_products_tier_prices_delete__catalog_data_price_update_result_interface__from_json(v: &Value) -> Option<iface_products_tier_prices_delete::CatalogDataPriceUpdateResultInterface> {
     let m = v.as_object()?;
     Some(iface_products_tier_prices_delete::CatalogDataPriceUpdateResultInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_tier_prices_delete__catalog_data_price_update_result_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         parameters: m.get("parameters").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_products_tier_prices_delete__catalog_data_price_update_result_extension_interface__from_json(v: &Value) -> Option<iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterface> {
+fn iface_products_tier_prices_delete__catalog_data_price_update_result_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_tier_prices_delete::CatalogDataPriceUpdateResultExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

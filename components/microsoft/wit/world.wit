@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apim_key` | header `Ocp-Apim-Subscription-Key` |
-package autostamp:microsoft@0.5.0;
+package autostamp:microsoft@0.6.0;
 
 interface analyze {
   enum image-visual-features-item-enum {
@@ -437,7 +437,7 @@ interface models {
     /// Id of the REST API request.
     request-id: option<string>,
     /// Model-specific response.
-    result-op: option<domain-model-results-result-op>
+    result-op: option<list<domain-model-results-result-op-entry>>
   }
 
   /// Image metadata.
@@ -450,10 +450,10 @@ interface models {
     width: option<s32>
   }
 
-  /// Model-specific response.
-  record domain-model-results-result-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record domain-model-results-result-op-entry {
+    key: string,
+    value: string
   }
 
   list-models: func() -> result<list-models-result, string>;

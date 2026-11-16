@@ -6,64 +6,47 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `ApiKey` | header `Api-Key` |
-package autostamp:pinecone@0.5.0;
+package autostamp:pinecone@0.6.0;
 
 interface index-operations {
-  record collections-list {
-    /// opaque schema; raw JSON
-    value: string
+  enum index-metric {
+    euclidean,
+    cosine,
+    dotproduct,
   }
 
-  /// The unique name of a collection.
-  record collection-name {
-    /// opaque schema; raw JSON
-    value: string
+  enum pod-type {
+    s1-x1,
+    s1-x2,
+    s1-x4,
+    s1-x8,
+    p1-x1,
+    p1-x2,
+    p1-x4,
+    p1-x8,
+    p2-x1,
+    p2-x2,
+    p2-x4,
+    p2-x8,
   }
 
-  /// The unique name of an index.
-  record index-name {
-    /// opaque schema; raw JSON
-    value: string
+  enum index-state {
+    initializing,
+    scaling-up,
+    scaling-down,
+    terminating,
+    ready,
   }
 
   record collection {
-    name: collection-name,
+    name: string,
     size: s64,
-    status: collection-state
-  }
-
-  /// The current status of a collection.
-  record collection-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record indexes-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of dimensions in the vector representation
-  record vector-dimensionality {
-    /// opaque schema; raw JSON
-    value: string
+    status: string
   }
 
   /// Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed.
   record index-metadata-config {
     indexed: option<string>
-  }
-
-  /// The vector similarity metric of the index
-  record index-metric {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The pod type
-  record pod-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record index {
@@ -72,9 +55,9 @@ interface index-operations {
   }
 
   record index-database {
-    dimension: option<vector-dimensionality>,
+    dimension: option<s32>,
     metric: option<index-metric>,
-    name: option<index-name>,
+    name: option<string>,
     pod-type: option<pod-type>,
     pods: option<s32>,
     replicas: option<s32>,
@@ -86,12 +69,6 @@ interface index-operations {
     port: option<s32>,
     ready: option<bool>,
     state: option<index-state>
-  }
-
-  /// The current status of a index.
-  record index-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   variant create-collection-error {
@@ -140,12 +117,12 @@ interface index-operations {
   }
 
   /// List collections
-  list-collections: func() -> result<collections-list, string>;
+  list-collections: func() -> result<list<string>, string>;
 
   /// Create collection
   record create-collection-params {
-    name: collection-name,
-    source: index-name
+    name: string,
+    source: string
   }
   create-collection: func(params: create-collection-params) -> result<string, create-collection-error>;
 
@@ -162,20 +139,20 @@ interface index-operations {
   delete-collection: func(params: delete-collection-params) -> result<string, delete-collection-error>;
 
   /// List indexes
-  list-indexes: func() -> result<indexes-list, string>;
+  list-indexes: func() -> result<list<string>, string>;
 
   /// Create index
   record create-index-params {
-    dimension: vector-dimensionality,
+    dimension: s32,
     metadata-config: option<index-metadata-config>,
     metric: option<index-metric>,
-    name: index-name,
+    name: string,
     pod-type: option<pod-type>,
     /// The number of pods for the index to use,including replicas.
     pods: option<s32>,
     /// The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.
     replicas: option<s32>,
-    source-collection: option<collection-name>
+    source-collection: option<string>
   }
   create-index: func(params: create-index-params) -> result<string, create-index-error>;
 
@@ -204,40 +181,33 @@ interface index-operations {
 
 
 interface vector-operations {
-  /// If this parameter is present, the operation only affects vectors that satisfy the filter. See https://www.pinecone.io/docs/metadata-filtering/.
-  record vector-filter {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record vector-filter-entry {
+    key: string,
+    value: string
   }
 
   record describe-index-stats-response {
-    dimension: option<vector-dimensionality>,
+    dimension: option<s32>,
     /// The fullness of the index, regardless of whether a metadata filter expression was passed. The granularity of this metric is 10%.
     index-fullness: option<f64>,
-    namespaces: option<describe-index-stats-response-namespaces>,
+    namespaces: option<list<describe-index-stats-response-namespaces-entry>>,
     total-vector-count: option<s64>
   }
 
-  /// The number of dimensions in the vector representation
-  record vector-dimensionality {
-    /// opaque schema; raw JSON
-    value: string
+  record index-namespace-stats {
+    vector-count: option<s64>
   }
 
-  record describe-index-stats-response-namespaces {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record describe-index-stats-response-namespaces-entry {
+    key: string,
+    value: index-namespace-stats
   }
 
-  /// The unique ID of a vector
-  record vector-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// An index namespace name
-  record namespace-name {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record vector-filter-entry-v2 {
+    key: string,
     value: string
   }
 
@@ -249,48 +219,58 @@ interface vector-operations {
     values: list<f64>
   }
 
-  /// Vector dense data. This should be the same length as the dimension of the index being queried.
-  record vector-data {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record query-response {
     matches: option<list<query-match>>,
-    namespace: option<namespace-name>
+    namespace: option<string>
   }
 
   record query-match {
-    id: vector-id,
-    metadata: option<vector-metadata>,
+    id: string,
+    metadata: option<list<vector-metadata-entry>>,
     score: option<f64>,
     sparse-values: option<sparse-vector-data>,
-    values: option<vector-data>
+    values: option<list<f64>>
   }
 
-  record vector-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record vector-metadata-entry {
+    key: string,
+    value: string
   }
 
-  record delete-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record vector-filter-entry-v3 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record delete-response-entry {
+    key: string,
+    value: string
   }
 
   record fetch-response {
-    namespace: option<namespace-name>,
-    vectors: option<fetch-response-vectors>
+    namespace: option<string>,
+    vectors: option<list<fetch-response-vectors-entry>>
   }
 
-  record fetch-response-vectors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record fetch-response-vectors-entry {
+    key: string,
+    value: list<f64>
   }
 
-  record update-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record vector-metadata-entry-v2 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-entry {
+    key: string,
+    value: string
   }
 
   record upsert-response {
@@ -299,37 +279,37 @@ interface vector-operations {
 
   /// Describe Index Stats
   record describe-index-stats-params {
-    filter: option<vector-filter>
+    filter: option<list<vector-filter-entry>>
   }
   describe-index-stats: func(params: describe-index-stats-params) -> result<describe-index-stats-response, string>;
 
   /// Query
   record query-params {
-    filter: option<vector-filter>,
-    id: option<vector-id>,
+    filter: option<list<vector-filter-entry-v2>>,
+    id: option<string>,
     include-metadata: option<bool>,
     include-values: option<bool>,
-    namespace: option<namespace-name>,
+    namespace: option<string>,
     sparse-vector: option<sparse-vector-data>,
     /// The number of results to return for each query.
     top-k: s64,
-    vector: option<vector-data>
+    vector: option<list<f64>>
   }
   query: func(params: query-params) -> result<query-response, string>;
 
   /// Delete
   record delete-params {
     delete-all: option<bool>,
-    filter: option<vector-filter>,
+    filter: option<list<vector-filter-entry-v3>>,
     ids: option<string>,
-    namespace: option<namespace-name>
+    namespace: option<string>
   }
-  delete: func(params: delete-params) -> result<delete-response, string>;
+  delete: func(params: delete-params) -> result<list<delete-response-entry>, string>;
 
   /// Fetch
   record fetch-params {
     ids: string,
-    namespace: option<namespace-name>
+    namespace: option<string>
   }
   fetch: func(params: fetch-params) -> result<fetch-response, string>;
 
@@ -337,16 +317,16 @@ interface vector-operations {
   record update-params {
     /// The vector's unique ID
     id: string,
-    namespace: option<namespace-name>,
-    set-metadata: option<vector-metadata>,
+    namespace: option<string>,
+    set-metadata: option<list<vector-metadata-entry-v2>>,
     sparse-values: option<sparse-vector-data>,
-    values: option<vector-data>
+    values: option<list<f64>>
   }
-  update: func(params: update-params) -> result<update-response, string>;
+  update: func(params: update-params) -> result<list<update-response-entry>, string>;
 
   /// Upsert
   record upsert-params {
-    namespace: option<namespace-name>,
+    namespace: option<string>,
     vectors: string
   }
   upsert: func(params: upsert-params) -> result<upsert-response, string>;

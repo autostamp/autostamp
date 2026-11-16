@@ -102,15 +102,16 @@ fn iface_user__get_available_themes_response__to_json(p: &iface_user::GetAvailab
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_available_themes_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_user__config_user_theme__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_available_themes_response_message_data__to_json(p: &iface_user::GetAvailableThemesResponseMessageData) -> Value {
+fn iface_user__get_available_themes_response_message_data_entry__to_json(p: &iface_user::GetAvailableThemesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -128,15 +129,16 @@ fn iface_user__get_bungie_net_user_by_id_response__to_json(p: &iface_user::GetBu
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_bungie_net_user_by_id_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__general_user__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_bungie_net_user_by_id_response_message_data__to_json(p: &iface_user::GetBungieNetUserByIdResponseMessageData) -> Value {
+fn iface_user__get_bungie_net_user_by_id_response_message_data_entry__to_json(p: &iface_user::GetBungieNetUserByIdResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -202,15 +204,16 @@ fn iface_user__get_credential_types_for_target_account_response__to_json(p: &ifa
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_credential_types_for_target_account_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_user__models_get_credential_types_for_account_response__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_credential_types_for_target_account_response_message_data__to_json(p: &iface_user::GetCredentialTypesForTargetAccountResponseMessageData) -> Value {
+fn iface_user__get_credential_types_for_target_account_response_message_data_entry__to_json(p: &iface_user::GetCredentialTypesForTargetAccountResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -229,15 +232,16 @@ fn iface_user__get_membership_from_hard_linked_credential_response__to_json(p: &
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_membership_from_hard_linked_credential_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__hard_linked_user_membership__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_membership_from_hard_linked_credential_response_message_data__to_json(p: &iface_user::GetMembershipFromHardLinkedCredentialResponseMessageData) -> Value {
+fn iface_user__get_membership_from_hard_linked_credential_response_message_data_entry__to_json(p: &iface_user::GetMembershipFromHardLinkedCredentialResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -256,15 +260,16 @@ fn iface_user__get_membership_data_by_id_response__to_json(p: &iface_user::GetMe
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_membership_data_by_id_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__user_membership_data__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_membership_data_by_id_response_message_data__to_json(p: &iface_user::GetMembershipDataByIdResponseMessageData) -> Value {
+fn iface_user__get_membership_data_by_id_response_message_data_entry__to_json(p: &iface_user::GetMembershipDataByIdResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -299,15 +304,16 @@ fn iface_user__get_membership_data_for_current_user_response__to_json(p: &iface_
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_membership_data_for_current_user_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__user_membership_data__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_membership_data_for_current_user_response_message_data__to_json(p: &iface_user::GetMembershipDataForCurrentUserResponseMessageData) -> Value {
+fn iface_user__get_membership_data_for_current_user_response_message_data_entry__to_json(p: &iface_user::GetMembershipDataForCurrentUserResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -317,21 +323,23 @@ fn iface_user__get_sanitized_platform_display_names_response__to_json(p: &iface_
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__get_sanitized_platform_display_names_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__get_sanitized_platform_display_names_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__get_sanitized_platform_display_names_response_message_data__to_json(p: &iface_user::GetSanitizedPlatformDisplayNamesResponseMessageData) -> Value {
+fn iface_user__get_sanitized_platform_display_names_response_message_data_entry__to_json(p: &iface_user::GetSanitizedPlatformDisplayNamesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_user__get_sanitized_platform_display_names_response_response__to_json(p: &iface_user::GetSanitizedPlatformDisplayNamesResponseResponse) -> Value {
+fn iface_user__get_sanitized_platform_display_names_response_response_entry__to_json(p: &iface_user::GetSanitizedPlatformDisplayNamesResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -341,15 +349,16 @@ fn iface_user__search_by_global_name_post_response__to_json(p: &iface_user::Sear
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__search_by_global_name_post_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__user_search_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__search_by_global_name_post_response_message_data__to_json(p: &iface_user::SearchByGlobalNamePostResponseMessageData) -> Value {
+fn iface_user__search_by_global_name_post_response_message_data_entry__to_json(p: &iface_user::SearchByGlobalNamePostResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -391,15 +400,16 @@ fn iface_user__search_by_global_name_prefix_response__to_json(p: &iface_user::Se
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_user__search_by_global_name_prefix_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_user__user_search_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user__search_by_global_name_prefix_response_message_data__to_json(p: &iface_user::SearchByGlobalNamePrefixResponseMessageData) -> Value {
+fn iface_user__search_by_global_name_prefix_response_message_data_entry__to_json(p: &iface_user::SearchByGlobalNamePrefixResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -455,16 +465,17 @@ fn iface_user__get_available_themes_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_available_themes_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetAvailableThemesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user__config_user_theme__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_available_themes_response_message_data__from_json(v: &Value) -> Option<iface_user::GetAvailableThemesResponseMessageData> {
+fn iface_user__get_available_themes_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetAvailableThemesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetAvailableThemesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetAvailableThemesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -484,16 +495,17 @@ fn iface_user__get_bungie_net_user_by_id_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_bungie_net_user_by_id_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetBungieNetUserByIdResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__general_user__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_bungie_net_user_by_id_response_message_data__from_json(v: &Value) -> Option<iface_user::GetBungieNetUserByIdResponseMessageData> {
+fn iface_user__get_bungie_net_user_by_id_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetBungieNetUserByIdResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetBungieNetUserByIdResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetBungieNetUserByIdResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -563,16 +575,17 @@ fn iface_user__get_credential_types_for_target_account_response__from_json(v: &V
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_credential_types_for_target_account_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetCredentialTypesForTargetAccountResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user__models_get_credential_types_for_account_response__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_credential_types_for_target_account_response_message_data__from_json(v: &Value) -> Option<iface_user::GetCredentialTypesForTargetAccountResponseMessageData> {
+fn iface_user__get_credential_types_for_target_account_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetCredentialTypesForTargetAccountResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetCredentialTypesForTargetAccountResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetCredentialTypesForTargetAccountResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -593,16 +606,17 @@ fn iface_user__get_membership_from_hard_linked_credential_response__from_json(v:
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_membership_from_hard_linked_credential_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetMembershipFromHardLinkedCredentialResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__hard_linked_user_membership__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_membership_from_hard_linked_credential_response_message_data__from_json(v: &Value) -> Option<iface_user::GetMembershipFromHardLinkedCredentialResponseMessageData> {
+fn iface_user__get_membership_from_hard_linked_credential_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetMembershipFromHardLinkedCredentialResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetMembershipFromHardLinkedCredentialResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetMembershipFromHardLinkedCredentialResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -623,16 +637,17 @@ fn iface_user__get_membership_data_by_id_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_membership_data_by_id_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetMembershipDataByIdResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__user_membership_data__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_membership_data_by_id_response_message_data__from_json(v: &Value) -> Option<iface_user::GetMembershipDataByIdResponseMessageData> {
+fn iface_user__get_membership_data_by_id_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetMembershipDataByIdResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetMembershipDataByIdResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetMembershipDataByIdResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -670,16 +685,17 @@ fn iface_user__get_membership_data_for_current_user_response__from_json(v: &Valu
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_membership_data_for_current_user_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetMembershipDataForCurrentUserResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__user_membership_data__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_membership_data_for_current_user_response_message_data__from_json(v: &Value) -> Option<iface_user::GetMembershipDataForCurrentUserResponseMessageData> {
+fn iface_user__get_membership_data_for_current_user_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetMembershipDataForCurrentUserResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetMembershipDataForCurrentUserResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetMembershipDataForCurrentUserResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -690,23 +706,25 @@ fn iface_user__get_sanitized_platform_display_names_response__from_json(v: &Valu
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__get_sanitized_platform_display_names_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__get_sanitized_platform_display_names_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetSanitizedPlatformDisplayNamesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::GetSanitizedPlatformDisplayNamesResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__get_sanitized_platform_display_names_response_message_data__from_json(v: &Value) -> Option<iface_user::GetSanitizedPlatformDisplayNamesResponseMessageData> {
+fn iface_user__get_sanitized_platform_display_names_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::GetSanitizedPlatformDisplayNamesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetSanitizedPlatformDisplayNamesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetSanitizedPlatformDisplayNamesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_user__get_sanitized_platform_display_names_response_response__from_json(v: &Value) -> Option<iface_user::GetSanitizedPlatformDisplayNamesResponseResponse> {
+fn iface_user__get_sanitized_platform_display_names_response_response_entry__from_json(v: &Value) -> Option<iface_user::GetSanitizedPlatformDisplayNamesResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_user::GetSanitizedPlatformDisplayNamesResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::GetSanitizedPlatformDisplayNamesResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -717,16 +735,17 @@ fn iface_user__search_by_global_name_post_response__from_json(v: &Value) -> Opti
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__search_by_global_name_post_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::SearchByGlobalNamePostResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__user_search_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__search_by_global_name_post_response_message_data__from_json(v: &Value) -> Option<iface_user::SearchByGlobalNamePostResponseMessageData> {
+fn iface_user__search_by_global_name_post_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::SearchByGlobalNamePostResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::SearchByGlobalNamePostResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::SearchByGlobalNamePostResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -772,16 +791,17 @@ fn iface_user__search_by_global_name_prefix_response__from_json(v: &Value) -> Op
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_user__search_by_global_name_prefix_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user::SearchByGlobalNamePrefixResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_user__user_search_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_user__search_by_global_name_prefix_response_message_data__from_json(v: &Value) -> Option<iface_user::SearchByGlobalNamePrefixResponseMessageData> {
+fn iface_user__search_by_global_name_prefix_response_message_data_entry__from_json(v: &Value) -> Option<iface_user::SearchByGlobalNamePrefixResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_user::SearchByGlobalNamePrefixResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user::SearchByGlobalNamePrefixResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

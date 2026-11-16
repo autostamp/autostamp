@@ -1,4 +1,4 @@
-package autostamp:tfl@0.5.0;
+package autostamp:tfl@0.6.0;
 
 interface accident-stats {
   record tfl-api-presentation-entities-accident-stats-accident-detail {
@@ -36,13 +36,14 @@ interface accident-stats {
 
 
 interface air-quality {
-  record system-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry {
+    key: string,
+    value: string
   }
 
   /// Gets air quality data feed
-  get: func() -> result<system-object, string>;
+  get: func() -> result<list<system-object-entry>, string>;
 
 }
 
@@ -100,9 +101,10 @@ interface bike-point {
 }
 
 interface cabwise {
-  record system-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry {
+    key: string,
+    value: string
   }
 
   /// Gets taxis and minicabs contact information
@@ -128,7 +130,7 @@ interface cabwise {
     /// Twenty Four Seven Only
     twenty-four-seven-only: option<bool>
   }
-  get: func(params: get-params) -> result<system-object, string>;
+  get: func(params: get-params) -> result<list<system-object-entry>, string>;
 
 }
 
@@ -1740,14 +1742,27 @@ interface place {
     value: option<s32>
   }
 
-  record system-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry {
+    key: string,
+    value: string
   }
 
   record tfl-api-presentation-entities-place-category {
     available-keys: option<list<string>>,
     category: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry-v2 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry-v3 {
+    key: string,
+    value: string
   }
 
   /// Gets the places that lie within a geographic region. The geographic region of interest can either be specified
@@ -1783,7 +1798,7 @@ interface place {
     /// Automatically added
     postcode-v2: string
   }
-  get-streets-by-post-code: func(params: get-streets-by-post-code-params) -> result<system-object, string>;
+  get-streets-by-post-code: func(params: get-streets-by-post-code-params) -> result<list<system-object-entry>, string>;
 
   /// Gets a list of all of the available place property categories and keys.
   meta-categories: func() -> result<list<tfl-api-presentation-entities-place-category>, string>;
@@ -1833,7 +1848,7 @@ interface place {
     /// Automatically added
     lon-v2: string
   }
-  get-at: func(params: get-at-params) -> result<system-object, string>;
+  get-at: func(params: get-at-params) -> result<list<system-object-entry-v2>, string>;
 
   /// Gets the place overlay for a given set of co-ordinates and a given width/height.
   record get-overlay-params {
@@ -1854,7 +1869,7 @@ interface place {
     /// Automatically added
     lon-v2: string
   }
-  get-overlay: func(params: get-overlay-params) -> result<system-object, string>;
+  get-overlay: func(params: get-overlay-params) -> result<list<system-object-entry-v3>, string>;
 
 }
 
@@ -2049,9 +2064,10 @@ interface road {
     toid: option<string>
   }
 
-  record system-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry {
+    key: string,
+    value: string
   }
 
   /// Gets all roads managed by TfL
@@ -2079,7 +2095,7 @@ interface road {
     /// Optional, The end time to filter on.
     end-date: string
   }
-  disrupted-streets: func(params: disrupted-streets-params) -> result<system-object, string>;
+  disrupted-streets: func(params: disrupted-streets-params) -> result<list<system-object-entry>, string>;
 
   /// Gets the road with the specified id (e.g. A1)
   record get-road-ids-params {
@@ -2403,9 +2419,10 @@ interface stop-point {
     uri: option<string>
   }
 
-  record system-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry {
+    key: string,
+    value: string
   }
 
   /// DTO to capture the prediction details
@@ -2609,7 +2626,7 @@ interface stop-point {
     /// If set to "web", a 302 redirect to relevant website bus stop page is returned. Valid values are : web. All other values are ignored.
     output: option<string>
   }
-  get-by-sms: func(params: get-by-sms-params) -> result<system-object, string>;
+  get-by-sms: func(params: get-by-sms-params) -> result<list<system-object-entry>, string>;
 
   /// Gets all stop points of a given type
   record get-by-type-params {
@@ -2739,9 +2756,16 @@ interface travel-time {
     to,
   }
 
-  record system-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record system-object-entry-v2 {
+    key: string,
+    value: string
   }
 
   /// Gets the TravelTime overlay.
@@ -2773,7 +2797,7 @@ interface travel-time {
     compare-type: string,
     compare-value: string
   }
-  get-compare-overlay: func(params: get-compare-overlay-params) -> result<system-object, string>;
+  get-compare-overlay: func(params: get-compare-overlay-params) -> result<list<system-object-entry>, string>;
 
   /// Gets the TravelTime overlay.
   record get-overlay-params {
@@ -2802,7 +2826,7 @@ interface travel-time {
     /// The total minutes between the travel time bands
     travel-time-interval: s32
   }
-  get-overlay: func(params: get-overlay-params) -> result<system-object, string>;
+  get-overlay: func(params: get-overlay-params) -> result<list<system-object-entry-v2>, string>;
 
 }
 

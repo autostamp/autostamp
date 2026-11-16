@@ -1,4 +1,4 @@
-package autostamp:getpostman@0.5.0;
+package autostamp:getpostman@0.6.0;
 
 interface api {
   record create-api-body-api {

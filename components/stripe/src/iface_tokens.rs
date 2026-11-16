@@ -490,7 +490,7 @@ fn iface_tokens__bank_account__to_json(p: &iface_tokens::BankAccount) -> Value {
     m.insert("future_requirements".into(), match (&p.future_requirements) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("last4".into(), Value::String((&p.last4).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tokens__bank_account_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_tokens__bank_account_object_enum__to_str(&p.object).into()));
     m.insert("requirements".into(), match (&p.requirements) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("routing_number".into(), match (&p.routing_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -498,9 +498,10 @@ fn iface_tokens__bank_account__to_json(p: &iface_tokens::BankAccount) -> Value {
     Value::Object(m)
 }
 
-fn iface_tokens__bank_account_metadata__to_json(p: &iface_tokens::BankAccountMetadata) -> Value {
+fn iface_tokens__bank_account_metadata_entry__to_json(p: &iface_tokens::BankAccountMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -529,7 +530,7 @@ fn iface_tokens__card__to_json(p: &iface_tokens::Card) -> Value {
     m.insert("funding".into(), Value::String((&p.funding).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("last4".into(), Value::String((&p.last4).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tokens__card_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_tokens__card_object_enum__to_str(&p.object).into()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -537,9 +538,10 @@ fn iface_tokens__card__to_json(p: &iface_tokens::Card) -> Value {
     Value::Object(m)
 }
 
-fn iface_tokens__card_metadata__to_json(p: &iface_tokens::CardMetadata) -> Value {
+fn iface_tokens__card_metadata_entry__to_json(p: &iface_tokens::CardMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -596,7 +598,7 @@ fn iface_tokens__bank_account__from_json(v: &Value) -> Option<iface_tokens::Bank
         future_requirements: m.get("future_requirements").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last4: m.get("last4").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_tokens__bank_account_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::BankAccountMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_tokens__bank_account_object_enum__from_str)) { Some(x) => x, None => return None },
         requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         routing_number: m.get("routing_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -604,10 +606,11 @@ fn iface_tokens__bank_account__from_json(v: &Value) -> Option<iface_tokens::Bank
     })
 }
 
-fn iface_tokens__bank_account_metadata__from_json(v: &Value) -> Option<iface_tokens::BankAccountMetadata> {
+fn iface_tokens__bank_account_metadata_entry__from_json(v: &Value) -> Option<iface_tokens::BankAccountMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::BankAccountMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::BankAccountMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -637,7 +640,7 @@ fn iface_tokens__card__from_json(v: &Value) -> Option<iface_tokens::Card> {
         funding: m.get("funding").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last4: m.get("last4").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_tokens__card_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::CardMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_tokens__card_object_enum__from_str)) { Some(x) => x, None => return None },
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -645,10 +648,11 @@ fn iface_tokens__card__from_json(v: &Value) -> Option<iface_tokens::Card> {
     })
 }
 
-fn iface_tokens__card_metadata__from_json(v: &Value) -> Option<iface_tokens::CardMetadata> {
+fn iface_tokens__card_metadata_entry__from_json(v: &Value) -> Option<iface_tokens::CardMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::CardMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::CardMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -630,12 +630,6 @@ fn iface_call_commands__leave_queue_response__to_json(p: &iface_call_commands::L
     Value::Object(m)
 }
 
-fn iface_call_commands__loopcount__to_json(p: &iface_call_commands::Loopcount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_call_commands__call_playback_start_response__to_json(p: &iface_call_commands::CallPlaybackStartResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_call_commands__call_control_command_result__to_json(v), None => Value::Null });
@@ -876,7 +870,7 @@ fn iface_call_commands__call_playback_start_params__to_json(p: &iface_call_comma
     m.insert("audio_url".into(), match (&p.audio_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("loop".into(), match (&p.loop_) { Some(v) => iface_call_commands__loopcount__to_json(v), None => Value::Null });
+    m.insert("loop".into(), match (&p.loop_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("media_name".into(), match (&p.media_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("overlay".into(), match (&p.overlay) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });

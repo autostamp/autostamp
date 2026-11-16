@@ -136,9 +136,18 @@ fn iface_subaccounts__info_response_last_v30_days__to_json(p: &iface_subaccounts
     Value::Object(m)
 }
 
-fn iface_subaccounts__list_response__to_json(p: &iface_subaccounts::ListResponse) -> Value {
+fn iface_subaccounts__list_response_item__to_json(p: &iface_subaccounts::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_quota".into(), match (&p.custom_quota) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("first_sent_at".into(), match (&p.first_sent_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent_monthly".into(), match (&p.sent_monthly) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent_total".into(), match (&p.sent_total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent_weekly".into(), match (&p.sent_weekly) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -249,10 +258,19 @@ fn iface_subaccounts__info_response_last_v30_days__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_subaccounts__list_response__from_json(v: &Value) -> Option<iface_subaccounts::ListResponse> {
+fn iface_subaccounts__list_response_item__from_json(v: &Value) -> Option<iface_subaccounts::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_subaccounts::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_subaccounts::ListResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        custom_quota: m.get("custom_quota").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        first_sent_at: m.get("first_sent_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent_monthly: m.get("sent_monthly").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent_total: m.get("sent_total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent_weekly: m.get("sent_weekly").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -310,12 +328,12 @@ fn iface_subaccounts__post_subaccounts_info_json__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_subaccounts__post_subaccounts_list_json__ok(body: String) -> Result<iface_subaccounts::ListResponse, crate::runtime::DispatchError> {
+fn iface_subaccounts__post_subaccounts_list_json__ok(body: String) -> Result<Vec<iface_subaccounts::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_subaccounts__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_subaccounts__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -404,7 +422,7 @@ impl iface_subaccounts::Guest for crate::Component {
             Err(e) => Err(iface_subaccounts__post_subaccounts_info_json__err(e)),
         }
     }
-    fn post_subaccounts_list_json(params: iface_subaccounts::PostSubaccountsListJsonParams) -> Result<iface_subaccounts::ListResponse, String> {
+    fn post_subaccounts_list_json(params: iface_subaccounts::PostSubaccountsListJsonParams) -> Result<Vec<iface_subaccounts::ListResponseItem>, String> {
         let json = iface_subaccounts__post_subaccounts_list_json_params__to_json(&params);
         match dispatch(&OP_SUBACCOUNTS_POST_SUBACCOUNTS_LIST_JSON, json).and_then(iface_subaccounts__post_subaccounts_list_json__ok) {
             Ok(v) => Ok(v),

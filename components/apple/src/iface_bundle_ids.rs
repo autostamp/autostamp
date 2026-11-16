@@ -212,6 +212,13 @@ fn iface_bundle_ids__get_collection_fields_apps_item_enum__to_str(e: &iface_bund
     }
 }
 
+fn iface_bundle_ids__bundle_id_platform__to_str(e: &iface_bundle_ids::BundleIdPlatform) -> &'static str {
+    match e {
+        iface_bundle_ids::BundleIdPlatform::Ios => "IOS",
+        iface_bundle_ids::BundleIdPlatform::MacOs => "MAC_OS",
+    }
+}
+
 fn iface_bundle_ids__bundle_id_relationships_app_data_type_op_enum__to_str(e: &iface_bundle_ids::BundleIdRelationshipsAppDataTypeOpEnum) -> &'static str {
     match e {
         iface_bundle_ids::BundleIdRelationshipsAppDataTypeOpEnum::Apps => "apps",
@@ -327,6 +334,39 @@ fn iface_bundle_ids__app_relationships_prices_data_item_type_op_enum__to_str(e: 
     }
 }
 
+fn iface_bundle_ids__capability_type__to_str(e: &iface_bundle_ids::CapabilityType) -> &'static str {
+    match e {
+        iface_bundle_ids::CapabilityType::Icloud => "ICLOUD",
+        iface_bundle_ids::CapabilityType::InAppPurchase => "IN_APP_PURCHASE",
+        iface_bundle_ids::CapabilityType::GameCenter => "GAME_CENTER",
+        iface_bundle_ids::CapabilityType::PushNotifications => "PUSH_NOTIFICATIONS",
+        iface_bundle_ids::CapabilityType::Wallet => "WALLET",
+        iface_bundle_ids::CapabilityType::InterAppAudio => "INTER_APP_AUDIO",
+        iface_bundle_ids::CapabilityType::Maps => "MAPS",
+        iface_bundle_ids::CapabilityType::AssociatedDomains => "ASSOCIATED_DOMAINS",
+        iface_bundle_ids::CapabilityType::PersonalVpn => "PERSONAL_VPN",
+        iface_bundle_ids::CapabilityType::AppGroups => "APP_GROUPS",
+        iface_bundle_ids::CapabilityType::Healthkit => "HEALTHKIT",
+        iface_bundle_ids::CapabilityType::Homekit => "HOMEKIT",
+        iface_bundle_ids::CapabilityType::WirelessAccessoryConfiguration => "WIRELESS_ACCESSORY_CONFIGURATION",
+        iface_bundle_ids::CapabilityType::ApplePay => "APPLE_PAY",
+        iface_bundle_ids::CapabilityType::DataProtection => "DATA_PROTECTION",
+        iface_bundle_ids::CapabilityType::Sirikit => "SIRIKIT",
+        iface_bundle_ids::CapabilityType::NetworkExtensions => "NETWORK_EXTENSIONS",
+        iface_bundle_ids::CapabilityType::Multipath => "MULTIPATH",
+        iface_bundle_ids::CapabilityType::HotSpot => "HOT_SPOT",
+        iface_bundle_ids::CapabilityType::NfcTagReading => "NFC_TAG_READING",
+        iface_bundle_ids::CapabilityType::Classkit => "CLASSKIT",
+        iface_bundle_ids::CapabilityType::AutofillCredentialProvider => "AUTOFILL_CREDENTIAL_PROVIDER",
+        iface_bundle_ids::CapabilityType::AccessWifiInformation => "ACCESS_WIFI_INFORMATION",
+        iface_bundle_ids::CapabilityType::NetworkCustomProtocol => "NETWORK_CUSTOM_PROTOCOL",
+        iface_bundle_ids::CapabilityType::CoremediaHlsLowLatency => "COREMEDIA_HLS_LOW_LATENCY",
+        iface_bundle_ids::CapabilityType::SystemExtensionInstall => "SYSTEM_EXTENSION_INSTALL",
+        iface_bundle_ids::CapabilityType::UserManagement => "USER_MANAGEMENT",
+        iface_bundle_ids::CapabilityType::AppleIdAuth => "APPLE_ID_AUTH",
+    }
+}
+
 fn iface_bundle_ids__capability_setting_allowed_instances_enum__to_str(e: &iface_bundle_ids::CapabilitySettingAllowedInstancesEnum) -> &'static str {
     match e {
         iface_bundle_ids::CapabilitySettingAllowedInstancesEnum::Entry => "ENTRY",
@@ -415,14 +455,8 @@ fn iface_bundle_ids__bundle_id_attributes__to_json(p: &iface_bundle_ids::BundleI
     let mut m = Map::new();
     m.insert("identifier".into(), match (&p.identifier) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_bundle_ids__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_bundle_ids__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("seedId".into(), match (&p.seed_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_bundle_ids__bundle_id_platform__to_json(p: &iface_bundle_ids::BundleIdPlatform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -537,7 +571,7 @@ fn iface_bundle_ids__bundle_id_create_request_data_attributes__to_json(p: &iface
     let mut m = Map::new();
     m.insert("identifier".into(), Value::String((&p.identifier).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("platform".into(), iface_bundle_ids__bundle_id_platform__to_json(&p.platform));
+    m.insert("platform".into(), Value::String(iface_bundle_ids__bundle_id_platform__to_str(&p.platform).into()));
     m.insert("seedId".into(), match (&p.seed_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -942,14 +976,8 @@ fn iface_bundle_ids__bundle_id_capability__to_json(p: &iface_bundle_ids::BundleI
 
 fn iface_bundle_ids__bundle_id_capability_attributes__to_json(p: &iface_bundle_ids::BundleIdCapabilityAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("capabilityType".into(), match (&p.capability_type) { Some(v) => iface_bundle_ids__capability_type__to_json(v), None => Value::Null });
+    m.insert("capabilityType".into(), match (&p.capability_type) { Some(v) => Value::String(iface_bundle_ids__capability_type__to_str(v).into()), None => Value::Null });
     m.insert("settings".into(), match (&p.settings) { Some(v) => Value::Array((v).iter().map(|v| iface_bundle_ids__capability_setting__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_bundle_ids__capability_type__to_json(p: &iface_bundle_ids::CapabilityType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1001,7 +1029,7 @@ fn iface_bundle_ids__profile_attributes__to_json(p: &iface_bundle_ids::ProfileAt
     m.insert("createdDate".into(), match (&p.created_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_bundle_ids__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_bundle_ids__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("profileContent".into(), match (&p.profile_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("profileState".into(), match (&p.profile_state) { Some(v) => Value::String(iface_bundle_ids__profile_attributes_profile_state_enum__to_str(v).into()), None => Value::Null });
     m.insert("profileType".into(), match (&p.profile_type) { Some(v) => Value::String(iface_bundle_ids__profile_attributes_profile_type_enum__to_str(v).into()), None => Value::Null });
@@ -1182,15 +1210,8 @@ fn iface_bundle_ids__bundle_id_attributes__from_json(v: &Value) -> Option<iface_
     Some(iface_bundle_ids::BundleIdAttributes {
         identifier: m.get("identifier").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_bundle_ids__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_bundle_ids__bundle_id_platform__from_str)),
         seed_id: m.get("seedId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_bundle_ids__bundle_id_platform__from_json(v: &Value) -> Option<iface_bundle_ids::BundleIdPlatform> {
-    let m = v.as_object()?;
-    Some(iface_bundle_ids::BundleIdPlatform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1745,15 +1766,8 @@ fn iface_bundle_ids__bundle_id_capability__from_json(v: &Value) -> Option<iface_
 fn iface_bundle_ids__bundle_id_capability_attributes__from_json(v: &Value) -> Option<iface_bundle_ids::BundleIdCapabilityAttributes> {
     let m = v.as_object()?;
     Some(iface_bundle_ids::BundleIdCapabilityAttributes {
-        capability_type: m.get("capabilityType").filter(|v| !v.is_null()).and_then(|v| iface_bundle_ids__capability_type__from_json(v)),
+        capability_type: m.get("capabilityType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_bundle_ids__capability_type__from_str)),
         settings: m.get("settings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bundle_ids__capability_setting__from_json(x)).collect())),
-    })
-}
-
-fn iface_bundle_ids__capability_type__from_json(v: &Value) -> Option<iface_bundle_ids::CapabilityType> {
-    let m = v.as_object()?;
-    Some(iface_bundle_ids::CapabilityType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1810,7 +1824,7 @@ fn iface_bundle_ids__profile_attributes__from_json(v: &Value) -> Option<iface_bu
         created_date: m.get("createdDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_bundle_ids__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_bundle_ids__bundle_id_platform__from_str)),
         profile_content: m.get("profileContent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         profile_state: m.get("profileState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_bundle_ids__profile_attributes_profile_state_enum__from_str)),
         profile_type: m.get("profileType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_bundle_ids__profile_attributes_profile_type_enum__from_str)),
@@ -1899,6 +1913,14 @@ fn iface_bundle_ids__profile_relationships_devices_links__from_json(v: &Value) -
         related: m.get("related").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_bundle_ids__bundle_id_platform__from_str(s: &str) -> Option<iface_bundle_ids::BundleIdPlatform> {
+    match s {
+        "IOS" => Some(iface_bundle_ids::BundleIdPlatform::Ios),
+        "MAC_OS" => Some(iface_bundle_ids::BundleIdPlatform::MacOs),
+        _ => None,
+    }
 }
 
 fn iface_bundle_ids__bundle_id_relationships_app_data_type_op_enum__from_str(s: &str) -> Option<iface_bundle_ids::BundleIdRelationshipsAppDataTypeOpEnum> {
@@ -2031,6 +2053,40 @@ fn iface_bundle_ids__app_relationships_pre_release_versions_data_item_type_op_en
 fn iface_bundle_ids__app_relationships_prices_data_item_type_op_enum__from_str(s: &str) -> Option<iface_bundle_ids::AppRelationshipsPricesDataItemTypeOpEnum> {
     match s {
         "appPrices" => Some(iface_bundle_ids::AppRelationshipsPricesDataItemTypeOpEnum::AppPrices),
+        _ => None,
+    }
+}
+
+fn iface_bundle_ids__capability_type__from_str(s: &str) -> Option<iface_bundle_ids::CapabilityType> {
+    match s {
+        "ICLOUD" => Some(iface_bundle_ids::CapabilityType::Icloud),
+        "IN_APP_PURCHASE" => Some(iface_bundle_ids::CapabilityType::InAppPurchase),
+        "GAME_CENTER" => Some(iface_bundle_ids::CapabilityType::GameCenter),
+        "PUSH_NOTIFICATIONS" => Some(iface_bundle_ids::CapabilityType::PushNotifications),
+        "WALLET" => Some(iface_bundle_ids::CapabilityType::Wallet),
+        "INTER_APP_AUDIO" => Some(iface_bundle_ids::CapabilityType::InterAppAudio),
+        "MAPS" => Some(iface_bundle_ids::CapabilityType::Maps),
+        "ASSOCIATED_DOMAINS" => Some(iface_bundle_ids::CapabilityType::AssociatedDomains),
+        "PERSONAL_VPN" => Some(iface_bundle_ids::CapabilityType::PersonalVpn),
+        "APP_GROUPS" => Some(iface_bundle_ids::CapabilityType::AppGroups),
+        "HEALTHKIT" => Some(iface_bundle_ids::CapabilityType::Healthkit),
+        "HOMEKIT" => Some(iface_bundle_ids::CapabilityType::Homekit),
+        "WIRELESS_ACCESSORY_CONFIGURATION" => Some(iface_bundle_ids::CapabilityType::WirelessAccessoryConfiguration),
+        "APPLE_PAY" => Some(iface_bundle_ids::CapabilityType::ApplePay),
+        "DATA_PROTECTION" => Some(iface_bundle_ids::CapabilityType::DataProtection),
+        "SIRIKIT" => Some(iface_bundle_ids::CapabilityType::Sirikit),
+        "NETWORK_EXTENSIONS" => Some(iface_bundle_ids::CapabilityType::NetworkExtensions),
+        "MULTIPATH" => Some(iface_bundle_ids::CapabilityType::Multipath),
+        "HOT_SPOT" => Some(iface_bundle_ids::CapabilityType::HotSpot),
+        "NFC_TAG_READING" => Some(iface_bundle_ids::CapabilityType::NfcTagReading),
+        "CLASSKIT" => Some(iface_bundle_ids::CapabilityType::Classkit),
+        "AUTOFILL_CREDENTIAL_PROVIDER" => Some(iface_bundle_ids::CapabilityType::AutofillCredentialProvider),
+        "ACCESS_WIFI_INFORMATION" => Some(iface_bundle_ids::CapabilityType::AccessWifiInformation),
+        "NETWORK_CUSTOM_PROTOCOL" => Some(iface_bundle_ids::CapabilityType::NetworkCustomProtocol),
+        "COREMEDIA_HLS_LOW_LATENCY" => Some(iface_bundle_ids::CapabilityType::CoremediaHlsLowLatency),
+        "SYSTEM_EXTENSION_INSTALL" => Some(iface_bundle_ids::CapabilityType::SystemExtensionInstall),
+        "USER_MANAGEMENT" => Some(iface_bundle_ids::CapabilityType::UserManagement),
+        "APPLE_ID_AUTH" => Some(iface_bundle_ids::CapabilityType::AppleIdAuth),
         _ => None,
     }
 }

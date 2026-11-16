@@ -76,8 +76,33 @@ fn iface_scrobbling__mark_type__to_json(p: &iface_scrobbling::MarkType) -> Value
     Value::Object(m)
 }
 
-fn iface_scrobbling__bulk_response__to_json(p: &iface_scrobbling::BulkResponse) -> Value {
+fn iface_scrobbling__bulk_response_item__to_json(p: &iface_scrobbling::BulkResponseItem) -> Value {
     let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("input".into(), match (&p.input) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_errors_entry__to_json(p: &iface_scrobbling::BulkResponseItemErrorsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_input_entry__to_json(p: &iface_scrobbling::BulkResponseItemInputEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_result_op_entry__to_json(p: &iface_scrobbling::BulkResponseItemResultOpEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -93,13 +118,14 @@ fn iface_scrobbling__marked_episode__to_json(p: &iface_scrobbling::MarkedEpisode
 
 fn iface_scrobbling__marked_episode_embedded__to_json(p: &iface_scrobbling::MarkedEpisodeEmbedded) -> Value {
     let mut m = Map::new();
-    m.insert("episode".into(), match (&p.episode) { Some(v) => iface_scrobbling__episode__to_json(v), None => Value::Null });
+    m.insert("episode".into(), match (&p.episode) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_scrobbling__episode__to_json(p: &iface_scrobbling::Episode) -> Value {
+fn iface_scrobbling__episode_entry__to_json(p: &iface_scrobbling::EpisodeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -110,6 +136,37 @@ fn iface_scrobbling__post_scrobble_shows_body_item__to_json(p: &iface_scrobbling
     m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("season".into(), match (&p.season) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => iface_scrobbling__mark_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_v2__to_json(p: &iface_scrobbling::BulkResponseItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("input".into(), match (&p.input) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_v2_errors_entry__to_json(p: &iface_scrobbling::BulkResponseItemV2ErrorsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_v2_input_entry__to_json(p: &iface_scrobbling::BulkResponseItemV2InputEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response_item_v2_result_op_entry__to_json(p: &iface_scrobbling::BulkResponseItemV2ResultOpEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -152,9 +209,37 @@ fn iface_scrobbling__mark_type__from_json(v: &Value) -> Option<iface_scrobbling:
     })
 }
 
-fn iface_scrobbling__bulk_response__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponse> {
+fn iface_scrobbling__bulk_response_item__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItem> {
     let m = v.as_object()?;
-    Some(iface_scrobbling::BulkResponse {
+    Some(iface_scrobbling::BulkResponseItem {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::BulkResponseItemErrorsEntry { key: k.clone(), value: val })).collect())),
+        input: m.get("input").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::BulkResponseItemInputEntry { key: k.clone(), value: val })).collect())),
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::BulkResponseItemResultOpEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_scrobbling__bulk_response_item_errors_entry__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemErrorsEntry> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemErrorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_scrobbling__bulk_response_item_input_entry__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemInputEntry> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemInputEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_scrobbling__bulk_response_item_result_op_entry__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemResultOpEntry> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemResultOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -172,23 +257,59 @@ fn iface_scrobbling__marked_episode__from_json(v: &Value) -> Option<iface_scrobb
 fn iface_scrobbling__marked_episode_embedded__from_json(v: &Value) -> Option<iface_scrobbling::MarkedEpisodeEmbedded> {
     let m = v.as_object()?;
     Some(iface_scrobbling::MarkedEpisodeEmbedded {
-        episode: m.get("episode").filter(|v| !v.is_null()).and_then(|v| iface_scrobbling__episode__from_json(v)),
+        episode: m.get("episode").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::EpisodeEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_scrobbling__episode__from_json(v: &Value) -> Option<iface_scrobbling::Episode> {
+fn iface_scrobbling__episode_entry__from_json(v: &Value) -> Option<iface_scrobbling::EpisodeEntry> {
     let m = v.as_object()?;
-    Some(iface_scrobbling::Episode {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_scrobbling::EpisodeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_scrobbling__post_scrobble_episodes__ok(body: String) -> Result<iface_scrobbling::BulkResponse, crate::runtime::DispatchError> {
+fn iface_scrobbling__bulk_response_item_v2__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemV2> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemV2 {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::BulkResponseItemV2ErrorsEntry { key: k.clone(), value: val })).collect())),
+        input: m.get("input").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::BulkResponseItemV2InputEntry { key: k.clone(), value: val })).collect())),
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_scrobbling::BulkResponseItemV2ResultOpEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_scrobbling__bulk_response_item_v2_errors_entry__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemV2ErrorsEntry> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemV2ErrorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_scrobbling__bulk_response_item_v2_input_entry__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemV2InputEntry> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemV2InputEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_scrobbling__bulk_response_item_v2_result_op_entry__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponseItemV2ResultOpEntry> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponseItemV2ResultOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_scrobbling__post_scrobble_episodes__ok(body: String) -> Result<Vec<iface_scrobbling::BulkResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_scrobbling__bulk_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_scrobbling__bulk_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -226,12 +347,12 @@ fn iface_scrobbling__put_scrobble_episodes_episode_id__err(e: crate::runtime::Di
     }
 }
 
-fn iface_scrobbling__post_scrobble_shows__ok(body: String) -> Result<iface_scrobbling::BulkResponse, crate::runtime::DispatchError> {
+fn iface_scrobbling__post_scrobble_shows__ok(body: String) -> Result<Vec<iface_scrobbling::BulkResponseItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_scrobbling__bulk_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_scrobbling__bulk_response_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -266,7 +387,7 @@ fn iface_scrobbling__get_scrobble_shows_show_id__err(e: crate::runtime::Dispatch
 }
 
 impl iface_scrobbling::Guest for crate::Component {
-    fn post_scrobble_episodes(params: iface_scrobbling::PostScrobbleEpisodesParams) -> Result<iface_scrobbling::BulkResponse, iface_scrobbling::PostScrobbleEpisodesError> {
+    fn post_scrobble_episodes(params: iface_scrobbling::PostScrobbleEpisodesParams) -> Result<Vec<iface_scrobbling::BulkResponseItem>, iface_scrobbling::PostScrobbleEpisodesError> {
         let json = iface_scrobbling__post_scrobble_episodes_params__to_json(&params);
         match dispatch(&OP_SCROBBLING_POST_SCROBBLE_EPISODES, json).and_then(iface_scrobbling__post_scrobble_episodes__ok) {
             Ok(v) => Ok(v),
@@ -280,7 +401,7 @@ impl iface_scrobbling::Guest for crate::Component {
             Err(e) => Err(iface_scrobbling__put_scrobble_episodes_episode_id__err(e)),
         }
     }
-    fn post_scrobble_shows(params: iface_scrobbling::PostScrobbleShowsParams) -> Result<iface_scrobbling::BulkResponse, iface_scrobbling::PostScrobbleShowsError> {
+    fn post_scrobble_shows(params: iface_scrobbling::PostScrobbleShowsParams) -> Result<Vec<iface_scrobbling::BulkResponseItemV2>, iface_scrobbling::PostScrobbleShowsError> {
         let json = iface_scrobbling__post_scrobble_shows_params__to_json(&params);
         match dispatch(&OP_SCROBBLING_POST_SCROBBLE_SHOWS, json).and_then(iface_scrobbling__post_scrobble_shows__ok) {
             Ok(v) => Ok(v),

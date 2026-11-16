@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:zuora@0.5.0` |
-| Published version | `0.5.0+zuora-2021-08-20` |
+| Package | `autostamp:zuora@0.6.0` |
+| Published version | `0.6.0+zuora-2021-08-20` |
 | Tag filter | all tags |
 | Operations generated | 428 |
 | Infer API-key credentials | enabled — not triggered |

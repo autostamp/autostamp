@@ -279,7 +279,7 @@ fn iface_templates__patch_templates_id_response_links_item__to_json(p: &iface_te
 fn iface_templates__get_templates_id_default_content_response__to_json(p: &iface_templates::GetTemplatesIdDefaultContentResponse) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => Value::Array((v).iter().map(|v| iface_templates__get_templates_id_default_content_response_links_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("sections".into(), match (&p.sections) { Some(v) => iface_templates__get_templates_id_default_content_response_sections__to_json(v), None => Value::Null });
+    m.insert("sections".into(), match (&p.sections) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -293,9 +293,10 @@ fn iface_templates__get_templates_id_default_content_response_links_item__to_jso
     Value::Object(m)
 }
 
-fn iface_templates__get_templates_id_default_content_response_sections__to_json(p: &iface_templates::GetTemplatesIdDefaultContentResponseSections) -> Value {
+fn iface_templates__get_templates_id_default_content_response_sections_entry__to_json(p: &iface_templates::GetTemplatesIdDefaultContentResponseSectionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -512,7 +513,7 @@ fn iface_templates__get_templates_id_default_content_response__from_json(v: &Val
     let m = v.as_object()?;
     Some(iface_templates::GetTemplatesIdDefaultContentResponse {
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_templates__get_templates_id_default_content_response_links_item__from_json(x)).collect())),
-        sections: m.get("sections").filter(|v| !v.is_null()).and_then(|v| iface_templates__get_templates_id_default_content_response_sections__from_json(v)),
+        sections: m.get("sections").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_templates::GetTemplatesIdDefaultContentResponseSectionsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -527,10 +528,11 @@ fn iface_templates__get_templates_id_default_content_response_links_item__from_j
     })
 }
 
-fn iface_templates__get_templates_id_default_content_response_sections__from_json(v: &Value) -> Option<iface_templates::GetTemplatesIdDefaultContentResponseSections> {
+fn iface_templates__get_templates_id_default_content_response_sections_entry__from_json(v: &Value) -> Option<iface_templates::GetTemplatesIdDefaultContentResponseSectionsEntry> {
     let m = v.as_object()?;
-    Some(iface_templates::GetTemplatesIdDefaultContentResponseSections {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_templates::GetTemplatesIdDefaultContentResponseSectionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

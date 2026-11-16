@@ -31,9 +31,95 @@ const OP_INBOX_GET_INBOX_UNREAD: OpSpec = OpSpec {
     ],
 };
 
-fn iface_inbox__items__to_json(p: &iface_inbox::Items) -> Value {
+fn iface_inbox__items_item__to_json(p: &iface_inbox::ItemsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("answer_id".into(), match (&p.answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_unread".into(), match (&p.is_unread) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_inbox__items_item_site__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inbox__items_item_site__to_json(p: &iface_inbox::ItemsItemSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_inbox__items_item_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inbox__items_item_site_styling__to_json(p: &iface_inbox::ItemsItemSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inbox__items_item_v2__to_json(p: &iface_inbox::ItemsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("answer_id".into(), match (&p.answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_unread".into(), match (&p.is_unread) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_inbox__items_item_v2_site__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inbox__items_item_v2_site__to_json(p: &iface_inbox::ItemsItemV2Site) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_inbox__items_item_v2_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inbox__items_item_v2_site_styling__to_json(p: &iface_inbox::ItemsItemV2SiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -56,19 +142,110 @@ fn iface_inbox__get_inbox_unread_params__to_json(p: &iface_inbox::GetInboxUnread
     Value::Object(m)
 }
 
-fn iface_inbox__items__from_json(v: &Value) -> Option<iface_inbox::Items> {
+fn iface_inbox__items_item__from_json(v: &Value) -> Option<iface_inbox::ItemsItem> {
     let m = v.as_object()?;
-    Some(iface_inbox::Items {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_inbox::ItemsItem {
+        answer_id: m.get("answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_unread: m.get("is_unread").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_type: m.get("item_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_inbox__items_item_site__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_inbox__get_inbox__ok(body: String) -> Result<iface_inbox::Items, crate::runtime::DispatchError> {
+fn iface_inbox__items_item_site__from_json(v: &Value) -> Option<iface_inbox::ItemsItemSite> {
+    let m = v.as_object()?;
+    Some(iface_inbox::ItemsItemSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_inbox__items_item_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inbox__items_item_site_styling__from_json(v: &Value) -> Option<iface_inbox::ItemsItemSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_inbox::ItemsItemSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inbox__items_item_v2__from_json(v: &Value) -> Option<iface_inbox::ItemsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_inbox::ItemsItemV2 {
+        answer_id: m.get("answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_unread: m.get("is_unread").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_type: m.get("item_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_inbox__items_item_v2_site__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inbox__items_item_v2_site__from_json(v: &Value) -> Option<iface_inbox::ItemsItemV2Site> {
+    let m = v.as_object()?;
+    Some(iface_inbox::ItemsItemV2Site {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_inbox__items_item_v2_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inbox__items_item_v2_site_styling__from_json(v: &Value) -> Option<iface_inbox::ItemsItemV2SiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_inbox::ItemsItemV2SiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inbox__get_inbox__ok(body: String) -> Result<Vec<iface_inbox::ItemsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_inbox__items__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_inbox__items_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -93,12 +270,12 @@ fn iface_inbox__get_inbox__err(e: crate::runtime::DispatchError) -> iface_inbox:
     }
 }
 
-fn iface_inbox__get_inbox_unread__ok(body: String) -> Result<iface_inbox::Items, crate::runtime::DispatchError> {
+fn iface_inbox__get_inbox_unread__ok(body: String) -> Result<Vec<iface_inbox::ItemsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_inbox__items__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_inbox__items_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -124,14 +301,14 @@ fn iface_inbox__get_inbox_unread__err(e: crate::runtime::DispatchError) -> iface
 }
 
 impl iface_inbox::Guest for crate::Component {
-    fn get_inbox(params: iface_inbox::GetInboxParams) -> Result<iface_inbox::Items, iface_inbox::GetInboxError> {
+    fn get_inbox(params: iface_inbox::GetInboxParams) -> Result<Vec<iface_inbox::ItemsItem>, iface_inbox::GetInboxError> {
         let json = iface_inbox__get_inbox_params__to_json(&params);
         match dispatch(&OP_INBOX_GET_INBOX, json).and_then(iface_inbox__get_inbox__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_inbox__get_inbox__err(e)),
         }
     }
-    fn get_inbox_unread(params: iface_inbox::GetInboxUnreadParams) -> Result<iface_inbox::Items, iface_inbox::GetInboxUnreadError> {
+    fn get_inbox_unread(params: iface_inbox::GetInboxUnreadParams) -> Result<Vec<iface_inbox::ItemsItemV2>, iface_inbox::GetInboxUnreadError> {
         let json = iface_inbox__get_inbox_unread_params__to_json(&params);
         match dispatch(&OP_INBOX_GET_INBOX_UNREAD, json).and_then(iface_inbox__get_inbox_unread__ok) {
             Ok(v) => Ok(v),

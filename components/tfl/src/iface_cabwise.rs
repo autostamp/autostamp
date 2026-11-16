@@ -23,9 +23,10 @@ const OP_CABWISE_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_cabwise__system_object__to_json(p: &iface_cabwise::SystemObject) -> Value {
+fn iface_cabwise__system_object_entry__to_json(p: &iface_cabwise::SystemObjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -44,19 +45,20 @@ fn iface_cabwise__get_params__to_json(p: &iface_cabwise::GetParams) -> Value {
     Value::Object(m)
 }
 
-fn iface_cabwise__system_object__from_json(v: &Value) -> Option<iface_cabwise::SystemObject> {
+fn iface_cabwise__system_object_entry__from_json(v: &Value) -> Option<iface_cabwise::SystemObjectEntry> {
     let m = v.as_object()?;
-    Some(iface_cabwise::SystemObject {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_cabwise::SystemObjectEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_cabwise__get__ok(body: String) -> Result<iface_cabwise::SystemObject, crate::runtime::DispatchError> {
+fn iface_cabwise__get__ok(body: String) -> Result<Vec<iface_cabwise::SystemObjectEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_cabwise__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_cabwise::SystemObjectEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -70,7 +72,7 @@ fn iface_cabwise__get__err(e: crate::runtime::DispatchError) -> String {
 }
 
 impl iface_cabwise::Guest for crate::Component {
-    fn get(params: iface_cabwise::GetParams) -> Result<iface_cabwise::SystemObject, String> {
+    fn get(params: iface_cabwise::GetParams) -> Result<Vec<iface_cabwise::SystemObjectEntry>, String> {
         let json = iface_cabwise__get_params__to_json(&params);
         match dispatch(&OP_CABWISE_GET, json).and_then(iface_cabwise__get__ok) {
             Ok(v) => Ok(v),

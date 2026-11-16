@@ -57,9 +57,19 @@ const OP_TAGS_POST_TAGS_TIME_SERIES_JSON: OpSpec = OpSpec {
     ],
 };
 
-fn iface_tags__timeseries__to_json(p: &iface_tags::Timeseries) -> Value {
+fn iface_tags__timeseries_item__to_json(p: &iface_tags::TimeseriesItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rejects".into(), match (&p.rejects) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_opens".into(), match (&p.unique_opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unsubs".into(), match (&p.unsubs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -180,9 +190,36 @@ fn iface_tags__info_response_stats_today__to_json(p: &iface_tags::InfoResponseSt
     Value::Object(m)
 }
 
-fn iface_tags__list_response__to_json(p: &iface_tags::ListResponse) -> Value {
+fn iface_tags__list_response_item__to_json(p: &iface_tags::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rejects".into(), match (&p.rejects) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_opens".into(), match (&p.unique_opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unsubs".into(), match (&p.unsubs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__timeseries_item_v2__to_json(p: &iface_tags::TimeseriesItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rejects".into(), match (&p.rejects) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_opens".into(), match (&p.unique_opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unsubs".into(), match (&p.unsubs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -219,10 +256,20 @@ fn iface_tags__post_tags_time_series_json_params__to_json(p: &iface_tags::PostTa
     Value::Object(m)
 }
 
-fn iface_tags__timeseries__from_json(v: &Value) -> Option<iface_tags::Timeseries> {
+fn iface_tags__timeseries_item__from_json(v: &Value) -> Option<iface_tags::TimeseriesItem> {
     let m = v.as_object()?;
-    Some(iface_tags::Timeseries {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_tags::TimeseriesItem {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hard_bounces: m.get("hard_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rejects: m.get("rejects").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        soft_bounces: m.get("soft_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_opens: m.get("unique_opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unsubs: m.get("unsubs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -351,19 +398,47 @@ fn iface_tags__info_response_stats_today__from_json(v: &Value) -> Option<iface_t
     })
 }
 
-fn iface_tags__list_response__from_json(v: &Value) -> Option<iface_tags::ListResponse> {
+fn iface_tags__list_response_item__from_json(v: &Value) -> Option<iface_tags::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_tags::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_tags::ListResponseItem {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hard_bounces: m.get("hard_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rejects: m.get("rejects").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        soft_bounces: m.get("soft_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tag: m.get("tag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_opens: m.get("unique_opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unsubs: m.get("unsubs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tags__post_tags_all_time_series_json__ok(body: String) -> Result<iface_tags::Timeseries, crate::runtime::DispatchError> {
+fn iface_tags__timeseries_item_v2__from_json(v: &Value) -> Option<iface_tags::TimeseriesItemV2> {
+    let m = v.as_object()?;
+    Some(iface_tags::TimeseriesItemV2 {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hard_bounces: m.get("hard_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rejects: m.get("rejects").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        soft_bounces: m.get("soft_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_opens: m.get("unique_opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unsubs: m.get("unsubs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tags__post_tags_all_time_series_json__ok(body: String) -> Result<Vec<iface_tags::TimeseriesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_tags__timeseries__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__timeseries_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -412,12 +487,12 @@ fn iface_tags__post_tags_info_json__err(e: crate::runtime::DispatchError) -> Str
     }
 }
 
-fn iface_tags__post_tags_list_json__ok(body: String) -> Result<iface_tags::ListResponse, crate::runtime::DispatchError> {
+fn iface_tags__post_tags_list_json__ok(body: String) -> Result<Vec<iface_tags::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_tags__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -430,12 +505,12 @@ fn iface_tags__post_tags_list_json__err(e: crate::runtime::DispatchError) -> Str
     }
 }
 
-fn iface_tags__post_tags_time_series_json__ok(body: String) -> Result<iface_tags::Timeseries, crate::runtime::DispatchError> {
+fn iface_tags__post_tags_time_series_json__ok(body: String) -> Result<Vec<iface_tags::TimeseriesItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_tags__timeseries__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__timeseries_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -449,7 +524,7 @@ fn iface_tags__post_tags_time_series_json__err(e: crate::runtime::DispatchError)
 }
 
 impl iface_tags::Guest for crate::Component {
-    fn post_tags_all_time_series_json(params: iface_tags::PostTagsAllTimeSeriesJsonParams) -> Result<iface_tags::Timeseries, String> {
+    fn post_tags_all_time_series_json(params: iface_tags::PostTagsAllTimeSeriesJsonParams) -> Result<Vec<iface_tags::TimeseriesItem>, String> {
         let json = iface_tags__post_tags_all_time_series_json_params__to_json(&params);
         match dispatch(&OP_TAGS_POST_TAGS_ALL_TIME_SERIES_JSON, json).and_then(iface_tags__post_tags_all_time_series_json__ok) {
             Ok(v) => Ok(v),
@@ -470,14 +545,14 @@ impl iface_tags::Guest for crate::Component {
             Err(e) => Err(iface_tags__post_tags_info_json__err(e)),
         }
     }
-    fn post_tags_list_json(params: iface_tags::PostTagsListJsonParams) -> Result<iface_tags::ListResponse, String> {
+    fn post_tags_list_json(params: iface_tags::PostTagsListJsonParams) -> Result<Vec<iface_tags::ListResponseItem>, String> {
         let json = iface_tags__post_tags_list_json_params__to_json(&params);
         match dispatch(&OP_TAGS_POST_TAGS_LIST_JSON, json).and_then(iface_tags__post_tags_list_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_tags__post_tags_list_json__err(e)),
         }
     }
-    fn post_tags_time_series_json(params: iface_tags::PostTagsTimeSeriesJsonParams) -> Result<iface_tags::Timeseries, String> {
+    fn post_tags_time_series_json(params: iface_tags::PostTagsTimeSeriesJsonParams) -> Result<Vec<iface_tags::TimeseriesItemV2>, String> {
         let json = iface_tags__post_tags_time_series_json_params__to_json(&params);
         match dispatch(&OP_TAGS_POST_TAGS_TIME_SERIES_JSON, json).and_then(iface_tags__post_tags_time_series_json__ok) {
             Ok(v) => Ok(v),

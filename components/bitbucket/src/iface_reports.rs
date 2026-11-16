@@ -240,13 +240,14 @@ fn iface_reports__report_data__to_json(p: &iface_reports::ReportData) -> Value {
     let mut m = Map::new();
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_reports__report_data_type_op_enum__to_str(v).into()), None => Value::Null });
-    m.insert("value".into(), match (&p.value) { Some(v) => iface_reports__report_data_value__to_json(v), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_reports__report_data_value__to_json(p: &iface_reports::ReportDataValue) -> Value {
+fn iface_reports__report_data_value_entry__to_json(p: &iface_reports::ReportDataValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -427,14 +428,15 @@ fn iface_reports__report_data__from_json(v: &Value) -> Option<iface_reports::Rep
     Some(iface_reports::ReportData {
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_reports__report_data_type_op_enum__from_str)),
-        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| iface_reports__report_data_value__from_json(v)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::ReportDataValueEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_reports__report_data_value__from_json(v: &Value) -> Option<iface_reports::ReportDataValue> {
+fn iface_reports__report_data_value_entry__from_json(v: &Value) -> Option<iface_reports::ReportDataValueEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::ReportDataValue {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::ReportDataValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

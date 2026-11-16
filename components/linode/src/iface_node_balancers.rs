@@ -357,12 +357,21 @@ fn iface_node_balancers__node_balancer_node_status_enum__to_str(e: &iface_node_b
     }
 }
 
+fn iface_node_balancers__node_balancer_node_properties_mode__to_str(e: &iface_node_balancers::NodeBalancerNodePropertiesMode) -> &'static str {
+    match e {
+        iface_node_balancers::NodeBalancerNodePropertiesMode::Accept => "accept",
+        iface_node_balancers::NodeBalancerNodePropertiesMode::Reject => "reject",
+        iface_node_balancers::NodeBalancerNodePropertiesMode::Drain => "drain",
+        iface_node_balancers::NodeBalancerNodePropertiesMode::Backup => "backup",
+    }
+}
+
 fn iface_node_balancers__get_node_balancers_response__to_json(p: &iface_node_balancers::GetNodeBalancersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_node_balancers__node_balancer__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_node_balancers__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_node_balancers__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_node_balancers__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -390,48 +399,19 @@ fn iface_node_balancers__node_balancer_transfer__to_json(p: &iface_node_balancer
     Value::Object(m)
 }
 
-fn iface_node_balancers__pagination_envelope_properties_page__to_json(p: &iface_node_balancers::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_node_balancers__delete_node_balancer_response_entry__to_json(p: &iface_node_balancers::DeleteNodeBalancerResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__pagination_envelope_properties_pages__to_json(p: &iface_node_balancers::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__pagination_envelope_properties_results__to_json(p: &iface_node_balancers::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__node_balancer_properties_client_conn_throttle__to_json(p: &iface_node_balancers::NodeBalancerPropertiesClientConnThrottle) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__node_balancer_properties_label__to_json(p: &iface_node_balancers::NodeBalancerPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__delete_node_balancer_response__to_json(p: &iface_node_balancers::DeleteNodeBalancerResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_node_balancers__get_node_balancer_configs_response__to_json(p: &iface_node_balancers::GetNodeBalancerConfigsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_node_balancers__node_balancer_config__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_node_balancers__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_node_balancers__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_node_balancers__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -467,18 +447,19 @@ fn iface_node_balancers__node_balancer_config_nodes_status__to_json(p: &iface_no
     Value::Object(m)
 }
 
-fn iface_node_balancers__delete_node_balancer_config_response__to_json(p: &iface_node_balancers::DeleteNodeBalancerConfigResponse) -> Value {
+fn iface_node_balancers__delete_node_balancer_config_response_entry__to_json(p: &iface_node_balancers::DeleteNodeBalancerConfigResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_node_balancers__get_node_balancer_config_nodes_response__to_json(p: &iface_node_balancers::GetNodeBalancerConfigNodesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_node_balancers__node_balancer_node__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_node_balancers__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_node_balancers__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_node_balancers__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -495,9 +476,10 @@ fn iface_node_balancers__node_balancer_node__to_json(p: &iface_node_balancers::N
     Value::Object(m)
 }
 
-fn iface_node_balancers__delete_node_balancer_config_node_response__to_json(p: &iface_node_balancers::DeleteNodeBalancerConfigNodeResponse) -> Value {
+fn iface_node_balancers__delete_node_balancer_config_node_response_entry__to_json(p: &iface_node_balancers::DeleteNodeBalancerConfigNodeResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -510,35 +492,11 @@ fn iface_node_balancers__rebuild_node_balancer_config_body_nodes_status__to_json
 
 fn iface_node_balancers__rebuild_node_balancer_config_body_nodes_item__to_json(p: &iface_node_balancers::RebuildNodeBalancerConfigBodyNodesItem) -> Value {
     let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_node_balancers__node_balancer_node_properties_address__to_json(v), None => Value::Null });
+    m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_node_balancers__node_balancer_node_properties_label__to_json(v), None => Value::Null });
-    m.insert("mode".into(), match (&p.mode) { Some(v) => iface_node_balancers__node_balancer_node_properties_mode__to_json(v), None => Value::Null });
-    m.insert("weight".into(), match (&p.weight) { Some(v) => iface_node_balancers__node_balancer_node_properties_weight__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_node_balancers__node_balancer_node_properties_address__to_json(p: &iface_node_balancers::NodeBalancerNodePropertiesAddress) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__node_balancer_node_properties_label__to_json(p: &iface_node_balancers::NodeBalancerNodePropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__node_balancer_node_properties_mode__to_json(p: &iface_node_balancers::NodeBalancerNodePropertiesMode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_node_balancers__node_balancer_node_properties_weight__to_json(p: &iface_node_balancers::NodeBalancerNodePropertiesWeight) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String(iface_node_balancers__node_balancer_node_properties_mode__to_str(v).into()), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -572,9 +530,9 @@ fn iface_node_balancers__get_node_balancers_params__to_json(p: &iface_node_balan
 
 fn iface_node_balancers__create_node_balancer_params__to_json(p: &iface_node_balancers::CreateNodeBalancerParams) -> Value {
     let mut m = Map::new();
-    m.insert("client_conn_throttle".into(), match (&p.client_conn_throttle) { Some(v) => iface_node_balancers__node_balancer_properties_client_conn_throttle__to_json(v), None => Value::Null });
+    m.insert("client_conn_throttle".into(), match (&p.client_conn_throttle) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("configs".into(), match (&p.configs) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_node_balancers__node_balancer_properties_label__to_json(v), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("region".into(), Value::String((&p.region).clone()));
     Value::Object(m)
 }
@@ -770,9 +728,9 @@ fn iface_node_balancers__get_node_balancers_response__from_json(v: &Value) -> Op
     let m = v.as_object()?;
     Some(iface_node_balancers::GetNodeBalancersResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_node_balancers__node_balancer__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -802,31 +760,11 @@ fn iface_node_balancers__node_balancer_transfer__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_node_balancers__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_node_balancers::PaginationEnvelopePropertiesPage> {
+fn iface_node_balancers__delete_node_balancer_response_entry__from_json(v: &Value) -> Option<iface_node_balancers::DeleteNodeBalancerResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_node_balancers::PaginationEnvelopePropertiesPage {
+    Some(iface_node_balancers::DeleteNodeBalancerResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_node_balancers__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_node_balancers::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_node_balancers::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_node_balancers__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_node_balancers::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_node_balancers::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_node_balancers__delete_node_balancer_response__from_json(v: &Value) -> Option<iface_node_balancers::DeleteNodeBalancerResponse> {
-    let m = v.as_object()?;
-    Some(iface_node_balancers::DeleteNodeBalancerResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -834,9 +772,9 @@ fn iface_node_balancers__get_node_balancer_configs_response__from_json(v: &Value
     let m = v.as_object()?;
     Some(iface_node_balancers::GetNodeBalancerConfigsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_node_balancers__node_balancer_config__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -874,10 +812,11 @@ fn iface_node_balancers__node_balancer_config_nodes_status__from_json(v: &Value)
     })
 }
 
-fn iface_node_balancers__delete_node_balancer_config_response__from_json(v: &Value) -> Option<iface_node_balancers::DeleteNodeBalancerConfigResponse> {
+fn iface_node_balancers__delete_node_balancer_config_response_entry__from_json(v: &Value) -> Option<iface_node_balancers::DeleteNodeBalancerConfigResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_node_balancers::DeleteNodeBalancerConfigResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_node_balancers::DeleteNodeBalancerConfigResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -885,9 +824,9 @@ fn iface_node_balancers__get_node_balancer_config_nodes_response__from_json(v: &
     let m = v.as_object()?;
     Some(iface_node_balancers::GetNodeBalancerConfigNodesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_node_balancers__node_balancer_node__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_node_balancers__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -905,10 +844,11 @@ fn iface_node_balancers__node_balancer_node__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_node_balancers__delete_node_balancer_config_node_response__from_json(v: &Value) -> Option<iface_node_balancers::DeleteNodeBalancerConfigNodeResponse> {
+fn iface_node_balancers__delete_node_balancer_config_node_response_entry__from_json(v: &Value) -> Option<iface_node_balancers::DeleteNodeBalancerConfigNodeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_node_balancers::DeleteNodeBalancerConfigNodeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_node_balancers::DeleteNodeBalancerConfigNodeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1081,12 +1021,12 @@ fn iface_node_balancers__update_node_balancer__err(e: crate::runtime::DispatchEr
     }
 }
 
-fn iface_node_balancers__delete_node_balancer__ok(body: String) -> Result<iface_node_balancers::DeleteNodeBalancerResponse, crate::runtime::DispatchError> {
+fn iface_node_balancers__delete_node_balancer__ok(body: String) -> Result<Vec<iface_node_balancers::DeleteNodeBalancerResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_node_balancers__delete_node_balancer_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_node_balancers::DeleteNodeBalancerResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1171,12 +1111,12 @@ fn iface_node_balancers__update_node_balancer_config__err(e: crate::runtime::Dis
     }
 }
 
-fn iface_node_balancers__delete_node_balancer_config__ok(body: String) -> Result<iface_node_balancers::DeleteNodeBalancerConfigResponse, crate::runtime::DispatchError> {
+fn iface_node_balancers__delete_node_balancer_config__ok(body: String) -> Result<Vec<iface_node_balancers::DeleteNodeBalancerConfigResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_node_balancers__delete_node_balancer_config_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_node_balancers::DeleteNodeBalancerConfigResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1261,12 +1201,12 @@ fn iface_node_balancers__update_node_balancer_node__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_node_balancers__delete_node_balancer_config_node__ok(body: String) -> Result<iface_node_balancers::DeleteNodeBalancerConfigNodeResponse, crate::runtime::DispatchError> {
+fn iface_node_balancers__delete_node_balancer_config_node__ok(body: String) -> Result<Vec<iface_node_balancers::DeleteNodeBalancerConfigNodeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_node_balancers__delete_node_balancer_config_node_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_node_balancers::DeleteNodeBalancerConfigNodeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1344,7 +1284,7 @@ impl iface_node_balancers::Guest for crate::Component {
             Err(e) => Err(iface_node_balancers__update_node_balancer__err(e)),
         }
     }
-    fn delete_node_balancer(params: iface_node_balancers::DeleteNodeBalancerParams) -> Result<iface_node_balancers::DeleteNodeBalancerResponse, String> {
+    fn delete_node_balancer(params: iface_node_balancers::DeleteNodeBalancerParams) -> Result<Vec<iface_node_balancers::DeleteNodeBalancerResponseEntry>, String> {
         let json = iface_node_balancers__delete_node_balancer_params__to_json(&params);
         match dispatch(&OP_NODE_BALANCERS_DELETE_NODE_BALANCER, json).and_then(iface_node_balancers__delete_node_balancer__ok) {
             Ok(v) => Ok(v),
@@ -1379,7 +1319,7 @@ impl iface_node_balancers::Guest for crate::Component {
             Err(e) => Err(iface_node_balancers__update_node_balancer_config__err(e)),
         }
     }
-    fn delete_node_balancer_config(params: iface_node_balancers::DeleteNodeBalancerConfigParams) -> Result<iface_node_balancers::DeleteNodeBalancerConfigResponse, String> {
+    fn delete_node_balancer_config(params: iface_node_balancers::DeleteNodeBalancerConfigParams) -> Result<Vec<iface_node_balancers::DeleteNodeBalancerConfigResponseEntry>, String> {
         let json = iface_node_balancers__delete_node_balancer_config_params__to_json(&params);
         match dispatch(&OP_NODE_BALANCERS_DELETE_NODE_BALANCER_CONFIG, json).and_then(iface_node_balancers__delete_node_balancer_config__ok) {
             Ok(v) => Ok(v),
@@ -1414,7 +1354,7 @@ impl iface_node_balancers::Guest for crate::Component {
             Err(e) => Err(iface_node_balancers__update_node_balancer_node__err(e)),
         }
     }
-    fn delete_node_balancer_config_node(params: iface_node_balancers::DeleteNodeBalancerConfigNodeParams) -> Result<iface_node_balancers::DeleteNodeBalancerConfigNodeResponse, String> {
+    fn delete_node_balancer_config_node(params: iface_node_balancers::DeleteNodeBalancerConfigNodeParams) -> Result<Vec<iface_node_balancers::DeleteNodeBalancerConfigNodeResponseEntry>, String> {
         let json = iface_node_balancers__delete_node_balancer_config_node_params__to_json(&params);
         match dispatch(&OP_NODE_BALANCERS_DELETE_NODE_BALANCER_CONFIG_NODE, json).and_then(iface_node_balancers__delete_node_balancer_config_node__ok) {
             Ok(v) => Ok(v),

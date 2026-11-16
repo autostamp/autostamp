@@ -109,6 +109,13 @@ fn iface_devices__device_attributes_device_class_enum__to_str(e: &iface_devices:
     }
 }
 
+fn iface_devices__bundle_id_platform__to_str(e: &iface_devices::BundleIdPlatform) -> &'static str {
+    match e {
+        iface_devices::BundleIdPlatform::Ios => "IOS",
+        iface_devices::BundleIdPlatform::MacOs => "MAC_OS",
+    }
+}
+
 fn iface_devices__device_type_op_enum__to_str(e: &iface_devices::DeviceTypeOpEnum) -> &'static str {
     match e {
         iface_devices::DeviceTypeOpEnum::Devices => "devices",
@@ -138,15 +145,9 @@ fn iface_devices__device_attributes__to_json(p: &iface_devices::DeviceAttributes
     m.insert("deviceClass".into(), match (&p.device_class) { Some(v) => Value::String(iface_devices__device_attributes_device_class_enum__to_str(v).into()), None => Value::Null });
     m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_devices__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_devices__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_devices__get_collection_filter_status_item_enum__to_str(v).into()), None => Value::Null });
     m.insert("udid".into(), match (&p.udid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_devices__bundle_id_platform__to_json(p: &iface_devices::BundleIdPlatform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -187,7 +188,7 @@ fn iface_devices__device_create_request_data__to_json(p: &iface_devices::DeviceC
 fn iface_devices__device_create_request_data_attributes__to_json(p: &iface_devices::DeviceCreateRequestDataAttributes) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("platform".into(), iface_devices__bundle_id_platform__to_json(&p.platform));
+    m.insert("platform".into(), Value::String(iface_devices__bundle_id_platform__to_str(&p.platform).into()));
     m.insert("udid".into(), Value::String((&p.udid).clone()));
     Value::Object(m)
 }
@@ -279,16 +280,9 @@ fn iface_devices__device_attributes__from_json(v: &Value) -> Option<iface_device
         device_class: m.get("deviceClass").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_devices__device_attributes_device_class_enum__from_str)),
         model: m.get("model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_devices__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_devices__bundle_id_platform__from_str)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_devices__get_collection_filter_status_item_enum__from_str)),
         udid: m.get("udid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_devices__bundle_id_platform__from_json(v: &Value) -> Option<iface_devices::BundleIdPlatform> {
-    let m = v.as_object()?;
-    Some(iface_devices::BundleIdPlatform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -354,6 +348,14 @@ fn iface_devices__device_attributes_device_class_enum__from_str(s: &str) -> Opti
         "IPOD" => Some(iface_devices::DeviceAttributesDeviceClassEnum::Ipod),
         "APPLE_TV" => Some(iface_devices::DeviceAttributesDeviceClassEnum::AppleTv),
         "MAC" => Some(iface_devices::DeviceAttributesDeviceClassEnum::Mac),
+        _ => None,
+    }
+}
+
+fn iface_devices__bundle_id_platform__from_str(s: &str) -> Option<iface_devices::BundleIdPlatform> {
+    match s {
+        "IOS" => Some(iface_devices::BundleIdPlatform::Ios),
+        "MAC_OS" => Some(iface_devices::BundleIdPlatform::MacOs),
         _ => None,
     }
 }

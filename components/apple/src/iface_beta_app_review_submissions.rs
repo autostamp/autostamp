@@ -104,6 +104,15 @@ fn iface_beta_app_review_submissions__get_collection_fields_builds_item_enum__to
     }
 }
 
+fn iface_beta_app_review_submissions__beta_review_state__to_str(e: &iface_beta_app_review_submissions::BetaReviewState) -> &'static str {
+    match e {
+        iface_beta_app_review_submissions::BetaReviewState::WaitingForReview => "WAITING_FOR_REVIEW",
+        iface_beta_app_review_submissions::BetaReviewState::InReview => "IN_REVIEW",
+        iface_beta_app_review_submissions::BetaReviewState::Rejected => "REJECTED",
+        iface_beta_app_review_submissions::BetaReviewState::Approved => "APPROVED",
+    }
+}
+
 fn iface_beta_app_review_submissions__beta_app_review_submission_relationships_build_data_type_op_enum__to_str(e: &iface_beta_app_review_submissions::BetaAppReviewSubmissionRelationshipsBuildDataTypeOpEnum) -> &'static str {
     match e {
         iface_beta_app_review_submissions::BetaAppReviewSubmissionRelationshipsBuildDataTypeOpEnum::Builds => "builds",
@@ -194,13 +203,7 @@ fn iface_beta_app_review_submissions__beta_app_review_submission__to_json(p: &if
 
 fn iface_beta_app_review_submissions__beta_app_review_submission_attributes__to_json(p: &iface_beta_app_review_submissions::BetaAppReviewSubmissionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("betaReviewState".into(), match (&p.beta_review_state) { Some(v) => iface_beta_app_review_submissions__beta_review_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_beta_app_review_submissions__beta_review_state__to_json(p: &iface_beta_app_review_submissions::BetaReviewState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("betaReviewState".into(), match (&p.beta_review_state) { Some(v) => Value::String(iface_beta_app_review_submissions__beta_review_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -600,14 +603,7 @@ fn iface_beta_app_review_submissions__beta_app_review_submission__from_json(v: &
 fn iface_beta_app_review_submissions__beta_app_review_submission_attributes__from_json(v: &Value) -> Option<iface_beta_app_review_submissions::BetaAppReviewSubmissionAttributes> {
     let m = v.as_object()?;
     Some(iface_beta_app_review_submissions::BetaAppReviewSubmissionAttributes {
-        beta_review_state: m.get("betaReviewState").filter(|v| !v.is_null()).and_then(|v| iface_beta_app_review_submissions__beta_review_state__from_json(v)),
-    })
-}
-
-fn iface_beta_app_review_submissions__beta_review_state__from_json(v: &Value) -> Option<iface_beta_app_review_submissions::BetaReviewState> {
-    let m = v.as_object()?;
-    Some(iface_beta_app_review_submissions::BetaReviewState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        beta_review_state: m.get("betaReviewState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_beta_app_review_submissions__beta_review_state__from_str)),
     })
 }
 
@@ -964,6 +960,16 @@ fn iface_beta_app_review_submissions__build_response__from_json(v: &Value) -> Op
         included: m.get("included").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         links: match m.get("links").and_then(|v| iface_beta_app_review_submissions__document_links__from_json(v)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_beta_app_review_submissions__beta_review_state__from_str(s: &str) -> Option<iface_beta_app_review_submissions::BetaReviewState> {
+    match s {
+        "WAITING_FOR_REVIEW" => Some(iface_beta_app_review_submissions::BetaReviewState::WaitingForReview),
+        "IN_REVIEW" => Some(iface_beta_app_review_submissions::BetaReviewState::InReview),
+        "REJECTED" => Some(iface_beta_app_review_submissions::BetaReviewState::Rejected),
+        "APPROVED" => Some(iface_beta_app_review_submissions::BetaReviewState::Approved),
+        _ => None,
+    }
 }
 
 fn iface_beta_app_review_submissions__beta_app_review_submission_relationships_build_data_type_op_enum__from_str(s: &str) -> Option<iface_beta_app_review_submissions::BetaAppReviewSubmissionRelationshipsBuildDataTypeOpEnum> {

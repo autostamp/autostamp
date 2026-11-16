@@ -49,7 +49,7 @@ fn iface_food__search_restaurants_response_restaurants_item__to_json(p: &iface_f
     m.insert("offers_third_party_delivery".into(), match (&p.offers_third_party_delivery) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pickup_enabled".into(), match (&p.pickup_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("store_photos".into(), match (&p.store_photos) { Some(v) => Value::Array((v).iter().map(|v| iface_food__search_restaurants_response_restaurants_item_store_photos_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("store_photos".into(), match (&p.store_photos) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("weighted_rating_value".into(), match (&p.weighted_rating_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
@@ -127,9 +127,10 @@ fn iface_food__search_restaurants_response_restaurants_item_local_hours_pickup__
     Value::Object(m)
 }
 
-fn iface_food__search_restaurants_response_restaurants_item_store_photos_item__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItem) -> Value {
+fn iface_food__search_restaurants_response_restaurants_item_store_photos_item_entry__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -175,7 +176,7 @@ fn iface_food__search_restaurants_response_restaurants_item__from_json(v: &Value
         offers_third_party_delivery: m.get("offers_third_party_delivery").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         pickup_enabled: m.get("pickup_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        store_photos: m.get("store_photos").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_food__search_restaurants_response_restaurants_item_store_photos_item__from_json(x)).collect())),
+        store_photos: m.get("store_photos").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItemEntry { key: k.clone(), value: val })).collect())).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         weighted_rating_value: m.get("weighted_rating_value").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
     })
@@ -259,10 +260,11 @@ fn iface_food__search_restaurants_response_restaurants_item_local_hours_pickup__
     })
 }
 
-fn iface_food__search_restaurants_response_restaurants_item_store_photos_item__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItem> {
+fn iface_food__search_restaurants_response_restaurants_item_store_photos_item_entry__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItemEntry> {
     let m = v.as_object()?;
-    Some(iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

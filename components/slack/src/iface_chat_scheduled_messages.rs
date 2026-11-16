@@ -22,15 +22,9 @@ const OP_CHAT_SCHEDULED_MESSAGES_LIST_OP: OpSpec = OpSpec {
 
 fn iface_chat_scheduled_messages__list_op_response__to_json(p: &iface_chat_scheduled_messages::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_chat_scheduled_messages__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("response_metadata".into(), iface_chat_scheduled_messages__list_op_response_response_metadata__to_json(&p.response_metadata));
     m.insert("scheduled_messages".into(), Value::Array((&p.scheduled_messages).iter().map(|v| iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-fn iface_chat_scheduled_messages__defs_ok_true__to_json(p: &iface_chat_scheduled_messages::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -42,17 +36,11 @@ fn iface_chat_scheduled_messages__list_op_response_response_metadata__to_json(p:
 
 fn iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__to_json(p: &iface_chat_scheduled_messages::ListOpResponseScheduledMessagesItem) -> Value {
     let mut m = Map::new();
-    m.insert("channel_id".into(), iface_chat_scheduled_messages__defs_channel_id__to_json(&p.channel_id));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
     m.insert("date_created".into(), Value::String((&p.date_created).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("post_at".into(), Value::String((&p.post_at).clone()));
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_chat_scheduled_messages__defs_channel_id__to_json(p: &iface_chat_scheduled_messages::DefsChannelId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -70,16 +58,9 @@ fn iface_chat_scheduled_messages__list_op_params__to_json(p: &iface_chat_schedul
 fn iface_chat_scheduled_messages__list_op_response__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_chat_scheduled_messages::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_chat_scheduled_messages__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         response_metadata: match m.get("response_metadata").and_then(|v| iface_chat_scheduled_messages__list_op_response_response_metadata__from_json(v)) { Some(x) => x, None => return None },
         scheduled_messages: m.get("scheduled_messages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__from_json(x)).collect())).unwrap_or_default(),
-    })
-}
-
-fn iface_chat_scheduled_messages__defs_ok_true__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_chat_scheduled_messages::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -93,18 +74,11 @@ fn iface_chat_scheduled_messages__list_op_response_response_metadata__from_json(
 fn iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::ListOpResponseScheduledMessagesItem> {
     let m = v.as_object()?;
     Some(iface_chat_scheduled_messages::ListOpResponseScheduledMessagesItem {
-        channel_id: match m.get("channel_id").and_then(|v| iface_chat_scheduled_messages__defs_channel_id__from_json(v)) { Some(x) => x, None => return None },
+        channel_id: m.get("channel_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         date_created: m.get("date_created").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         post_at: m.get("post_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_chat_scheduled_messages__defs_channel_id__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::DefsChannelId> {
-    let m = v.as_object()?;
-    Some(iface_chat_scheduled_messages::DefsChannelId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

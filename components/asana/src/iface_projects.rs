@@ -609,7 +609,7 @@ fn iface_projects__project_request__to_json(p: &iface_projects::ProjectRequest) 
     m.insert("public".into(), match (&p.public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("start_on".into(), match (&p.start_on) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_projects__project_request_workspace__to_json(v), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_projects__project_request_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("followers".into(), match (&p.followers) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("team".into(), match (&p.team) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -739,9 +739,10 @@ fn iface_projects__project_request_workspace__to_json(p: &iface_projects::Projec
     Value::Object(m)
 }
 
-fn iface_projects__project_request_custom_fields__to_json(p: &iface_projects::ProjectRequestCustomFields) -> Value {
+fn iface_projects__project_request_custom_fields_entry__to_json(p: &iface_projects::ProjectRequestCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -867,13 +868,14 @@ fn iface_projects__update_project_response__to_json(p: &iface_projects::UpdatePr
 
 fn iface_projects__delete_project_response__to_json(p: &iface_projects::DeleteProjectResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_projects__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_projects__empty_response__to_json(p: &iface_projects::EmptyResponse) -> Value {
+fn iface_projects__empty_response_entry__to_json(p: &iface_projects::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -976,7 +978,14 @@ fn iface_projects__remove_custom_field_setting_request__to_json(p: &iface_projec
 
 fn iface_projects__remove_custom_field_setting_for_project_response__to_json(p: &iface_projects::RemoveCustomFieldSettingForProjectResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_projects__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__empty_response_entry_v2__to_json(p: &iface_projects::EmptyResponseEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1516,14 +1525,15 @@ fn iface_projects__update_project_response__from_json(v: &Value) -> Option<iface
 fn iface_projects__delete_project_response__from_json(v: &Value) -> Option<iface_projects::DeleteProjectResponse> {
     let m = v.as_object()?;
     Some(iface_projects::DeleteProjectResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_projects__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_projects__empty_response__from_json(v: &Value) -> Option<iface_projects::EmptyResponse> {
+fn iface_projects__empty_response_entry__from_json(v: &Value) -> Option<iface_projects::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1590,7 +1600,15 @@ fn iface_projects__task_compact__from_json(v: &Value) -> Option<iface_projects::
 fn iface_projects__remove_custom_field_setting_for_project_response__from_json(v: &Value) -> Option<iface_projects::RemoveCustomFieldSettingForProjectResponse> {
     let m = v.as_object()?;
     Some(iface_projects::RemoveCustomFieldSettingForProjectResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_projects__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::EmptyResponseEntryV2 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_projects__empty_response_entry_v2__from_json(v: &Value) -> Option<iface_projects::EmptyResponseEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_projects::EmptyResponseEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

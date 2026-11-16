@@ -48,25 +48,19 @@ const OP_WORKFLOWS_UPDATE_STEP: OpSpec = OpSpec {
 
 fn iface_workflows__step_completed_response__to_json(p: &iface_workflows::StepCompletedResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_workflows__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_workflows__defs_ok_true__to_json(p: &iface_workflows::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_workflows__step_failed_response__to_json(p: &iface_workflows::StepFailedResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_workflows__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_workflows__update_step_response__to_json(p: &iface_workflows::UpdateStepResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_workflows__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -100,28 +94,21 @@ fn iface_workflows__update_step_params__to_json(p: &iface_workflows::UpdateStepP
 fn iface_workflows__step_completed_response__from_json(v: &Value) -> Option<iface_workflows::StepCompletedResponse> {
     let m = v.as_object()?;
     Some(iface_workflows::StepCompletedResponse {
-        ok: match m.get("ok").and_then(|v| iface_workflows__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_workflows__defs_ok_true__from_json(v: &Value) -> Option<iface_workflows::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_workflows::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_workflows__step_failed_response__from_json(v: &Value) -> Option<iface_workflows::StepFailedResponse> {
     let m = v.as_object()?;
     Some(iface_workflows::StepFailedResponse {
-        ok: match m.get("ok").and_then(|v| iface_workflows__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_workflows__update_step_response__from_json(v: &Value) -> Option<iface_workflows::UpdateStepResponse> {
     let m = v.as_object()?;
     Some(iface_workflows::UpdateStepResponse {
-        ok: match m.get("ok").and_then(|v| iface_workflows__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

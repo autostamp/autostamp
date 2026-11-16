@@ -2107,13 +2107,14 @@ fn iface_campaigns__put_campaigns_id_content_body_archive__to_json(p: &iface_cam
 fn iface_campaigns__put_campaigns_id_content_body_template__to_json(p: &iface_campaigns::PutCampaignsIdContentBodyTemplate) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
-    m.insert("sections".into(), match (&p.sections) { Some(v) => iface_campaigns__put_campaigns_id_content_body_template_sections__to_json(v), None => Value::Null });
+    m.insert("sections".into(), match (&p.sections) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_campaigns__put_campaigns_id_content_body_template_sections__to_json(p: &iface_campaigns::PutCampaignsIdContentBodyTemplateSections) -> Value {
+fn iface_campaigns__put_campaigns_id_content_body_template_sections_entry__to_json(p: &iface_campaigns::PutCampaignsIdContentBodyTemplateSectionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2138,13 +2139,14 @@ fn iface_campaigns__put_campaigns_id_content_body_variate_contents_item_archive_
 fn iface_campaigns__put_campaigns_id_content_body_variate_contents_item_template__to_json(p: &iface_campaigns::PutCampaignsIdContentBodyVariateContentsItemTemplate) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
-    m.insert("sections".into(), match (&p.sections) { Some(v) => iface_campaigns__put_campaigns_id_content_body_variate_contents_item_template_sections__to_json(v), None => Value::Null });
+    m.insert("sections".into(), match (&p.sections) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_campaigns__put_campaigns_id_content_body_variate_contents_item_template_sections__to_json(p: &iface_campaigns::PutCampaignsIdContentBodyVariateContentsItemTemplateSections) -> Value {
+fn iface_campaigns__put_campaigns_id_content_body_variate_contents_item_template_sections_entry__to_json(p: &iface_campaigns::PutCampaignsIdContentBodyVariateContentsItemTemplateSectionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

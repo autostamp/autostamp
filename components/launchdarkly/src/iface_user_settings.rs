@@ -69,7 +69,7 @@ const OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS: OpSpec = OpSpec {
 fn iface_user_settings__user_flag_settings__to_json(p: &iface_user_settings::UserFlagSettings) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_settings__links__to_json(v), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => iface_user_settings__user_flag_settings_items__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_user_settings__user_flag_setting__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -87,17 +87,18 @@ fn iface_user_settings__link__to_json(p: &iface_user_settings::Link) -> Value {
     Value::Object(m)
 }
 
-fn iface_user_settings__user_flag_settings_items__to_json(p: &iface_user_settings::UserFlagSettingsItems) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
 fn iface_user_settings__user_flag_setting__to_json(p: &iface_user_settings::UserFlagSetting) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_settings__links__to_json(v), None => Value::Null });
     m.insert("_value".into(), match (&p.value) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("setting".into(), match (&p.setting) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__user_flag_settings_items_entry__to_json(p: &iface_user_settings::UserFlagSettingsItemsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_user_settings__user_flag_setting__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -176,7 +177,7 @@ fn iface_user_settings__user_flag_settings__from_json(v: &Value) -> Option<iface
     let m = v.as_object()?;
     Some(iface_user_settings::UserFlagSettings {
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__links__from_json(v)),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__user_flag_settings_items__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_user_settings__user_flag_setting__from_json(x)).map(|val| iface_user_settings::UserFlagSettingsItemsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -196,19 +197,20 @@ fn iface_user_settings__link__from_json(v: &Value) -> Option<iface_user_settings
     })
 }
 
-fn iface_user_settings__user_flag_settings_items__from_json(v: &Value) -> Option<iface_user_settings::UserFlagSettingsItems> {
-    let m = v.as_object()?;
-    Some(iface_user_settings::UserFlagSettingsItems {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
 fn iface_user_settings__user_flag_setting__from_json(v: &Value) -> Option<iface_user_settings::UserFlagSetting> {
     let m = v.as_object()?;
     Some(iface_user_settings::UserFlagSetting {
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__links__from_json(v)),
         value: m.get("_value").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         setting: m.get("setting").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_user_settings__user_flag_settings_items_entry__from_json(v: &Value) -> Option<iface_user_settings::UserFlagSettingsItemsEntry> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserFlagSettingsItemsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_user_settings__user_flag_setting__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 

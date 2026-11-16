@@ -1,4 +1,4 @@
-package autostamp:azure@0.5.0;
+package autostamp:azure@0.6.0;
 
 interface operations {
   /// The list of EnterpriseKnowledgeGraph service operation response.
@@ -17,7 +17,7 @@ interface operations {
     /// The origin of the operation.
     origin: option<string>,
     /// Additional properties.
-    properties: option<operation-entity-properties>
+    properties: option<list<operation-entity-properties-entry>>
   }
 
   /// The operation supported by EnterpriseKnowledgeGraph Service Management.
@@ -32,10 +32,10 @@ interface operations {
     resource-op: option<string>
   }
 
-  /// Additional properties.
-  record operation-entity-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record operation-entity-properties-entry {
+    key: string,
+    value: string
   }
 
   record list-op-params {
@@ -73,15 +73,15 @@ interface enterprise-knowledge-graph {
     /// The description of the EnterpriseKnowledgeGraph
     description: option<string>,
     /// Specifies the metadata  of the resource.
-    metadata: option<properties-metadata>,
+    metadata: option<list<properties-metadata-entry>>,
     /// The state of EnterpriseKnowledgeGraph provisioning
     provisioning-state: option<properties-provisioning-state-enum>
   }
 
-  /// Specifies the metadata  of the resource.
-  record properties-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record properties-metadata-entry {
+    key: string,
+    value: string
   }
 
   record list-op-params {

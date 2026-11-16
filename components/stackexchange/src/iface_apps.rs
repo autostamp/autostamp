@@ -18,9 +18,12 @@ const OP_APPS_GET_APPS_ACCESS_TOKENS_DE_AUTHENTICATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_apps__access_tokens__to_json(p: &iface_apps::AccessTokens) -> Value {
+fn iface_apps__access_tokens_item__to_json(p: &iface_apps::AccessTokensItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("expires_on_date".into(), match (&p.expires_on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -34,19 +37,22 @@ fn iface_apps__get_apps_access_tokens_de_authenticate_params__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_apps__access_tokens__from_json(v: &Value) -> Option<iface_apps::AccessTokens> {
+fn iface_apps__access_tokens_item__from_json(v: &Value) -> Option<iface_apps::AccessTokensItem> {
     let m = v.as_object()?;
-    Some(iface_apps::AccessTokens {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_apps::AccessTokensItem {
+        access_token: m.get("access_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        expires_on_date: m.get("expires_on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
-fn iface_apps__get_apps_access_tokens_de_authenticate__ok(body: String) -> Result<iface_apps::AccessTokens, crate::runtime::DispatchError> {
+fn iface_apps__get_apps_access_tokens_de_authenticate__ok(body: String) -> Result<Vec<iface_apps::AccessTokensItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_apps__access_tokens__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__access_tokens_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -72,7 +78,7 @@ fn iface_apps__get_apps_access_tokens_de_authenticate__err(e: crate::runtime::Di
 }
 
 impl iface_apps::Guest for crate::Component {
-    fn get_apps_access_tokens_de_authenticate(params: iface_apps::GetAppsAccessTokensDeAuthenticateParams) -> Result<iface_apps::AccessTokens, iface_apps::GetAppsAccessTokensDeAuthenticateError> {
+    fn get_apps_access_tokens_de_authenticate(params: iface_apps::GetAppsAccessTokensDeAuthenticateParams) -> Result<Vec<iface_apps::AccessTokensItem>, iface_apps::GetAppsAccessTokensDeAuthenticateError> {
         let json = iface_apps__get_apps_access_tokens_de_authenticate_params__to_json(&params);
         match dispatch(&OP_APPS_GET_APPS_ACCESS_TOKENS_DE_AUTHENTICATE, json).and_then(iface_apps__get_apps_access_tokens_de_authenticate__ok) {
             Ok(v) => Ok(v),

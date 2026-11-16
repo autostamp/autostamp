@@ -357,9 +357,9 @@ fn iface_networking__allocate_ip_body_type_op_enum__to_str(e: &iface_networking:
 fn iface_networking__get_firewalls_response__to_json(p: &iface_networking::GetFirewallsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_networking__firewall__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_networking__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_networking__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_networking__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -402,24 +402,6 @@ fn iface_networking__firewall_rule_config_addresses__to_json(p: &iface_networkin
     Value::Object(m)
 }
 
-fn iface_networking__pagination_envelope_properties_page__to_json(p: &iface_networking::PaginationEnvelopePropertiesPage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_networking__pagination_envelope_properties_pages__to_json(p: &iface_networking::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_networking__pagination_envelope_properties_results__to_json(p: &iface_networking::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_networking__create_firewalls_body_devices__to_json(p: &iface_networking::CreateFirewallsBodyDevices) -> Value {
     let mut m = Map::new();
     m.insert("linodes".into(), match (&p.linodes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -433,30 +415,19 @@ fn iface_networking__create_firewalls_body_rules__to_json(p: &iface_networking::
     Value::Object(m)
 }
 
-fn iface_networking__firewall_properties_label__to_json(p: &iface_networking::FirewallPropertiesLabel) -> Value {
+fn iface_networking__delete_firewall_response_entry__to_json(p: &iface_networking::DeleteFirewallResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_networking__firewall_properties_tags__to_json(p: &iface_networking::FirewallPropertiesTags) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_networking__delete_firewall_response__to_json(p: &iface_networking::DeleteFirewallResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_networking__get_firewall_devices_response__to_json(p: &iface_networking::GetFirewallDevicesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_networking__firewall_devices__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_networking__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_networking__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_networking__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -478,9 +449,10 @@ fn iface_networking__firewall_devices_entity__to_json(p: &iface_networking::Fire
     Value::Object(m)
 }
 
-fn iface_networking__delete_firewall_device_response__to_json(p: &iface_networking::DeleteFirewallDeviceResponse) -> Value {
+fn iface_networking__delete_firewall_device_response_entry__to_json(p: &iface_networking::DeleteFirewallDeviceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -496,9 +468,9 @@ fn iface_networking__firewall_properties_rules__to_json(p: &iface_networking::Fi
 fn iface_networking__get_i_ps_response__to_json(p: &iface_networking::GetIPsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_networking__ip_address__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_networking__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_networking__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_networking__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -516,36 +488,40 @@ fn iface_networking__ip_address__to_json(p: &iface_networking::IpAddress) -> Val
     Value::Object(m)
 }
 
-fn iface_networking__assign_i_ps_response__to_json(p: &iface_networking::AssignIPsResponse) -> Value {
+fn iface_networking__assign_i_ps_response_entry__to_json(p: &iface_networking::AssignIPsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_networking__share_i_ps_response__to_json(p: &iface_networking::ShareIPsResponse) -> Value {
+fn iface_networking__share_i_ps_response_entry__to_json(p: &iface_networking::ShareIPsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_networking__assign_i_pv4s_response__to_json(p: &iface_networking::AssignIPv4sResponse) -> Value {
+fn iface_networking__assign_i_pv4s_response_entry__to_json(p: &iface_networking::AssignIPv4sResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_networking__share_i_pv4s_response__to_json(p: &iface_networking::ShareIPv4sResponse) -> Value {
+fn iface_networking__share_i_pv4s_response_entry__to_json(p: &iface_networking::ShareIPv4sResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_networking__get_i_pv6_pools_response__to_json(p: &iface_networking::GetIPv6PoolsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_networking__i_pv6_pool__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_networking__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_networking__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_networking__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -561,9 +537,9 @@ fn iface_networking__i_pv6_pool__to_json(p: &iface_networking::IPv6Pool) -> Valu
 fn iface_networking__get_i_pv6_ranges_response__to_json(p: &iface_networking::GetIPv6RangesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_networking__i_pv6_range__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_networking__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_networking__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_networking__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -593,18 +569,19 @@ fn iface_networking__i_pv6_range_bgp__to_json(p: &iface_networking::IPv6RangeBgp
     Value::Object(m)
 }
 
-fn iface_networking__delete_i_pv6_range_response__to_json(p: &iface_networking::DeleteIPv6RangeResponse) -> Value {
+fn iface_networking__delete_i_pv6_range_response_entry__to_json(p: &iface_networking::DeleteIPv6RangeResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_networking__get_vla_ns_response__to_json(p: &iface_networking::GetVlaNsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_networking__vlans__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_networking__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_networking__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_networking__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -640,9 +617,9 @@ fn iface_networking__get_firewall_params__to_json(p: &iface_networking::GetFirew
 fn iface_networking__update_firewall_params__to_json(p: &iface_networking::UpdateFirewallParams) -> Value {
     let mut m = Map::new();
     m.insert("firewall_id".into(), Value::String((&p.firewall_id).clone()));
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_networking__firewall_properties_label__to_json(v), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_networking__update_firewall_body_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => iface_networking__firewall_properties_tags__to_json(v), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -789,9 +766,9 @@ fn iface_networking__get_firewalls_response__from_json(v: &Value) -> Option<ifac
     let m = v.as_object()?;
     Some(iface_networking::GetFirewallsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_networking__firewall__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -838,31 +815,11 @@ fn iface_networking__firewall_rule_config_addresses__from_json(v: &Value) -> Opt
     })
 }
 
-fn iface_networking__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_networking::PaginationEnvelopePropertiesPage> {
+fn iface_networking__delete_firewall_response_entry__from_json(v: &Value) -> Option<iface_networking::DeleteFirewallResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::PaginationEnvelopePropertiesPage {
+    Some(iface_networking::DeleteFirewallResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_networking__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_networking::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_networking::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_networking__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_networking::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_networking::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_networking__delete_firewall_response__from_json(v: &Value) -> Option<iface_networking::DeleteFirewallResponse> {
-    let m = v.as_object()?;
-    Some(iface_networking::DeleteFirewallResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -870,9 +827,9 @@ fn iface_networking__get_firewall_devices_response__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_networking::GetFirewallDevicesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_networking__firewall_devices__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -896,10 +853,11 @@ fn iface_networking__firewall_devices_entity__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_networking__delete_firewall_device_response__from_json(v: &Value) -> Option<iface_networking::DeleteFirewallDeviceResponse> {
+fn iface_networking__delete_firewall_device_response_entry__from_json(v: &Value) -> Option<iface_networking::DeleteFirewallDeviceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::DeleteFirewallDeviceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_networking::DeleteFirewallDeviceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -917,9 +875,9 @@ fn iface_networking__get_i_ps_response__from_json(v: &Value) -> Option<iface_net
     let m = v.as_object()?;
     Some(iface_networking::GetIPsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_networking__ip_address__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -938,31 +896,35 @@ fn iface_networking__ip_address__from_json(v: &Value) -> Option<iface_networking
     })
 }
 
-fn iface_networking__assign_i_ps_response__from_json(v: &Value) -> Option<iface_networking::AssignIPsResponse> {
+fn iface_networking__assign_i_ps_response_entry__from_json(v: &Value) -> Option<iface_networking::AssignIPsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::AssignIPsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_networking::AssignIPsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_networking__share_i_ps_response__from_json(v: &Value) -> Option<iface_networking::ShareIPsResponse> {
+fn iface_networking__share_i_ps_response_entry__from_json(v: &Value) -> Option<iface_networking::ShareIPsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::ShareIPsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_networking::ShareIPsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_networking__assign_i_pv4s_response__from_json(v: &Value) -> Option<iface_networking::AssignIPv4sResponse> {
+fn iface_networking__assign_i_pv4s_response_entry__from_json(v: &Value) -> Option<iface_networking::AssignIPv4sResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::AssignIPv4sResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_networking::AssignIPv4sResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_networking__share_i_pv4s_response__from_json(v: &Value) -> Option<iface_networking::ShareIPv4sResponse> {
+fn iface_networking__share_i_pv4s_response_entry__from_json(v: &Value) -> Option<iface_networking::ShareIPv4sResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::ShareIPv4sResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_networking::ShareIPv4sResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -970,9 +932,9 @@ fn iface_networking__get_i_pv6_pools_response__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_networking::GetIPv6PoolsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_networking__i_pv6_pool__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -990,9 +952,9 @@ fn iface_networking__get_i_pv6_ranges_response__from_json(v: &Value) -> Option<i
     let m = v.as_object()?;
     Some(iface_networking::GetIPv6RangesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_networking__i_pv6_range__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1025,10 +987,11 @@ fn iface_networking__i_pv6_range_bgp__from_json(v: &Value) -> Option<iface_netwo
     })
 }
 
-fn iface_networking__delete_i_pv6_range_response__from_json(v: &Value) -> Option<iface_networking::DeleteIPv6RangeResponse> {
+fn iface_networking__delete_i_pv6_range_response_entry__from_json(v: &Value) -> Option<iface_networking::DeleteIPv6RangeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_networking::DeleteIPv6RangeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_networking::DeleteIPv6RangeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1036,9 +999,9 @@ fn iface_networking__get_vla_ns_response__from_json(v: &Value) -> Option<iface_n
     let m = v.as_object()?;
     Some(iface_networking::GetVlaNsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_networking__vlans__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_networking__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1168,12 +1131,12 @@ fn iface_networking__update_firewall__err(e: crate::runtime::DispatchError) -> S
     }
 }
 
-fn iface_networking__delete_firewall__ok(body: String) -> Result<iface_networking::DeleteFirewallResponse, crate::runtime::DispatchError> {
+fn iface_networking__delete_firewall__ok(body: String) -> Result<Vec<iface_networking::DeleteFirewallResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__delete_firewall_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::DeleteFirewallResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1240,12 +1203,12 @@ fn iface_networking__get_firewall_device__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_networking__delete_firewall_device__ok(body: String) -> Result<iface_networking::DeleteFirewallDeviceResponse, crate::runtime::DispatchError> {
+fn iface_networking__delete_firewall_device__ok(body: String) -> Result<Vec<iface_networking::DeleteFirewallDeviceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__delete_firewall_device_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::DeleteFirewallDeviceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1330,12 +1293,12 @@ fn iface_networking__allocate_ip__err(e: crate::runtime::DispatchError) -> Strin
     }
 }
 
-fn iface_networking__assign_i_ps__ok(body: String) -> Result<iface_networking::AssignIPsResponse, crate::runtime::DispatchError> {
+fn iface_networking__assign_i_ps__ok(body: String) -> Result<Vec<iface_networking::AssignIPsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__assign_i_ps_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::AssignIPsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1348,12 +1311,12 @@ fn iface_networking__assign_i_ps__err(e: crate::runtime::DispatchError) -> Strin
     }
 }
 
-fn iface_networking__share_i_ps__ok(body: String) -> Result<iface_networking::ShareIPsResponse, crate::runtime::DispatchError> {
+fn iface_networking__share_i_ps__ok(body: String) -> Result<Vec<iface_networking::ShareIPsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__share_i_ps_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::ShareIPsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1402,12 +1365,12 @@ fn iface_networking__update_ip__err(e: crate::runtime::DispatchError) -> String 
     }
 }
 
-fn iface_networking__assign_i_pv4s__ok(body: String) -> Result<iface_networking::AssignIPv4sResponse, crate::runtime::DispatchError> {
+fn iface_networking__assign_i_pv4s__ok(body: String) -> Result<Vec<iface_networking::AssignIPv4sResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__assign_i_pv4s_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::AssignIPv4sResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1420,12 +1383,12 @@ fn iface_networking__assign_i_pv4s__err(e: crate::runtime::DispatchError) -> Str
     }
 }
 
-fn iface_networking__share_i_pv4s__ok(body: String) -> Result<iface_networking::ShareIPv4sResponse, crate::runtime::DispatchError> {
+fn iface_networking__share_i_pv4s__ok(body: String) -> Result<Vec<iface_networking::ShareIPv4sResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__share_i_pv4s_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::ShareIPv4sResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1510,12 +1473,12 @@ fn iface_networking__get_i_pv6_range__err(e: crate::runtime::DispatchError) -> S
     }
 }
 
-fn iface_networking__delete_i_pv6_range__ok(body: String) -> Result<iface_networking::DeleteIPv6RangeResponse, crate::runtime::DispatchError> {
+fn iface_networking__delete_i_pv6_range__ok(body: String) -> Result<Vec<iface_networking::DeleteIPv6RangeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_networking__delete_i_pv6_range_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_networking::DeleteIPv6RangeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1575,7 +1538,7 @@ impl iface_networking::Guest for crate::Component {
             Err(e) => Err(iface_networking__update_firewall__err(e)),
         }
     }
-    fn delete_firewall(params: iface_networking::DeleteFirewallParams) -> Result<iface_networking::DeleteFirewallResponse, String> {
+    fn delete_firewall(params: iface_networking::DeleteFirewallParams) -> Result<Vec<iface_networking::DeleteFirewallResponseEntry>, String> {
         let json = iface_networking__delete_firewall_params__to_json(&params);
         match dispatch(&OP_NETWORKING_DELETE_FIREWALL, json).and_then(iface_networking__delete_firewall__ok) {
             Ok(v) => Ok(v),
@@ -1603,7 +1566,7 @@ impl iface_networking::Guest for crate::Component {
             Err(e) => Err(iface_networking__get_firewall_device__err(e)),
         }
     }
-    fn delete_firewall_device(params: iface_networking::DeleteFirewallDeviceParams) -> Result<iface_networking::DeleteFirewallDeviceResponse, String> {
+    fn delete_firewall_device(params: iface_networking::DeleteFirewallDeviceParams) -> Result<Vec<iface_networking::DeleteFirewallDeviceResponseEntry>, String> {
         let json = iface_networking__delete_firewall_device_params__to_json(&params);
         match dispatch(&OP_NETWORKING_DELETE_FIREWALL_DEVICE, json).and_then(iface_networking__delete_firewall_device__ok) {
             Ok(v) => Ok(v),
@@ -1637,14 +1600,14 @@ impl iface_networking::Guest for crate::Component {
             Err(e) => Err(iface_networking__allocate_ip__err(e)),
         }
     }
-    fn assign_i_ps(params: iface_networking::AssignIPsParams) -> Result<iface_networking::AssignIPsResponse, String> {
+    fn assign_i_ps(params: iface_networking::AssignIPsParams) -> Result<Vec<iface_networking::AssignIPsResponseEntry>, String> {
         let json = iface_networking__assign_i_ps_params__to_json(&params);
         match dispatch(&OP_NETWORKING_ASSIGN_I_PS, json).and_then(iface_networking__assign_i_ps__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_networking__assign_i_ps__err(e)),
         }
     }
-    fn share_i_ps(params: iface_networking::ShareIPsParams) -> Result<iface_networking::ShareIPsResponse, String> {
+    fn share_i_ps(params: iface_networking::ShareIPsParams) -> Result<Vec<iface_networking::ShareIPsResponseEntry>, String> {
         let json = iface_networking__share_i_ps_params__to_json(&params);
         match dispatch(&OP_NETWORKING_SHARE_I_PS, json).and_then(iface_networking__share_i_ps__ok) {
             Ok(v) => Ok(v),
@@ -1665,14 +1628,14 @@ impl iface_networking::Guest for crate::Component {
             Err(e) => Err(iface_networking__update_ip__err(e)),
         }
     }
-    fn assign_i_pv4s(params: iface_networking::AssignIPv4sParams) -> Result<iface_networking::AssignIPv4sResponse, String> {
+    fn assign_i_pv4s(params: iface_networking::AssignIPv4sParams) -> Result<Vec<iface_networking::AssignIPv4sResponseEntry>, String> {
         let json = iface_networking__assign_i_pv4s_params__to_json(&params);
         match dispatch(&OP_NETWORKING_ASSIGN_I_PV4S, json).and_then(iface_networking__assign_i_pv4s__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_networking__assign_i_pv4s__err(e)),
         }
     }
-    fn share_i_pv4s(params: iface_networking::ShareIPv4sParams) -> Result<iface_networking::ShareIPv4sResponse, String> {
+    fn share_i_pv4s(params: iface_networking::ShareIPv4sParams) -> Result<Vec<iface_networking::ShareIPv4sResponseEntry>, String> {
         let json = iface_networking__share_i_pv4s_params__to_json(&params);
         match dispatch(&OP_NETWORKING_SHARE_I_PV4S, json).and_then(iface_networking__share_i_pv4s__ok) {
             Ok(v) => Ok(v),
@@ -1707,7 +1670,7 @@ impl iface_networking::Guest for crate::Component {
             Err(e) => Err(iface_networking__get_i_pv6_range__err(e)),
         }
     }
-    fn delete_i_pv6_range(params: iface_networking::DeleteIPv6RangeParams) -> Result<iface_networking::DeleteIPv6RangeResponse, String> {
+    fn delete_i_pv6_range(params: iface_networking::DeleteIPv6RangeParams) -> Result<Vec<iface_networking::DeleteIPv6RangeResponseEntry>, String> {
         let json = iface_networking__delete_i_pv6_range_params__to_json(&params);
         match dispatch(&OP_NETWORKING_DELETE_I_PV6_RANGE, json).and_then(iface_networking__delete_i_pv6_range__ok) {
             Ok(v) => Ok(v),

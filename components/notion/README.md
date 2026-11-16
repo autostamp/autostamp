@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:notion@0.5.0` |
-| Published version | `0.5.0+notion-1.0.0` |
+| Package | `autostamp:notion@0.6.0` |
+| Published version | `0.6.0+notion-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 13 |
 | Infer API-key credentials | enabled — not triggered |

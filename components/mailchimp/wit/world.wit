@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:mailchimp@0.5.0;
+package autostamp:mailchimp@0.6.0;
 
 interface root {
   enum get-root-response-links-item-method-enum {
@@ -2562,15 +2562,15 @@ interface batches {
     /// An optional client-supplied id returned with the operation results.
     operation-id: option<string>,
     /// Any request query parameters. Example parameters: {"count":10, "offset":0}
-    params: option<post-batches-body-operations-item-params>,
+    params: option<list<post-batches-body-operations-item-params-entry>>,
     /// The relative path to use for the operation.
     path: string
   }
 
-  /// Any request query parameters. Example parameters: {"count":10, "offset":0}
-  record post-batches-body-operations-item-params {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-batches-body-operations-item-params-entry {
+    key: string,
+    value: string
   }
 
   /// The status of a batch request
@@ -5432,13 +5432,13 @@ interface campaigns {
     /// The id of the template to use.
     id: s32,
     /// Content for the sections of the template. Each key should be the unique [mc:edit area](https://mailchimp.com/help/create-editable-content-areas-with-mailchimps-template-language/) name from the template.
-    sections: option<put-campaigns-id-content-body-template-sections>
+    sections: option<list<put-campaigns-id-content-body-template-sections-entry>>
   }
 
-  /// Content for the sections of the template. Each key should be the unique [mc:edit area](https://mailchimp.com/help/create-editable-content-areas-with-mailchimps-template-language/) name from the template.
-  record put-campaigns-id-content-body-template-sections {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-campaigns-id-content-body-template-sections-entry {
+    key: string,
+    value: string
   }
 
   record put-campaigns-id-content-body-variate-contents-item {
@@ -5469,13 +5469,13 @@ interface campaigns {
     /// The id of the template to use.
     id: s32,
     /// Content for the sections of the template. Each key should be the unique [mc:edit area](https://mailchimp.com/help/create-editable-content-areas-with-mailchimps-template-language/) name from the template.
-    sections: option<put-campaigns-id-content-body-variate-contents-item-template-sections>
+    sections: option<list<put-campaigns-id-content-body-variate-contents-item-template-sections-entry>>
   }
 
-  /// Content for the sections of the template. Each key should be the unique [mc:edit area](https://mailchimp.com/help/create-editable-content-areas-with-mailchimps-template-language/) name from the template.
-  record put-campaigns-id-content-body-variate-contents-item-template-sections {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-campaigns-id-content-body-variate-contents-item-template-sections-entry {
+    key: string,
+    value: string
   }
 
   /// The HTML and plain-text content for a campaign.
@@ -14712,7 +14712,7 @@ interface lists {
     /// Type of email this member asked to get ('html' or 'text').
     email-type: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-body-members-item-interests>,
+    interests: option<list<post-lists-id-body-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -14722,7 +14722,7 @@ interface lists {
     /// Subscriber location information.
     location: option<post-lists-id-body-members-item-location>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<post-lists-id-body-members-item-merge-fields>,
+    merge-fields: option<list<post-lists-id-body-members-item-merge-fields-entry>>,
     /// Subscriber's current status.
     status: option<post-lists-id-body-members-item-status-enum>,
     /// The date and time the subscriber confirmed their opt-in status in ISO 8601 format.
@@ -14733,10 +14733,10 @@ interface lists {
     vip: option<bool>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-body-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-body-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// Subscriber location information.
@@ -14747,10 +14747,10 @@ interface lists {
     longitude: option<f64>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record post-lists-id-body-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-body-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Batch update list members.
@@ -14811,7 +14811,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-response-new-members-item-interests>,
+    interests: option<list<post-lists-id-response-new-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -14829,7 +14829,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// An individual merge var and value for a member.
-    merge-fields: option<post-lists-id-response-new-members-item-merge-fields>,
+    merge-fields: option<list<post-lists-id-response-new-members-item-merge-fields-entry>>,
     /// Open and click rates for this subscriber.
     stats: option<post-lists-id-response-new-members-item-stats>,
     /// Subscriber's current status.
@@ -14862,10 +14862,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-response-new-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-response-new-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -14896,10 +14896,10 @@ interface lists {
     timezone: option<string>
   }
 
-  /// An individual merge var and value for a member.
-  record post-lists-id-response-new-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-response-new-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -14930,7 +14930,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-response-updated-members-item-interests>,
+    interests: option<list<post-lists-id-response-updated-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -14948,7 +14948,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// An individual merge var and value for a member.
-    merge-fields: option<post-lists-id-response-updated-members-item-merge-fields>,
+    merge-fields: option<list<post-lists-id-response-updated-members-item-merge-fields-entry>>,
     /// Open and click rates for this subscriber.
     stats: option<post-lists-id-response-updated-members-item-stats>,
     /// Subscriber's current status.
@@ -14981,10 +14981,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-response-updated-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-response-updated-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -15015,10 +15015,10 @@ interface lists {
     timezone: option<string>
   }
 
-  /// An individual merge var and value for a member.
-  record post-lists-id-response-updated-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-response-updated-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -15243,7 +15243,7 @@ interface lists {
     /// The list id for the abuse report.
     list-id: option<string>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-lists-id-abuse-reports-response-abuse-reports-item-merge-fields>,
+    merge-fields: option<list<get-lists-id-abuse-reports-response-abuse-reports-item-merge-fields-entry>>,
     /// [VIP status](https://mailchimp.com/help/designate-and-send-to-vip-contacts/) for subscriber.
     vip: option<bool>
   }
@@ -15262,10 +15262,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-lists-id-abuse-reports-response-abuse-reports-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-abuse-reports-response-abuse-reports-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Details of abuse complaints for a specific list. An abuse complaint occurs when your recipient clicks to 'report spam' in their email program.
@@ -15285,7 +15285,7 @@ interface lists {
     /// The list id for the abuse report.
     list-id: option<string>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-lists-id-abuse-reports-id-response-merge-fields>,
+    merge-fields: option<list<get-lists-id-abuse-reports-id-response-merge-fields-entry>>,
     /// [VIP status](https://mailchimp.com/help/designate-and-send-to-vip-contacts/) for subscriber.
     vip: option<bool>
   }
@@ -15304,10 +15304,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-lists-id-abuse-reports-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-abuse-reports-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Up to the previous 180 days of daily detailed aggregated activity stats for a specific list. Does not include AutoResponder or Automation activity.
@@ -15908,7 +15908,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<get-lists-id-members-response-members-item-interests>,
+    interests: option<list<get-lists-id-members-response-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -15928,7 +15928,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-lists-id-members-response-members-item-merge-fields>,
+    merge-fields: option<list<get-lists-id-members-response-members-item-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -15967,10 +15967,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record get-lists-id-members-response-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-members-response-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -16013,10 +16013,10 @@ interface lists {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-lists-id-members-response-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-members-response-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -16046,10 +16046,10 @@ interface lists {
     name: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-members-body-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-members-body-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// Subscriber location information.
@@ -16068,10 +16068,10 @@ interface lists {
     marketing-permission-id: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record post-lists-id-members-body-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-members-body-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Individuals who are currently or have been previously subscribed to this list, including members who have bounced or unsubscribed.
@@ -16093,7 +16093,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-members-response-interests>,
+    interests: option<list<post-lists-id-members-response-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -16113,7 +16113,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<post-lists-id-members-response-merge-fields>,
+    merge-fields: option<list<post-lists-id-members-response-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -16152,10 +16152,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-members-response-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-members-response-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -16198,10 +16198,10 @@ interface lists {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record post-lists-id-members-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-members-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -16250,7 +16250,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<get-lists-id-members-id-response-interests>,
+    interests: option<list<get-lists-id-members-id-response-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -16270,7 +16270,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-lists-id-members-id-response-merge-fields>,
+    merge-fields: option<list<get-lists-id-members-id-response-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -16309,10 +16309,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record get-lists-id-members-id-response-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-members-id-response-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -16355,10 +16355,10 @@ interface lists {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-lists-id-members-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-members-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -16388,10 +16388,10 @@ interface lists {
     name: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record put-lists-id-members-id-body-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-lists-id-members-id-body-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// Subscriber location information.
@@ -16410,10 +16410,10 @@ interface lists {
     marketing-permission-id: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record put-lists-id-members-id-body-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-lists-id-members-id-body-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Individuals who are currently or have been previously subscribed to this list, including members who have bounced or unsubscribed.
@@ -16435,7 +16435,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<put-lists-id-members-id-response-interests>,
+    interests: option<list<put-lists-id-members-id-response-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -16455,7 +16455,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<put-lists-id-members-id-response-merge-fields>,
+    merge-fields: option<list<put-lists-id-members-id-response-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -16494,10 +16494,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record put-lists-id-members-id-response-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-lists-id-members-id-response-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -16540,10 +16540,10 @@ interface lists {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record put-lists-id-members-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-lists-id-members-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -16573,10 +16573,10 @@ interface lists {
     name: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record patch-lists-id-members-id-body-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record patch-lists-id-members-id-body-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// Subscriber location information.
@@ -16595,10 +16595,10 @@ interface lists {
     marketing-permission-id: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record patch-lists-id-members-id-body-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record patch-lists-id-members-id-body-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Individuals who are currently or have been previously subscribed to this list, including members who have bounced or unsubscribed.
@@ -16620,7 +16620,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<patch-lists-id-members-id-response-interests>,
+    interests: option<list<patch-lists-id-members-id-response-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -16640,7 +16640,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<patch-lists-id-members-id-response-merge-fields>,
+    merge-fields: option<list<patch-lists-id-members-id-response-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -16679,10 +16679,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record patch-lists-id-members-id-response-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record patch-lists-id-members-id-response-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -16725,10 +16725,10 @@ interface lists {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record patch-lists-id-members-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record patch-lists-id-members-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -16863,19 +16863,19 @@ interface lists {
     /// The date and time the event occurred in ISO 8601 format.
     occurred-at: option<string>,
     /// An optional list of properties
-    properties: option<get-lists-id-members-id-events-response-events-item-properties>
+    properties: option<list<get-lists-id-members-id-events-response-events-item-properties-entry>>
   }
 
-  /// An optional list of properties
-  record get-lists-id-members-id-events-response-events-item-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-members-id-events-response-events-item-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// An optional list of properties
-  record post-list-member-events-body-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-list-member-events-body-properties-entry {
+    key: string,
+    value: string
   }
 
   /// The last 50 Goal events for a member on a specific list.
@@ -17625,7 +17625,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-segments-id-response-members-added-item-interests>,
+    interests: option<list<post-lists-id-segments-id-response-members-added-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -17643,7 +17643,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// An individual merge var and value for a member.
-    merge-fields: option<post-lists-id-segments-id-response-members-added-item-merge-fields>,
+    merge-fields: option<list<post-lists-id-segments-id-response-members-added-item-merge-fields-entry>>,
     /// Open and click rates for this subscriber.
     stats: option<post-lists-id-segments-id-response-members-added-item-stats>,
     /// Subscriber's current status.
@@ -17676,10 +17676,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-segments-id-response-members-added-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-segments-id-response-members-added-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -17710,10 +17710,10 @@ interface lists {
     timezone: option<string>
   }
 
-  /// An individual merge var and value for a member.
-  record post-lists-id-segments-id-response-members-added-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-segments-id-response-members-added-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -17744,7 +17744,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-segments-id-response-members-removed-item-interests>,
+    interests: option<list<post-lists-id-segments-id-response-members-removed-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -17762,7 +17762,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// An individual merge var and value for a member.
-    merge-fields: option<post-lists-id-segments-id-response-members-removed-item-merge-fields>,
+    merge-fields: option<list<post-lists-id-segments-id-response-members-removed-item-merge-fields-entry>>,
     /// Open and click rates for this subscriber.
     stats: option<post-lists-id-segments-id-response-members-removed-item-stats>,
     /// Subscriber's current status.
@@ -17795,10 +17795,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-segments-id-response-members-removed-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-segments-id-response-members-removed-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -17829,10 +17829,10 @@ interface lists {
     timezone: option<string>
   }
 
-  /// An individual merge var and value for a member.
-  record post-lists-id-segments-id-response-members-removed-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-segments-id-response-members-removed-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -17939,7 +17939,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<get-lists-id-segments-id-members-response-members-item-interests>,
+    interests: option<list<get-lists-id-segments-id-members-response-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -17957,7 +17957,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-lists-id-segments-id-members-response-members-item-merge-fields>,
+    merge-fields: option<list<get-lists-id-segments-id-members-response-members-item-merge-fields-entry>>,
     /// Open and click rates for this subscriber.
     stats: option<get-lists-id-segments-id-members-response-members-item-stats>,
     /// Subscriber's current status.
@@ -17986,10 +17986,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record get-lists-id-segments-id-members-response-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-segments-id-members-response-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -18020,10 +18020,10 @@ interface lists {
     timezone: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-lists-id-segments-id-members-response-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-lists-id-segments-id-members-response-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -18047,7 +18047,7 @@ interface lists {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-segments-id-members-response-interests>,
+    interests: option<list<post-lists-id-segments-id-members-response-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -18065,7 +18065,7 @@ interface lists {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<post-lists-id-segments-id-members-response-merge-fields>,
+    merge-fields: option<list<post-lists-id-segments-id-members-response-merge-fields-entry>>,
     /// Open and click rates for this subscriber.
     stats: option<post-lists-id-segments-id-members-response-stats>,
     /// Subscriber's current status.
@@ -18094,10 +18094,10 @@ interface lists {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record post-lists-id-segments-id-members-response-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-segments-id-members-response-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -18128,10 +18128,10 @@ interface lists {
     timezone: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record post-lists-id-segments-id-members-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lists-id-segments-id-members-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -19110,7 +19110,7 @@ interface lists {
     /// Type of email this member asked to get ('html' or 'text').
     email-type: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<post-lists-id-members-body-interests>,
+    interests: option<list<post-lists-id-members-body-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -19122,7 +19122,7 @@ interface lists {
     /// The marketing permissions for the subscriber.
     marketing-permissions: option<list<post-lists-id-members-body-marketing-permissions-item>>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<post-lists-id-members-body-merge-fields>,
+    merge-fields: option<list<post-lists-id-members-body-merge-fields-entry>>,
     /// Subscriber's current status.
     status: post-lists-id-body-members-item-status-enum,
     /// The tags that are associated with a member.
@@ -19162,7 +19162,7 @@ interface lists {
     /// Type of email this member asked to get ('html' or 'text').
     email-type: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<put-lists-id-members-id-body-interests>,
+    interests: option<list<put-lists-id-members-id-body-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -19174,7 +19174,7 @@ interface lists {
     /// The marketing permissions for the subscriber.
     marketing-permissions: option<list<put-lists-id-members-id-body-marketing-permissions-item>>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<put-lists-id-members-id-body-merge-fields>,
+    merge-fields: option<list<put-lists-id-members-id-body-merge-fields-entry>>,
     /// Subscriber's current status.
     status: option<post-lists-id-body-members-item-status-enum>,
     /// Subscriber's status. This value is required only if the email address is not already present on the list.
@@ -19201,7 +19201,7 @@ interface lists {
     /// Type of email this member asked to get ('html' or 'text').
     email-type: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<patch-lists-id-members-id-body-interests>,
+    interests: option<list<patch-lists-id-members-id-body-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -19213,7 +19213,7 @@ interface lists {
     /// The marketing permissions for the subscriber.
     marketing-permissions: option<list<patch-lists-id-members-id-body-marketing-permissions-item>>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<patch-lists-id-members-id-body-merge-fields>,
+    merge-fields: option<list<patch-lists-id-members-id-body-merge-fields-entry>>,
     /// Subscriber's current status.
     status: option<patch-lists-id-members-id-body-status-enum>,
     /// The date and time the subscriber confirmed their opt-in status in ISO 8601 format.
@@ -19307,7 +19307,7 @@ interface lists {
     /// The date and time the event occurred in ISO 8601 format.
     occurred-at: option<string>,
     /// An optional list of properties
-    properties: option<post-list-member-events-body-properties>
+    properties: option<list<post-list-member-events-body-properties-entry>>
   }
   post-list-member-events: func(params: post-list-member-events-params) -> result<string, string>;
 
@@ -22300,7 +22300,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-abuse-reports-id-response-abuse-reports-item-merge-fields>,
+    merge-fields: option<list<get-reports-id-abuse-reports-id-response-abuse-reports-item-merge-fields-entry>>,
     /// [VIP status](https://mailchimp.com/help/designate-and-send-to-vip-contacts/) for subscriber.
     vip: option<bool>
   }
@@ -22319,10 +22319,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-abuse-reports-id-response-abuse-reports-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-abuse-reports-id-response-abuse-reports-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Details of abuse complaints for a specific list. An abuse complaint occurs when your recipient clicks to 'report spam' in their email program.
@@ -22344,7 +22344,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-abuse-reports-id-id-response-merge-fields>,
+    merge-fields: option<list<get-reports-id-abuse-reports-id-id-response-merge-fields-entry>>,
     /// [VIP status](https://mailchimp.com/help/designate-and-send-to-vip-contacts/) for subscriber.
     vip: option<bool>
   }
@@ -22363,10 +22363,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-abuse-reports-id-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-abuse-reports-id-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A list of feedback based on a campaign's statistics.
@@ -22630,7 +22630,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-click-details-id-members-response-members-item-merge-fields>,
+    merge-fields: option<list<get-reports-id-click-details-id-members-response-members-item-merge-fields-entry>>,
     /// The id for the tracked URL in the campaign.
     url-id: option<string>,
     /// [VIP status](https://mailchimp.com/help/designate-and-send-to-vip-contacts/) for subscriber.
@@ -22651,10 +22651,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-click-details-id-members-response-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-click-details-id-members-response-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A subscriber who clicked a specific URL in a specific campaign.
@@ -22676,7 +22676,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-click-details-id-members-id-response-merge-fields>,
+    merge-fields: option<list<get-reports-id-click-details-id-members-id-response-merge-fields-entry>>,
     /// The id for the tracked URL in the campaign.
     url-id: option<string>,
     /// [VIP status](https://mailchimp.com/help/designate-and-send-to-vip-contacts/) for subscriber.
@@ -22697,10 +22697,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-click-details-id-members-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-click-details-id-members-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Statistics for the top-performing email domains in a campaign.
@@ -23085,7 +23085,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-open-details-response-members-item-merge-fields>,
+    merge-fields: option<list<get-reports-id-open-details-response-members-item-merge-fields-entry>>,
     /// An array of timestamps for each time a list member opened the campaign. If a list member opens an email multiple times, this will return a separate timestamp for each open event.
     opens: option<list<get-reports-id-open-details-response-members-item-opens-item>>,
     /// The total number of times the this campaign was opened by the list member.
@@ -23108,10 +23108,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-open-details-response-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-open-details-response-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A summary of the interaction with the campaign.
@@ -23137,7 +23137,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-open-details-id-members-id-response-merge-fields>,
+    merge-fields: option<list<get-reports-id-open-details-id-members-id-response-merge-fields-entry>>,
     /// An array of timestamps for each time a list member opened the campaign. If a list member opens an email multiple times, this will return a separate timestamp for each open event.
     opens: option<list<get-reports-id-open-details-id-members-id-response-opens-item>>,
     /// The total number of times the this campaign was opened by the list member.
@@ -23160,10 +23160,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-open-details-id-members-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-open-details-id-members-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A summary of the interaction with the campaign.
@@ -23219,7 +23219,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-sent-to-response-sent-to-item-merge-fields>,
+    merge-fields: option<list<get-reports-id-sent-to-response-sent-to-item-merge-fields-entry>>,
     /// The number of times a campaign was opened by this member.
     open-count: option<s32>,
     /// The status of the email delivered to this subscriber. `hard` and `soft` refer to different [bounce types](https://mailchimp.com/help/soft-vs-hard-bounces/).
@@ -23242,10 +23242,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-sent-to-response-sent-to-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-sent-to-response-sent-to-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A subscriber's status for a specific campaign.
@@ -23269,7 +23269,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-sent-to-id-response-merge-fields>,
+    merge-fields: option<list<get-reports-id-sent-to-id-response-merge-fields-entry>>,
     /// The number of times a campaign was opened by this member.
     open-count: option<s32>,
     /// The status of the email delivered to this subscriber. `hard` and `soft` refer to different [bounce types](https://mailchimp.com/help/soft-vs-hard-bounces/).
@@ -23292,10 +23292,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-sent-to-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-sent-to-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A list of reports containing child campaigns for a specific campaign.
@@ -23636,7 +23636,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-unsubscribed-response-unsubscribes-item-merge-fields>,
+    merge-fields: option<list<get-reports-id-unsubscribed-response-unsubscribes-item-merge-fields-entry>>,
     /// If available, the reason listed by the member for unsubscribing.
     reason: option<string>,
     /// The date and time the member opted-out in ISO 8601 format.
@@ -23659,10 +23659,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-unsubscribed-response-unsubscribes-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-unsubscribed-response-unsubscribes-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// A member who unsubscribed from a specific campaign.
@@ -23680,7 +23680,7 @@ interface reports {
     /// The status of the list used, namely if it's deleted or disabled.
     list-is-active: option<bool>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-reports-id-unsubscribed-id-response-merge-fields>,
+    merge-fields: option<list<get-reports-id-unsubscribed-id-response-merge-fields-entry>>,
     /// If available, the reason listed by the member for unsubscribing.
     reason: option<string>,
     /// The date and time the member opted-out in ISO 8601 format.
@@ -23703,10 +23703,10 @@ interface reports {
     target-schema: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-reports-id-unsubscribed-id-response-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-reports-id-unsubscribed-id-response-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// List campaign reports
@@ -24567,7 +24567,7 @@ interface search-members {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<get-search-members-response-exact-matches-members-item-interests>,
+    interests: option<list<get-search-members-response-exact-matches-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -24587,7 +24587,7 @@ interface search-members {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-search-members-response-exact-matches-members-item-merge-fields>,
+    merge-fields: option<list<get-search-members-response-exact-matches-members-item-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -24626,10 +24626,10 @@ interface search-members {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record get-search-members-response-exact-matches-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-search-members-response-exact-matches-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -24672,10 +24672,10 @@ interface search-members {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-search-members-response-exact-matches-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-search-members-response-exact-matches-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -24732,7 +24732,7 @@ interface search-members {
     /// The MD5 hash of the lowercase version of the list member's email address.
     id: option<string>,
     /// The key of this object's properties is the ID of the interest in question.
-    interests: option<get-search-members-response-full-search-members-item-interests>,
+    interests: option<list<get-search-members-response-full-search-members-item-interests-entry>>,
     /// The IP address the subscriber used to confirm their opt-in status.
     ip-opt: option<string>,
     /// IP address the subscriber signed up from.
@@ -24752,7 +24752,7 @@ interface search-members {
     /// Star rating for this member, between 1 and 5.
     member-rating: option<s32>,
     /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-    merge-fields: option<get-search-members-response-full-search-members-item-merge-fields>,
+    merge-fields: option<list<get-search-members-response-full-search-members-item-merge-fields-entry>>,
     /// The source from which the subscriber was added to this list.
     source: option<string>,
     /// Open and click rates for this subscriber.
@@ -24791,10 +24791,10 @@ interface search-members {
     target-schema: option<string>
   }
 
-  /// The key of this object's properties is the ID of the interest in question.
-  record get-search-members-response-full-search-members-item-interests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-search-members-response-full-search-members-item-interests-entry {
+    key: string,
+    value: bool
   }
 
   /// The most recent Note added about this member.
@@ -24837,10 +24837,10 @@ interface search-members {
     text: option<string>
   }
 
-  /// A dictionary of merge fields where the keys are the merge tags. See the [Merge Fields documentation](https://mailchimp.com/developer/marketing/docs/merge-fields/#structure) for more about the structure.
-  record get-search-members-response-full-search-members-item-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-search-members-response-full-search-members-item-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Open and click rates for this subscriber.
@@ -25336,7 +25336,7 @@ interface templates {
     /// A list of link types and descriptions for the API schema documents.
     links: option<list<get-templates-id-default-content-response-links-item>>,
     /// The sections that you can edit in the template, including each section's default content.
-    sections: option<get-templates-id-default-content-response-sections>
+    sections: option<list<get-templates-id-default-content-response-sections-entry>>
   }
 
   /// This object represents a link from the resource where it is found to another resource or action that may be performed.
@@ -25353,10 +25353,10 @@ interface templates {
     target-schema: option<string>
   }
 
-  /// The sections that you can edit in the template, including each section's default content.
-  record get-templates-id-default-content-response-sections {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-templates-id-default-content-response-sections-entry {
+    key: string,
+    value: string
   }
 
   /// List templates

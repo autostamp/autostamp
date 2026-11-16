@@ -386,14 +386,15 @@ fn iface_route_optimization_api__snapped_waypoint__to_json(p: &iface_route_optim
 
 fn iface_route_optimization_api__route_point__to_json(p: &iface_route_optimization_api::RoutePoint) -> Value {
     let mut m = Map::new();
-    m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__route_point_coordinates_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_route_optimization_api__route_point_coordinates_item__to_json(p: &iface_route_optimization_api::RoutePointCoordinatesItem) -> Value {
+fn iface_route_optimization_api__route_point_coordinates_item_entry__to_json(p: &iface_route_optimization_api::RoutePointCoordinatesItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -542,15 +543,16 @@ fn iface_route_optimization_api__snapped_waypoint__from_json(v: &Value) -> Optio
 fn iface_route_optimization_api__route_point__from_json(v: &Value) -> Option<iface_route_optimization_api::RoutePoint> {
     let m = v.as_object()?;
     Some(iface_route_optimization_api::RoutePoint {
-        coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_route_optimization_api__route_point_coordinates_item__from_json(x)).collect())),
+        coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_route_optimization_api::RoutePointCoordinatesItemEntry { key: k.clone(), value: val })).collect())).collect())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_route_optimization_api__route_point_coordinates_item__from_json(v: &Value) -> Option<iface_route_optimization_api::RoutePointCoordinatesItem> {
+fn iface_route_optimization_api__route_point_coordinates_item_entry__from_json(v: &Value) -> Option<iface_route_optimization_api::RoutePointCoordinatesItemEntry> {
     let m = v.as_object()?;
-    Some(iface_route_optimization_api::RoutePointCoordinatesItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_route_optimization_api::RoutePointCoordinatesItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

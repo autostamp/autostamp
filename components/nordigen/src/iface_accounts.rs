@@ -50,6 +50,16 @@ const OP_ACCOUNTS_RETRIEVE_ACCOUNT_TRANSACTIONS_V2_V2: OpSpec = OpSpec {
     ],
 };
 
+fn iface_accounts__account_status_enum__to_str(e: &iface_accounts::AccountStatusEnum) -> &'static str {
+    match e {
+        iface_accounts::AccountStatusEnum::Discovered => "DISCOVERED",
+        iface_accounts::AccountStatusEnum::Processing => "PROCESSING",
+        iface_accounts::AccountStatusEnum::Ready => "READY",
+        iface_accounts::AccountStatusEnum::Error => "ERROR",
+        iface_accounts::AccountStatusEnum::Suspended => "SUSPENDED",
+    }
+}
+
 fn iface_accounts__account__to_json(p: &iface_accounts::Account) -> Value {
     let mut m = Map::new();
     m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -58,31 +68,28 @@ fn iface_accounts__account__to_json(p: &iface_accounts::Account) -> Value {
     m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("last_accessed".into(), match (&p.last_accessed) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("owner_name".into(), match (&p.owner_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_accounts__account_status_enum__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_accounts__account_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_accounts__account_status_enum__to_json(p: &iface_accounts::AccountStatusEnum) -> Value {
+fn iface_accounts__retrieve_account_balances_v2_response_entry__to_json(p: &iface_accounts::RetrieveAccountBalancesV2ResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_accounts__retrieve_account_balances_v2_response__to_json(p: &iface_accounts::RetrieveAccountBalancesV2Response) -> Value {
+fn iface_accounts__retrieve_account_details_v2_response_entry__to_json(p: &iface_accounts::RetrieveAccountDetailsV2ResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_accounts__retrieve_account_details_v2_response__to_json(p: &iface_accounts::RetrieveAccountDetailsV2Response) -> Value {
+fn iface_accounts__retrieve_account_transactions_v2_v2_response_entry__to_json(p: &iface_accounts::RetrieveAccountTransactionsV2V2ResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__retrieve_account_transactions_v2_v2_response__to_json(p: &iface_accounts::RetrieveAccountTransactionsV2V2Response) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -121,36 +128,43 @@ fn iface_accounts__account__from_json(v: &Value) -> Option<iface_accounts::Accou
         institution_id: m.get("institution_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_accessed: m.get("last_accessed").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         owner_name: m.get("owner_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_accounts__account_status_enum__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__account_status_enum__from_str)),
     })
 }
 
-fn iface_accounts__account_status_enum__from_json(v: &Value) -> Option<iface_accounts::AccountStatusEnum> {
+fn iface_accounts__retrieve_account_balances_v2_response_entry__from_json(v: &Value) -> Option<iface_accounts::RetrieveAccountBalancesV2ResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::AccountStatusEnum {
+    Some(iface_accounts::RetrieveAccountBalancesV2ResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_accounts__retrieve_account_balances_v2_response__from_json(v: &Value) -> Option<iface_accounts::RetrieveAccountBalancesV2Response> {
+fn iface_accounts__retrieve_account_details_v2_response_entry__from_json(v: &Value) -> Option<iface_accounts::RetrieveAccountDetailsV2ResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::RetrieveAccountBalancesV2Response {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_accounts::RetrieveAccountDetailsV2ResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_accounts__retrieve_account_details_v2_response__from_json(v: &Value) -> Option<iface_accounts::RetrieveAccountDetailsV2Response> {
+fn iface_accounts__retrieve_account_transactions_v2_v2_response_entry__from_json(v: &Value) -> Option<iface_accounts::RetrieveAccountTransactionsV2V2ResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::RetrieveAccountDetailsV2Response {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_accounts::RetrieveAccountTransactionsV2V2ResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_accounts__retrieve_account_transactions_v2_v2_response__from_json(v: &Value) -> Option<iface_accounts::RetrieveAccountTransactionsV2V2Response> {
-    let m = v.as_object()?;
-    Some(iface_accounts::RetrieveAccountTransactionsV2V2Response {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
+fn iface_accounts__account_status_enum__from_str(s: &str) -> Option<iface_accounts::AccountStatusEnum> {
+    match s {
+        "DISCOVERED" => Some(iface_accounts::AccountStatusEnum::Discovered),
+        "PROCESSING" => Some(iface_accounts::AccountStatusEnum::Processing),
+        "READY" => Some(iface_accounts::AccountStatusEnum::Ready),
+        "ERROR" => Some(iface_accounts::AccountStatusEnum::Error),
+        "SUSPENDED" => Some(iface_accounts::AccountStatusEnum::Suspended),
+        _ => None,
+    }
 }
 
 fn iface_accounts__retrieve_account_metadata__ok(body: String) -> Result<iface_accounts::Account, crate::runtime::DispatchError> {
@@ -177,12 +191,12 @@ fn iface_accounts__retrieve_account_metadata__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_accounts__retrieve_account_balances_v2__ok(body: String) -> Result<iface_accounts::RetrieveAccountBalancesV2Response, crate::runtime::DispatchError> {
+fn iface_accounts__retrieve_account_balances_v2__ok(body: String) -> Result<Vec<iface_accounts::RetrieveAccountBalancesV2ResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_accounts__retrieve_account_balances_v2_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::RetrieveAccountBalancesV2ResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -205,12 +219,12 @@ fn iface_accounts__retrieve_account_balances_v2__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_accounts__retrieve_account_details_v2__ok(body: String) -> Result<iface_accounts::RetrieveAccountDetailsV2Response, crate::runtime::DispatchError> {
+fn iface_accounts__retrieve_account_details_v2__ok(body: String) -> Result<Vec<iface_accounts::RetrieveAccountDetailsV2ResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_accounts__retrieve_account_details_v2_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::RetrieveAccountDetailsV2ResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -233,12 +247,12 @@ fn iface_accounts__retrieve_account_details_v2__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_accounts__retrieve_account_transactions_v2_v2__ok(body: String) -> Result<iface_accounts::RetrieveAccountTransactionsV2V2Response, crate::runtime::DispatchError> {
+fn iface_accounts__retrieve_account_transactions_v2_v2__ok(body: String) -> Result<Vec<iface_accounts::RetrieveAccountTransactionsV2V2ResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_accounts__retrieve_account_transactions_v2_v2_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::RetrieveAccountTransactionsV2V2ResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -269,21 +283,21 @@ impl iface_accounts::Guest for crate::Component {
             Err(e) => Err(iface_accounts__retrieve_account_metadata__err(e)),
         }
     }
-    fn retrieve_account_balances_v2(params: iface_accounts::RetrieveAccountBalancesV2Params) -> Result<iface_accounts::RetrieveAccountBalancesV2Response, iface_accounts::RetrieveAccountBalancesV2Error> {
+    fn retrieve_account_balances_v2(params: iface_accounts::RetrieveAccountBalancesV2Params) -> Result<Vec<iface_accounts::RetrieveAccountBalancesV2ResponseEntry>, iface_accounts::RetrieveAccountBalancesV2Error> {
         let json = iface_accounts__retrieve_account_balances_v2_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_BALANCES_V2, json).and_then(iface_accounts__retrieve_account_balances_v2__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__retrieve_account_balances_v2__err(e)),
         }
     }
-    fn retrieve_account_details_v2(params: iface_accounts::RetrieveAccountDetailsV2Params) -> Result<iface_accounts::RetrieveAccountDetailsV2Response, iface_accounts::RetrieveAccountDetailsV2Error> {
+    fn retrieve_account_details_v2(params: iface_accounts::RetrieveAccountDetailsV2Params) -> Result<Vec<iface_accounts::RetrieveAccountDetailsV2ResponseEntry>, iface_accounts::RetrieveAccountDetailsV2Error> {
         let json = iface_accounts__retrieve_account_details_v2_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_DETAILS_V2, json).and_then(iface_accounts__retrieve_account_details_v2__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__retrieve_account_details_v2__err(e)),
         }
     }
-    fn retrieve_account_transactions_v2_v2(params: iface_accounts::RetrieveAccountTransactionsV2V2Params) -> Result<iface_accounts::RetrieveAccountTransactionsV2V2Response, iface_accounts::RetrieveAccountTransactionsV2V2Error> {
+    fn retrieve_account_transactions_v2_v2(params: iface_accounts::RetrieveAccountTransactionsV2V2Params) -> Result<Vec<iface_accounts::RetrieveAccountTransactionsV2V2ResponseEntry>, iface_accounts::RetrieveAccountTransactionsV2V2Error> {
         let json = iface_accounts__retrieve_account_transactions_v2_v2_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_TRANSACTIONS_V2_V2, json).and_then(iface_accounts__retrieve_account_transactions_v2_v2__ok) {
             Ok(v) => Ok(v),

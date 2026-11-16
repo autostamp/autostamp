@@ -215,7 +215,7 @@ fn iface_games__list_op_response__to_json(p: &iface_games::ListOpResponse) -> Va
 fn iface_games__game__to_json(p: &iface_games::Game) -> Value {
     let mut m = Map::new();
     m.insert("added".into(), match (&p.added) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("added_by_status".into(), match (&p.added_by_status) { Some(v) => iface_games__game_added_by_status__to_json(v), None => Value::Null });
+    m.insert("added_by_status".into(), match (&p.added_by_status) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("background_image".into(), match (&p.background_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("esrb_rating".into(), match (&p.esrb_rating) { Some(v) => iface_games__game_esrb_rating__to_json(v), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -225,7 +225,7 @@ fn iface_games__game__to_json(p: &iface_games::Game) -> Value {
     m.insert("playtime".into(), match (&p.playtime) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("rating".into(), serde_json::Number::from_f64(*(&p.rating)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("rating_top".into(), match (&p.rating_top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ratings".into(), match (&p.ratings) { Some(v) => iface_games__game_ratings__to_json(v), None => Value::Null });
+    m.insert("ratings".into(), match (&p.ratings) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ratings_count".into(), match (&p.ratings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("released".into(), match (&p.released) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reviews_text_count".into(), match (&p.reviews_text_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -236,9 +236,10 @@ fn iface_games__game__to_json(p: &iface_games::Game) -> Value {
     Value::Object(m)
 }
 
-fn iface_games__game_added_by_status__to_json(p: &iface_games::GameAddedByStatus) -> Value {
+fn iface_games__game_added_by_status_entry__to_json(p: &iface_games::GameAddedByStatusEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -273,9 +274,10 @@ fn iface_games__game_platforms_item_requirements__to_json(p: &iface_games::GameP
     Value::Object(m)
 }
 
-fn iface_games__game_ratings__to_json(p: &iface_games::GameRatings) -> Value {
+fn iface_games__game_ratings_entry__to_json(p: &iface_games::GameRatingsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -367,7 +369,7 @@ fn iface_games__game_single__to_json(p: &iface_games::GameSingle) -> Value {
     let mut m = Map::new();
     m.insert("achievements_count".into(), match (&p.achievements_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("added".into(), match (&p.added) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("added_by_status".into(), match (&p.added_by_status) { Some(v) => iface_games__game_single_added_by_status__to_json(v), None => Value::Null });
+    m.insert("added_by_status".into(), match (&p.added_by_status) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("additions_count".into(), match (&p.additions_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("alternative_names".into(), match (&p.alternative_names) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("background_image".into(), match (&p.background_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -389,9 +391,9 @@ fn iface_games__game_single__to_json(p: &iface_games::GameSingle) -> Value {
     m.insert("playtime".into(), match (&p.playtime) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("rating".into(), serde_json::Number::from_f64(*(&p.rating)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("rating_top".into(), match (&p.rating_top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ratings".into(), match (&p.ratings) { Some(v) => iface_games__game_single_ratings__to_json(v), None => Value::Null });
+    m.insert("ratings".into(), match (&p.ratings) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ratings_count".into(), match (&p.ratings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("reactions".into(), match (&p.reactions) { Some(v) => iface_games__game_single_reactions__to_json(v), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("reddit_count".into(), match (&p.reddit_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("reddit_description".into(), match (&p.reddit_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reddit_logo".into(), match (&p.reddit_logo) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -410,9 +412,10 @@ fn iface_games__game_single__to_json(p: &iface_games::GameSingle) -> Value {
     Value::Object(m)
 }
 
-fn iface_games__game_single_added_by_status__to_json(p: &iface_games::GameSingleAddedByStatus) -> Value {
+fn iface_games__game_single_added_by_status_entry__to_json(p: &iface_games::GameSingleAddedByStatusEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -454,15 +457,17 @@ fn iface_games__game_single_platforms_item_requirements__to_json(p: &iface_games
     Value::Object(m)
 }
 
-fn iface_games__game_single_ratings__to_json(p: &iface_games::GameSingleRatings) -> Value {
+fn iface_games__game_single_ratings_entry__to_json(p: &iface_games::GameSingleRatingsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_games__game_single_reactions__to_json(p: &iface_games::GameSingleReactions) -> Value {
+fn iface_games__game_single_reactions_entry__to_json(p: &iface_games::GameSingleReactionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -478,16 +483,17 @@ fn iface_games__parent_achievement__to_json(p: &iface_games::ParentAchievement) 
 
 fn iface_games__movie__to_json(p: &iface_games::Movie) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_games__movie_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_games__movie_data__to_json(p: &iface_games::MovieData) -> Value {
+fn iface_games__movie_data_entry__to_json(p: &iface_games::MovieDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -531,14 +537,15 @@ fn iface_games__youtube__to_json(p: &iface_games::Youtube) -> Value {
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("like_count".into(), match (&p.like_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("thumbnails".into(), match (&p.thumbnails) { Some(v) => iface_games__youtube_thumbnails__to_json(v), None => Value::Null });
+    m.insert("thumbnails".into(), match (&p.thumbnails) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_games__youtube_thumbnails__to_json(p: &iface_games::YoutubeThumbnails) -> Value {
+fn iface_games__youtube_thumbnails_entry__to_json(p: &iface_games::YoutubeThumbnailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -677,7 +684,7 @@ fn iface_games__game__from_json(v: &Value) -> Option<iface_games::Game> {
     let m = v.as_object()?;
     Some(iface_games::Game {
         added: m.get("added").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        added_by_status: m.get("added_by_status").filter(|v| !v.is_null()).and_then(|v| iface_games__game_added_by_status__from_json(v)),
+        added_by_status: m.get("added_by_status").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::GameAddedByStatusEntry { key: k.clone(), value: val })).collect())),
         background_image: m.get("background_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         esrb_rating: m.get("esrb_rating").filter(|v| !v.is_null()).and_then(|v| iface_games__game_esrb_rating__from_json(v)),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -687,7 +694,7 @@ fn iface_games__game__from_json(v: &Value) -> Option<iface_games::Game> {
         playtime: m.get("playtime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         rating: m.get("rating").and_then(|v| (v).as_f64()).unwrap_or_default(),
         rating_top: m.get("rating_top").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        ratings: m.get("ratings").filter(|v| !v.is_null()).and_then(|v| iface_games__game_ratings__from_json(v)),
+        ratings: m.get("ratings").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::GameRatingsEntry { key: k.clone(), value: val })).collect())),
         ratings_count: m.get("ratings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         released: m.get("released").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reviews_text_count: m.get("reviews_text_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -698,10 +705,11 @@ fn iface_games__game__from_json(v: &Value) -> Option<iface_games::Game> {
     })
 }
 
-fn iface_games__game_added_by_status__from_json(v: &Value) -> Option<iface_games::GameAddedByStatus> {
+fn iface_games__game_added_by_status_entry__from_json(v: &Value) -> Option<iface_games::GameAddedByStatusEntry> {
     let m = v.as_object()?;
-    Some(iface_games::GameAddedByStatus {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::GameAddedByStatusEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -740,10 +748,11 @@ fn iface_games__game_platforms_item_requirements__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_games__game_ratings__from_json(v: &Value) -> Option<iface_games::GameRatings> {
+fn iface_games__game_ratings_entry__from_json(v: &Value) -> Option<iface_games::GameRatingsEntry> {
     let m = v.as_object()?;
-    Some(iface_games::GameRatings {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::GameRatingsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -845,7 +854,7 @@ fn iface_games__game_single__from_json(v: &Value) -> Option<iface_games::GameSin
     Some(iface_games::GameSingle {
         achievements_count: m.get("achievements_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         added: m.get("added").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        added_by_status: m.get("added_by_status").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_added_by_status__from_json(v)),
+        added_by_status: m.get("added_by_status").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::GameSingleAddedByStatusEntry { key: k.clone(), value: val })).collect())),
         additions_count: m.get("additions_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         alternative_names: m.get("alternative_names").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         background_image: m.get("background_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -867,9 +876,9 @@ fn iface_games__game_single__from_json(v: &Value) -> Option<iface_games::GameSin
         playtime: m.get("playtime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         rating: m.get("rating").and_then(|v| (v).as_f64()).unwrap_or_default(),
         rating_top: m.get("rating_top").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        ratings: m.get("ratings").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_ratings__from_json(v)),
+        ratings: m.get("ratings").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::GameSingleRatingsEntry { key: k.clone(), value: val })).collect())),
         ratings_count: m.get("ratings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_reactions__from_json(v)),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::GameSingleReactionsEntry { key: k.clone(), value: val })).collect())),
         reddit_count: m.get("reddit_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         reddit_description: m.get("reddit_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reddit_logo: m.get("reddit_logo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -888,10 +897,11 @@ fn iface_games__game_single__from_json(v: &Value) -> Option<iface_games::GameSin
     })
 }
 
-fn iface_games__game_single_added_by_status__from_json(v: &Value) -> Option<iface_games::GameSingleAddedByStatus> {
+fn iface_games__game_single_added_by_status_entry__from_json(v: &Value) -> Option<iface_games::GameSingleAddedByStatusEntry> {
     let m = v.as_object()?;
-    Some(iface_games::GameSingleAddedByStatus {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::GameSingleAddedByStatusEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -938,17 +948,19 @@ fn iface_games__game_single_platforms_item_requirements__from_json(v: &Value) ->
     })
 }
 
-fn iface_games__game_single_ratings__from_json(v: &Value) -> Option<iface_games::GameSingleRatings> {
+fn iface_games__game_single_ratings_entry__from_json(v: &Value) -> Option<iface_games::GameSingleRatingsEntry> {
     let m = v.as_object()?;
-    Some(iface_games::GameSingleRatings {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::GameSingleRatingsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_games__game_single_reactions__from_json(v: &Value) -> Option<iface_games::GameSingleReactions> {
+fn iface_games__game_single_reactions_entry__from_json(v: &Value) -> Option<iface_games::GameSingleReactionsEntry> {
     let m = v.as_object()?;
-    Some(iface_games::GameSingleReactions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::GameSingleReactionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -966,17 +978,18 @@ fn iface_games__parent_achievement__from_json(v: &Value) -> Option<iface_games::
 fn iface_games__movie__from_json(v: &Value) -> Option<iface_games::Movie> {
     let m = v.as_object()?;
     Some(iface_games::Movie {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_games__movie_data__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::MovieDataEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_games__movie_data__from_json(v: &Value) -> Option<iface_games::MovieData> {
+fn iface_games__movie_data_entry__from_json(v: &Value) -> Option<iface_games::MovieDataEntry> {
     let m = v.as_object()?;
-    Some(iface_games::MovieData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::MovieDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1023,15 +1036,16 @@ fn iface_games__youtube__from_json(v: &Value) -> Option<iface_games::Youtube> {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         like_count: m.get("like_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        thumbnails: m.get("thumbnails").filter(|v| !v.is_null()).and_then(|v| iface_games__youtube_thumbnails__from_json(v)),
+        thumbnails: m.get("thumbnails").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_games::YoutubeThumbnailsEntry { key: k.clone(), value: val })).collect())),
         view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_games__youtube_thumbnails__from_json(v: &Value) -> Option<iface_games::YoutubeThumbnails> {
+fn iface_games__youtube_thumbnails_entry__from_json(v: &Value) -> Option<iface_games::YoutubeThumbnailsEntry> {
     let m = v.as_object()?;
-    Some(iface_games::YoutubeThumbnails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_games::YoutubeThumbnailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

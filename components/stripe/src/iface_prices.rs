@@ -116,17 +116,17 @@ fn iface_prices__price_billing_scheme_enum__to_str(e: &iface_prices::PriceBillin
     }
 }
 
-fn iface_prices__price_object_enum__to_str(e: &iface_prices::PriceObjectEnum) -> &'static str {
+fn iface_prices__currency_option_tax_behavior_enum__to_str(e: &iface_prices::CurrencyOptionTaxBehaviorEnum) -> &'static str {
     match e {
-        iface_prices::PriceObjectEnum::Price => "price",
+        iface_prices::CurrencyOptionTaxBehaviorEnum::Exclusive => "exclusive",
+        iface_prices::CurrencyOptionTaxBehaviorEnum::Inclusive => "inclusive",
+        iface_prices::CurrencyOptionTaxBehaviorEnum::Unspecified => "unspecified",
     }
 }
 
-fn iface_prices__price_tax_behavior_enum__to_str(e: &iface_prices::PriceTaxBehaviorEnum) -> &'static str {
+fn iface_prices__price_object_enum__to_str(e: &iface_prices::PriceObjectEnum) -> &'static str {
     match e {
-        iface_prices::PriceTaxBehaviorEnum::Exclusive => "exclusive",
-        iface_prices::PriceTaxBehaviorEnum::Inclusive => "inclusive",
-        iface_prices::PriceTaxBehaviorEnum::Unspecified => "unspecified",
+        iface_prices::PriceObjectEnum::Price => "price",
     }
 }
 
@@ -196,17 +196,17 @@ fn iface_prices__price__to_json(p: &iface_prices::Price) -> Value {
     m.insert("billing_scheme".into(), Value::String(iface_prices__price_billing_scheme_enum__to_str(&p.billing_scheme).into()));
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_prices__price_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_prices__currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("lookup_key".into(), match (&p.lookup_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), iface_prices__price_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("nickname".into(), match (&p.nickname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_prices__price_object_enum__to_str(&p.object).into()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), match (&p.recurring) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_prices__price_tier__to_json(v)).collect()), None => Value::Null });
     m.insert("tiers_mode".into(), match (&p.tiers_mode) { Some(v) => Value::String(iface_prices__price_tiers_mode_enum__to_str(v).into()), None => Value::Null });
     m.insert("transform_quantity".into(), match (&p.transform_quantity) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -216,15 +216,13 @@ fn iface_prices__price__to_json(p: &iface_prices::Price) -> Value {
     Value::Object(m)
 }
 
-fn iface_prices__price_currency_options__to_json(p: &iface_prices::PriceCurrencyOptions) -> Value {
+fn iface_prices__currency_option__to_json(p: &iface_prices::CurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_prices__price_metadata__to_json(p: &iface_prices::PriceMetadata) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_prices__price_tier__to_json(v)).collect()), None => Value::Null });
+    m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -238,9 +236,53 @@ fn iface_prices__price_tier__to_json(p: &iface_prices::PriceTier) -> Value {
     Value::Object(m)
 }
 
-fn iface_prices__post_prices_body_currency_options__to_json(p: &iface_prices::PostPricesBodyCurrencyOptions) -> Value {
+fn iface_prices__price_currency_options_entry__to_json(p: &iface_prices::PriceCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_prices__currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_prices__price_metadata_entry__to_json(p: &iface_prices::PriceMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_prices__post_prices_body_currency_options_value__to_json(p: &iface_prices::PostPricesBodyCurrencyOptionsValue) -> Value {
+    let mut m = Map::new();
+    m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => iface_prices__post_prices_body_currency_options_value_custom_unit_amount__to_json(v), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_prices__post_prices_body_currency_options_value_tiers_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_prices__post_prices_body_currency_options_value_custom_unit_amount__to_json(p: &iface_prices::PostPricesBodyCurrencyOptionsValueCustomUnitAmount) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("maximum".into(), match (&p.maximum) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("minimum".into(), match (&p.minimum) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("preset".into(), match (&p.preset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_prices__post_prices_body_currency_options_value_tiers_item__to_json(p: &iface_prices::PostPricesBodyCurrencyOptionsValueTiersItem) -> Value {
+    let mut m = Map::new();
+    m.insert("flat_amount".into(), match (&p.flat_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("flat_amount_decimal".into(), match (&p.flat_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_to".into(), Value::String((&p.up_to).clone()));
+    Value::Object(m)
+}
+
+fn iface_prices__post_prices_body_currency_options_entry__to_json(p: &iface_prices::PostPricesBodyCurrencyOptionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_prices__post_prices_body_currency_options_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -253,9 +295,10 @@ fn iface_prices__post_prices_body_custom_unit_amount__to_json(p: &iface_prices::
     Value::Object(m)
 }
 
-fn iface_prices__post_prices_body_metadata__to_json(p: &iface_prices::PostPricesBodyMetadata) -> Value {
+fn iface_prices__post_prices_body_metadata_entry__to_json(p: &iface_prices::PostPricesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -263,7 +306,7 @@ fn iface_prices__post_prices_body_product_data__to_json(p: &iface_prices::PostPr
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_prices__post_prices_body_product_data_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("statement_descriptor".into(), match (&p.statement_descriptor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tax_code".into(), match (&p.tax_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -271,9 +314,10 @@ fn iface_prices__post_prices_body_product_data__to_json(p: &iface_prices::PostPr
     Value::Object(m)
 }
 
-fn iface_prices__post_prices_body_product_data_metadata__to_json(p: &iface_prices::PostPricesBodyProductDataMetadata) -> Value {
+fn iface_prices__post_prices_body_product_data_metadata_entry__to_json(p: &iface_prices::PostPricesBodyProductDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -336,16 +380,16 @@ fn iface_prices__post_prices_params__to_json(p: &iface_prices::PostPricesParams)
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("billing_scheme".into(), match (&p.billing_scheme) { Some(v) => Value::String(iface_prices__price_billing_scheme_enum__to_str(v).into()), None => Value::Null });
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_prices__post_prices_body_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_prices__post_prices_body_currency_options_value__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => iface_prices__post_prices_body_custom_unit_amount__to_json(v), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("lookup_key".into(), match (&p.lookup_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_prices__post_prices_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("nickname".into(), match (&p.nickname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("product".into(), match (&p.product) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("product_data".into(), match (&p.product_data) { Some(v) => iface_prices__post_prices_body_product_data__to_json(v), None => Value::Null });
     m.insert("recurring".into(), match (&p.recurring) { Some(v) => iface_prices__post_prices_body_recurring__to_json(v), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_prices__post_prices_body_tiers_item__to_json(v)).collect()), None => Value::Null });
     m.insert("tiers_mode".into(), match (&p.tiers_mode) { Some(v) => Value::String(iface_prices__price_tiers_mode_enum__to_str(v).into()), None => Value::Null });
     m.insert("transfer_lookup_key".into(), match (&p.transfer_lookup_key) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -382,7 +426,7 @@ fn iface_prices__post_prices_price_params__to_json(p: &iface_prices::PostPricesP
     m.insert("lookup_key".into(), match (&p.lookup_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("nickname".into(), match (&p.nickname) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_prices__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("transfer_lookup_key".into(), match (&p.transfer_lookup_key) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
@@ -404,17 +448,17 @@ fn iface_prices__price__from_json(v: &Value) -> Option<iface_prices::Price> {
         billing_scheme: match m.get("billing_scheme").and_then(|v| (v).as_str().and_then(iface_prices__price_billing_scheme_enum__from_str)) { Some(x) => x, None => return None },
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_prices__price_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_prices__currency_option__from_json(x)).map(|val| iface_prices::PriceCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         custom_unit_amount: m.get("custom_unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         lookup_key: m.get("lookup_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: match m.get("metadata").and_then(|v| iface_prices__price_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_prices::PriceMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         nickname: m.get("nickname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_prices__price_object_enum__from_str)) { Some(x) => x, None => return None },
         product: m.get("product").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         recurring: m.get("recurring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_prices__price_tax_behavior_enum__from_str)),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_prices__currency_option_tax_behavior_enum__from_str)),
         tiers: m.get("tiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_prices__price_tier__from_json(x)).collect())),
         tiers_mode: m.get("tiers_mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_prices__price_tiers_mode_enum__from_str)),
         transform_quantity: m.get("transform_quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -424,17 +468,14 @@ fn iface_prices__price__from_json(v: &Value) -> Option<iface_prices::Price> {
     })
 }
 
-fn iface_prices__price_currency_options__from_json(v: &Value) -> Option<iface_prices::PriceCurrencyOptions> {
+fn iface_prices__currency_option__from_json(v: &Value) -> Option<iface_prices::CurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_prices::PriceCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_prices__price_metadata__from_json(v: &Value) -> Option<iface_prices::PriceMetadata> {
-    let m = v.as_object()?;
-    Some(iface_prices::PriceMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_prices::CurrencyOption {
+        custom_unit_amount: m.get("custom_unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_prices__currency_option_tax_behavior_enum__from_str)),
+        tiers: m.get("tiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_prices__price_tier__from_json(x)).collect())),
+        unit_amount: m.get("unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unit_amount_decimal: m.get("unit_amount_decimal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -446,6 +487,22 @@ fn iface_prices__price_tier__from_json(v: &Value) -> Option<iface_prices::PriceT
         unit_amount: m.get("unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         unit_amount_decimal: m.get("unit_amount_decimal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         up_to: m.get("up_to").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_prices__price_currency_options_entry__from_json(v: &Value) -> Option<iface_prices::PriceCurrencyOptionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_prices::PriceCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_prices__currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_prices__price_metadata_entry__from_json(v: &Value) -> Option<iface_prices::PriceMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_prices::PriceMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -477,18 +534,18 @@ fn iface_prices__price_billing_scheme_enum__from_str(s: &str) -> Option<iface_pr
     }
 }
 
-fn iface_prices__price_object_enum__from_str(s: &str) -> Option<iface_prices::PriceObjectEnum> {
+fn iface_prices__currency_option_tax_behavior_enum__from_str(s: &str) -> Option<iface_prices::CurrencyOptionTaxBehaviorEnum> {
     match s {
-        "price" => Some(iface_prices::PriceObjectEnum::Price),
+        "exclusive" => Some(iface_prices::CurrencyOptionTaxBehaviorEnum::Exclusive),
+        "inclusive" => Some(iface_prices::CurrencyOptionTaxBehaviorEnum::Inclusive),
+        "unspecified" => Some(iface_prices::CurrencyOptionTaxBehaviorEnum::Unspecified),
         _ => None,
     }
 }
 
-fn iface_prices__price_tax_behavior_enum__from_str(s: &str) -> Option<iface_prices::PriceTaxBehaviorEnum> {
+fn iface_prices__price_object_enum__from_str(s: &str) -> Option<iface_prices::PriceObjectEnum> {
     match s {
-        "exclusive" => Some(iface_prices::PriceTaxBehaviorEnum::Exclusive),
-        "inclusive" => Some(iface_prices::PriceTaxBehaviorEnum::Inclusive),
-        "unspecified" => Some(iface_prices::PriceTaxBehaviorEnum::Unspecified),
+        "price" => Some(iface_prices::PriceObjectEnum::Price),
         _ => None,
     }
 }

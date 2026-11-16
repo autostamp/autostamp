@@ -64,6 +64,15 @@ const OP_ACCESS_TOKENS_RESET_TOKEN: OpSpec = OpSpec {
     ],
 };
 
+fn iface_access_tokens__role__to_str(e: &iface_access_tokens::Role) -> &'static str {
+    match e {
+        iface_access_tokens::Role::Writer => "writer",
+        iface_access_tokens::Role::Reader => "reader",
+        iface_access_tokens::Role::Admin => "admin",
+        iface_access_tokens::Role::Owner => "owner",
+    }
+}
+
 fn iface_access_tokens__statement_effect_enum__to_str(e: &iface_access_tokens::StatementEffectEnum) -> &'static str {
     match e {
         iface_access_tokens::StatementEffectEnum::Allow => "allow",
@@ -94,7 +103,7 @@ fn iface_access_tokens__link__to_json(p: &iface_access_tokens::Link) -> Value {
 
 fn iface_access_tokens__token__to_json(p: &iface_access_tokens::Token) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_access_tokens__links__to_json(v), None => Value::Null });
     m.insert("_member".into(), match (&p.member) { Some(v) => iface_access_tokens__member__to_json(v), None => Value::Null });
     m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -103,47 +112,35 @@ fn iface_access_tokens__token__to_json(p: &iface_access_tokens::Token) -> Value 
     m.insert("inlineRole".into(), match (&p.inline_role) { Some(v) => Value::Array((v).iter().map(|v| iface_access_tokens__statement__to_json(v)).collect()), None => Value::Null });
     m.insert("lastModified".into(), match (&p.last_modified) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("lastUsed".into(), match (&p.last_used) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("memberId".into(), match (&p.member_id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("memberId".into(), match (&p.member_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ownerId".into(), match (&p.owner_id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("ownerId".into(), match (&p.owner_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("role".into(), match (&p.role) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("serviceToken".into(), match (&p.service_token) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_access_tokens__id__to_json(p: &iface_access_tokens::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_access_tokens__member__to_json(p: &iface_access_tokens::Member) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_access_tokens__member_last_seen_metadata__to_json(v), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_access_tokens__links__to_json(v), None => Value::Null });
     m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_access_tokens__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("role".into(), match (&p.role) { Some(v) => iface_access_tokens__role__to_json(v), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_access_tokens__role__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_access_tokens__member_last_seen_metadata__to_json(p: &iface_access_tokens::MemberLastSeenMetadata) -> Value {
     let mut m = Map::new();
     m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_access_tokens__role__to_json(p: &iface_access_tokens::Role) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -215,7 +212,7 @@ fn iface_access_tokens__link__from_json(v: &Value) -> Option<iface_access_tokens
 fn iface_access_tokens__token__from_json(v: &Value) -> Option<iface_access_tokens::Token> {
     let m = v.as_object()?;
     Some(iface_access_tokens::Token {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__links__from_json(v)),
         member: m.get("_member").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__member__from_json(v)),
         creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
@@ -224,37 +221,30 @@ fn iface_access_tokens__token__from_json(v: &Value) -> Option<iface_access_token
         inline_role: m.get("inlineRole").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__statement__from_json(x)).collect())),
         last_modified: m.get("lastModified").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         last_used: m.get("lastUsed").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        member_id: m.get("memberId").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        member_id: m.get("memberId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        owner_id: m.get("ownerId").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        owner_id: m.get("ownerId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         service_token: m.get("serviceToken").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         token: m.get("token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_access_tokens__id__from_json(v: &Value) -> Option<iface_access_tokens::Id> {
-    let m = v.as_object()?;
-    Some(iface_access_tokens::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_access_tokens__member__from_json(v: &Value) -> Option<iface_access_tokens::Member> {
     let m = v.as_object()?;
     Some(iface_access_tokens::Member {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__member_last_seen_metadata__from_json(v)),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__links__from_json(v)),
         pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__id__from_json(x)).collect())),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__role__from_json(v)),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_access_tokens__role__from_str)),
     })
 }
 
@@ -262,13 +252,6 @@ fn iface_access_tokens__member_last_seen_metadata__from_json(v: &Value) -> Optio
     let m = v.as_object()?;
     Some(iface_access_tokens::MemberLastSeenMetadata {
         token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_access_tokens__role__from_json(v: &Value) -> Option<iface_access_tokens::Role> {
-    let m = v.as_object()?;
-    Some(iface_access_tokens::Role {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -281,6 +264,16 @@ fn iface_access_tokens__statement__from_json(v: &Value) -> Option<iface_access_t
         not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
+}
+
+fn iface_access_tokens__role__from_str(s: &str) -> Option<iface_access_tokens::Role> {
+    match s {
+        "writer" => Some(iface_access_tokens::Role::Writer),
+        "reader" => Some(iface_access_tokens::Role::Reader),
+        "admin" => Some(iface_access_tokens::Role::Admin),
+        "owner" => Some(iface_access_tokens::Role::Owner),
+        _ => None,
+    }
 }
 
 fn iface_access_tokens__statement_effect_enum__from_str(s: &str) -> Option<iface_access_tokens::StatementEffectEnum> {

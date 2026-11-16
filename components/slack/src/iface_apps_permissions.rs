@@ -31,7 +31,7 @@ const OP_APPS_PERMISSIONS_REQUEST: OpSpec = OpSpec {
 fn iface_apps_permissions__info_response__to_json(p: &iface_apps_permissions::InfoResponse) -> Value {
     let mut m = Map::new();
     m.insert("info".into(), iface_apps_permissions__info_response_info__to_json(&p.info));
-    m.insert("ok".into(), iface_apps_permissions__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -49,7 +49,7 @@ fn iface_apps_permissions__info_response_info__to_json(p: &iface_apps_permission
 fn iface_apps_permissions__info_response_info_app_home__to_json(p: &iface_apps_permissions::InfoResponseInfoAppHome) -> Value {
     let mut m = Map::new();
     m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
-    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -61,56 +61,44 @@ fn iface_apps_permissions__objs_resources__to_json(p: &iface_apps_permissions::O
     Value::Object(m)
 }
 
-fn iface_apps_permissions__objs_scopes__to_json(p: &iface_apps_permissions::ObjsScopes) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_apps_permissions__info_response_info_channel__to_json(p: &iface_apps_permissions::InfoResponseInfoChannel) -> Value {
     let mut m = Map::new();
     m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
-    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_apps_permissions__info_response_info_group__to_json(p: &iface_apps_permissions::InfoResponseInfoGroup) -> Value {
     let mut m = Map::new();
     m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
-    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_apps_permissions__info_response_info_im__to_json(p: &iface_apps_permissions::InfoResponseInfoIm) -> Value {
     let mut m = Map::new();
     m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
-    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_apps_permissions__info_response_info_mpim__to_json(p: &iface_apps_permissions::InfoResponseInfoMpim) -> Value {
     let mut m = Map::new();
     m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
-    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_apps_permissions__info_response_info_team__to_json(p: &iface_apps_permissions::InfoResponseInfoTeam) -> Value {
     let mut m = Map::new();
     m.insert("resources".into(), iface_apps_permissions__objs_resources__to_json(&p.resources));
-    m.insert("scopes".into(), iface_apps_permissions__objs_scopes__to_json(&p.scopes));
-    Value::Object(m)
-}
-
-fn iface_apps_permissions__defs_ok_true__to_json(p: &iface_apps_permissions::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("scopes".into(), Value::Array((&p.scopes).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
 fn iface_apps_permissions__request_response__to_json(p: &iface_apps_permissions::RequestResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_apps_permissions__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -132,7 +120,7 @@ fn iface_apps_permissions__info_response__from_json(v: &Value) -> Option<iface_a
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponse {
         info: match m.get("info").and_then(|v| iface_apps_permissions__info_response_info__from_json(v)) { Some(x) => x, None => return None },
-        ok: match m.get("ok").and_then(|v| iface_apps_permissions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -152,7 +140,7 @@ fn iface_apps_permissions__info_response_info_app_home__from_json(v: &Value) -> 
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponseInfoAppHome {
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
-        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -165,18 +153,11 @@ fn iface_apps_permissions__objs_resources__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_apps_permissions__objs_scopes__from_json(v: &Value) -> Option<iface_apps_permissions::ObjsScopes> {
-    let m = v.as_object()?;
-    Some(iface_apps_permissions::ObjsScopes {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_apps_permissions__info_response_info_channel__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoChannel> {
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponseInfoChannel {
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
-        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -184,7 +165,7 @@ fn iface_apps_permissions__info_response_info_group__from_json(v: &Value) -> Opt
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponseInfoGroup {
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
-        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -192,7 +173,7 @@ fn iface_apps_permissions__info_response_info_im__from_json(v: &Value) -> Option
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponseInfoIm {
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
-        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -200,7 +181,7 @@ fn iface_apps_permissions__info_response_info_mpim__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponseInfoMpim {
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
-        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -208,21 +189,14 @@ fn iface_apps_permissions__info_response_info_team__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_apps_permissions::InfoResponseInfoTeam {
         resources: match m.get("resources").and_then(|v| iface_apps_permissions__objs_resources__from_json(v)) { Some(x) => x, None => return None },
-        scopes: match m.get("scopes").and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_apps_permissions__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_apps_permissions::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        scopes: m.get("scopes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 
 fn iface_apps_permissions__request_response__from_json(v: &Value) -> Option<iface_apps_permissions::RequestResponse> {
     let m = v.as_object()?;
     Some(iface_apps_permissions::RequestResponse {
-        ok: match m.get("ok").and_then(|v| iface_apps_permissions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

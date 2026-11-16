@@ -27,6 +27,21 @@ const OP_WORKFLOW_SCHEME_PROJECT_ASSOCIATIONS_ASSIGN_SCHEME_TO_PROJECT: OpSpec =
     ],
 };
 
+fn iface_workflow_scheme_project_associations__project_details_project_type_key_enum__to_str(e: &iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum) -> &'static str {
+    match e {
+        iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum::Software => "software",
+        iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum::ServiceDesk => "service_desk",
+        iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum::Business => "business",
+    }
+}
+
+fn iface_workflow_scheme_project_associations__scope_type_op_enum__to_str(e: &iface_workflow_scheme_project_associations::ScopeTypeOpEnum) -> &'static str {
+    match e {
+        iface_workflow_scheme_project_associations::ScopeTypeOpEnum::Project => "PROJECT",
+        iface_workflow_scheme_project_associations::ScopeTypeOpEnum::Template => "TEMPLATE",
+    }
+}
+
 fn iface_workflow_scheme_project_associations__user_account_type_enum__to_str(e: &iface_workflow_scheme_project_associations::UserAccountTypeEnum) -> &'static str {
     match e {
         iface_workflow_scheme_project_associations::UserAccountTypeEnum::Atlassian => "atlassian",
@@ -55,27 +70,82 @@ fn iface_workflow_scheme_project_associations__workflow_scheme__to_json(p: &ifac
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("issueTypeMappings".into(), match (&p.issue_type_mappings) { Some(v) => iface_workflow_scheme_project_associations__workflow_scheme_issue_type_mappings__to_json(v), None => Value::Null });
-    m.insert("issueTypes".into(), match (&p.issue_types) { Some(v) => iface_workflow_scheme_project_associations__workflow_scheme_issue_types__to_json(v), None => Value::Null });
+    m.insert("issueTypeMappings".into(), match (&p.issue_type_mappings) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("issueTypes".into(), match (&p.issue_types) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_workflow_scheme_project_associations__issue_type_details__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("lastModified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lastModifiedUser".into(), match (&p.last_modified_user) { Some(v) => iface_workflow_scheme_project_associations__user__to_json(v), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("originalDefaultWorkflow".into(), match (&p.original_default_workflow) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("originalIssueTypeMappings".into(), match (&p.original_issue_type_mappings) { Some(v) => iface_workflow_scheme_project_associations__workflow_scheme_original_issue_type_mappings__to_json(v), None => Value::Null });
+    m.insert("originalIssueTypeMappings".into(), match (&p.original_issue_type_mappings) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updateDraftIfNeeded".into(), match (&p.update_draft_if_needed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_workflow_scheme_project_associations__workflow_scheme_issue_type_mappings__to_json(p: &iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappings) -> Value {
+fn iface_workflow_scheme_project_associations__workflow_scheme_issue_type_mappings_entry__to_json(p: &iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappingsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_workflow_scheme_project_associations__workflow_scheme_issue_types__to_json(p: &iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypes) -> Value {
+fn iface_workflow_scheme_project_associations__issue_type_details__to_json(p: &iface_workflow_scheme_project_associations::IssueTypeDetails) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("avatarId".into(), match (&p.avatar_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("entityId".into(), match (&p.entity_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hierarchyLevel".into(), match (&p.hierarchy_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("iconUrl".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => iface_workflow_scheme_project_associations__scope__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subtask".into(), match (&p.subtask) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workflow_scheme_project_associations__scope__to_json(p: &iface_workflow_scheme_project_associations::Scope) -> Value {
+    let mut m = Map::new();
+    m.insert("project".into(), match (&p.project) { Some(v) => iface_workflow_scheme_project_associations__project_details__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_workflow_scheme_project_associations__scope_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workflow_scheme_project_associations__project_details__to_json(p: &iface_workflow_scheme_project_associations::ProjectDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("avatarUrls".into(), match (&p.avatar_urls) { Some(v) => iface_workflow_scheme_project_associations__avatar_urls_bean__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectCategory".into(), match (&p.project_category) { Some(v) => iface_workflow_scheme_project_associations__updated_project_category__to_json(v), None => Value::Null });
+    m.insert("projectTypeKey".into(), match (&p.project_type_key) { Some(v) => Value::String(iface_workflow_scheme_project_associations__project_details_project_type_key_enum__to_str(v).into()), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("simplified".into(), match (&p.simplified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workflow_scheme_project_associations__avatar_urls_bean__to_json(p: &iface_workflow_scheme_project_associations::AvatarUrlsBean) -> Value {
+    let mut m = Map::new();
+    m.insert("16x16".into(), match (&p.v16x16) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("24x24".into(), match (&p.v24x24) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("32x32".into(), match (&p.v32x32) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("48x48".into(), match (&p.v48x48) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workflow_scheme_project_associations__updated_project_category__to_json(p: &iface_workflow_scheme_project_associations::UpdatedProjectCategory) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workflow_scheme_project_associations__workflow_scheme_issue_types_entry__to_json(p: &iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_workflow_scheme_project_associations__issue_type_details__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -141,15 +211,6 @@ fn iface_workflow_scheme_project_associations__group_name__to_json(p: &iface_wor
     Value::Object(m)
 }
 
-fn iface_workflow_scheme_project_associations__avatar_urls_bean__to_json(p: &iface_workflow_scheme_project_associations::AvatarUrlsBean) -> Value {
-    let mut m = Map::new();
-    m.insert("16x16".into(), match (&p.v16x16) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("24x24".into(), match (&p.v24x24) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("32x32".into(), match (&p.v32x32) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("48x48".into(), match (&p.v48x48) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
 fn iface_workflow_scheme_project_associations__simple_list_wrapper_group_name__to_json(p: &iface_workflow_scheme_project_associations::SimpleListWrapperGroupName) -> Value {
     let mut m = Map::new();
     m.insert("callback".into(), match (&p.callback) { Some(v) => iface_workflow_scheme_project_associations__list_wrapper_callback_group_name__to_json(v), None => Value::Null });
@@ -166,9 +227,10 @@ fn iface_workflow_scheme_project_associations__list_wrapper_callback_group_name_
     Value::Object(m)
 }
 
-fn iface_workflow_scheme_project_associations__workflow_scheme_original_issue_type_mappings__to_json(p: &iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappings) -> Value {
+fn iface_workflow_scheme_project_associations__workflow_scheme_original_issue_type_mappings_entry__to_json(p: &iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappingsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -207,29 +269,89 @@ fn iface_workflow_scheme_project_associations__workflow_scheme__from_json(v: &Va
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         draft: m.get("draft").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        issue_type_mappings: m.get("issueTypeMappings").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__workflow_scheme_issue_type_mappings__from_json(v)),
-        issue_types: m.get("issueTypes").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__workflow_scheme_issue_types__from_json(v)),
+        issue_type_mappings: m.get("issueTypeMappings").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappingsEntry { key: k.clone(), value: val })).collect())),
+        issue_types: m.get("issueTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_workflow_scheme_project_associations__issue_type_details__from_json(x)).map(|val| iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypesEntry { key: k.clone(), value: val })).collect())),
         last_modified: m.get("lastModified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_modified_user: m.get("lastModifiedUser").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__user__from_json(v)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         original_default_workflow: m.get("originalDefaultWorkflow").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        original_issue_type_mappings: m.get("originalIssueTypeMappings").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__workflow_scheme_original_issue_type_mappings__from_json(v)),
+        original_issue_type_mappings: m.get("originalIssueTypeMappings").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappingsEntry { key: k.clone(), value: val })).collect())),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         update_draft_if_needed: m.get("updateDraftIfNeeded").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_workflow_scheme_project_associations__workflow_scheme_issue_type_mappings__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappings> {
+fn iface_workflow_scheme_project_associations__workflow_scheme_issue_type_mappings_entry__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappingsEntry> {
     let m = v.as_object()?;
-    Some(iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappings {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypeMappingsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_workflow_scheme_project_associations__workflow_scheme_issue_types__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypes> {
+fn iface_workflow_scheme_project_associations__issue_type_details__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::IssueTypeDetails> {
     let m = v.as_object()?;
-    Some(iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workflow_scheme_project_associations::IssueTypeDetails {
+        avatar_id: m.get("avatarId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        entity_id: m.get("entityId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hierarchy_level: m.get("hierarchyLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        icon_url: m.get("iconUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__scope__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subtask: m.get("subtask").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_workflow_scheme_project_associations__scope__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::Scope> {
+    let m = v.as_object()?;
+    Some(iface_workflow_scheme_project_associations::Scope {
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__project_details__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_workflow_scheme_project_associations__scope_type_op_enum__from_str)),
+    })
+}
+
+fn iface_workflow_scheme_project_associations__project_details__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::ProjectDetails> {
+    let m = v.as_object()?;
+    Some(iface_workflow_scheme_project_associations::ProjectDetails {
+        avatar_urls: m.get("avatarUrls").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__avatar_urls_bean__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_category: m.get("projectCategory").filter(|v| !v.is_null()).and_then(|v| iface_workflow_scheme_project_associations__updated_project_category__from_json(v)),
+        project_type_key: m.get("projectTypeKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_workflow_scheme_project_associations__project_details_project_type_key_enum__from_str)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        simplified: m.get("simplified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_workflow_scheme_project_associations__avatar_urls_bean__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::AvatarUrlsBean> {
+    let m = v.as_object()?;
+    Some(iface_workflow_scheme_project_associations::AvatarUrlsBean {
+        v16x16: m.get("16x16").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        v24x24: m.get("24x24").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        v32x32: m.get("32x32").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        v48x48: m.get("48x48").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workflow_scheme_project_associations__updated_project_category__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::UpdatedProjectCategory> {
+    let m = v.as_object()?;
+    Some(iface_workflow_scheme_project_associations::UpdatedProjectCategory {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workflow_scheme_project_associations__workflow_scheme_issue_types_entry__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypesEntry> {
+    let m = v.as_object()?;
+    Some(iface_workflow_scheme_project_associations::WorkflowSchemeIssueTypesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_workflow_scheme_project_associations__issue_type_details__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -300,16 +422,6 @@ fn iface_workflow_scheme_project_associations__group_name__from_json(v: &Value) 
     })
 }
 
-fn iface_workflow_scheme_project_associations__avatar_urls_bean__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::AvatarUrlsBean> {
-    let m = v.as_object()?;
-    Some(iface_workflow_scheme_project_associations::AvatarUrlsBean {
-        v16x16: m.get("16x16").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        v24x24: m.get("24x24").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        v32x32: m.get("32x32").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        v48x48: m.get("48x48").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
 fn iface_workflow_scheme_project_associations__simple_list_wrapper_group_name__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::SimpleListWrapperGroupName> {
     let m = v.as_object()?;
     Some(iface_workflow_scheme_project_associations::SimpleListWrapperGroupName {
@@ -328,11 +440,29 @@ fn iface_workflow_scheme_project_associations__list_wrapper_callback_group_name_
     })
 }
 
-fn iface_workflow_scheme_project_associations__workflow_scheme_original_issue_type_mappings__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappings> {
+fn iface_workflow_scheme_project_associations__workflow_scheme_original_issue_type_mappings_entry__from_json(v: &Value) -> Option<iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappingsEntry> {
     let m = v.as_object()?;
-    Some(iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappings {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workflow_scheme_project_associations::WorkflowSchemeOriginalIssueTypeMappingsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_workflow_scheme_project_associations__project_details_project_type_key_enum__from_str(s: &str) -> Option<iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum> {
+    match s {
+        "software" => Some(iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum::Software),
+        "service_desk" => Some(iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum::ServiceDesk),
+        "business" => Some(iface_workflow_scheme_project_associations::ProjectDetailsProjectTypeKeyEnum::Business),
+        _ => None,
+    }
+}
+
+fn iface_workflow_scheme_project_associations__scope_type_op_enum__from_str(s: &str) -> Option<iface_workflow_scheme_project_associations::ScopeTypeOpEnum> {
+    match s {
+        "PROJECT" => Some(iface_workflow_scheme_project_associations::ScopeTypeOpEnum::Project),
+        "TEMPLATE" => Some(iface_workflow_scheme_project_associations::ScopeTypeOpEnum::Template),
+        _ => None,
+    }
 }
 
 fn iface_workflow_scheme_project_associations__user_account_type_enum__from_str(s: &str) -> Option<iface_workflow_scheme_project_associations::UserAccountTypeEnum> {

@@ -104,7 +104,7 @@ fn iface_orders__order__to_json(p: &iface_orders::Order) -> Value {
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__order_line_item__to_json(v)).collect()), None => Value::Null });
     m.insert("location_id".into(), Value::String((&p.location_id).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_orders__order_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("net_amounts".into(), match (&p.net_amounts) { Some(v) => iface_orders__order_money_amounts__to_json(v), None => Value::Null });
     m.insert("pricing_options".into(), match (&p.pricing_options) { Some(v) => iface_orders__order_pricing_options__to_json(v), None => Value::Null });
     m.insert("reference_id".into(), match (&p.reference_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -134,7 +134,7 @@ fn iface_orders__order_line_item_discount__to_json(p: &iface_orders::OrderLineIt
     m.insert("applied_money".into(), match (&p.applied_money) { Some(v) => iface_orders__money__to_json(v), None => Value::Null });
     m.insert("catalog_object_id".into(), match (&p.catalog_object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_version".into(), match (&p.catalog_version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_orders__order_line_item_discount_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("percentage".into(), match (&p.percentage) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("pricing_rule_id".into(), match (&p.pricing_rule_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -152,15 +152,16 @@ fn iface_orders__money__to_json(p: &iface_orders::Money) -> Value {
     Value::Object(m)
 }
 
-fn iface_orders__order_line_item_discount_metadata__to_json(p: &iface_orders::OrderLineItemDiscountMetadata) -> Value {
+fn iface_orders__order_line_item_discount_metadata_entry__to_json(p: &iface_orders::OrderLineItemDiscountMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_orders__order_fulfillment__to_json(p: &iface_orders::OrderFulfillment) -> Value {
     let mut m = Map::new();
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_orders__order_fulfillment_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("pickup_details".into(), match (&p.pickup_details) { Some(v) => iface_orders__order_fulfillment_pickup_details__to_json(v), None => Value::Null });
     m.insert("shipment_details".into(), match (&p.shipment_details) { Some(v) => iface_orders__order_fulfillment_shipment_details__to_json(v), None => Value::Null });
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -169,9 +170,10 @@ fn iface_orders__order_fulfillment__to_json(p: &iface_orders::OrderFulfillment) 
     Value::Object(m)
 }
 
-fn iface_orders__order_fulfillment_metadata__to_json(p: &iface_orders::OrderFulfillmentMetadata) -> Value {
+fn iface_orders__order_fulfillment_metadata_entry__to_json(p: &iface_orders::OrderFulfillmentMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -264,7 +266,7 @@ fn iface_orders__order_line_item__to_json(p: &iface_orders::OrderLineItem) -> Va
     m.insert("catalog_version".into(), match (&p.catalog_version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("gross_sales_money".into(), match (&p.gross_sales_money) { Some(v) => iface_orders__money__to_json(v), None => Value::Null });
     m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_orders__order_line_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("modifiers".into(), match (&p.modifiers) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__order_line_item_modifier__to_json(v)).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("note".into(), match (&p.note) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -296,9 +298,10 @@ fn iface_orders__order_line_item_applied_tax__to_json(p: &iface_orders::OrderLin
     Value::Object(m)
 }
 
-fn iface_orders__order_line_item_metadata__to_json(p: &iface_orders::OrderLineItemMetadata) -> Value {
+fn iface_orders__order_line_item_metadata_entry__to_json(p: &iface_orders::OrderLineItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -364,9 +367,10 @@ fn iface_orders__measurement_unit_custom__to_json(p: &iface_orders::MeasurementU
     Value::Object(m)
 }
 
-fn iface_orders__order_metadata__to_json(p: &iface_orders::OrderMetadata) -> Value {
+fn iface_orders__order_metadata_entry__to_json(p: &iface_orders::OrderMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -530,7 +534,7 @@ fn iface_orders__order_service_charge__to_json(p: &iface_orders::OrderServiceCha
     m.insert("calculation_phase".into(), match (&p.calculation_phase) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_object_id".into(), match (&p.catalog_object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_version".into(), match (&p.catalog_version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_orders__order_service_charge_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("percentage".into(), match (&p.percentage) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("taxable".into(), match (&p.taxable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -541,9 +545,10 @@ fn iface_orders__order_service_charge__to_json(p: &iface_orders::OrderServiceCha
     Value::Object(m)
 }
 
-fn iface_orders__order_service_charge_metadata__to_json(p: &iface_orders::OrderServiceChargeMetadata) -> Value {
+fn iface_orders__order_service_charge_metadata_entry__to_json(p: &iface_orders::OrderServiceChargeMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -559,7 +564,7 @@ fn iface_orders__order_line_item_tax__to_json(p: &iface_orders::OrderLineItemTax
     m.insert("auto_applied".into(), match (&p.auto_applied) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("catalog_object_id".into(), match (&p.catalog_object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_version".into(), match (&p.catalog_version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_orders__order_line_item_tax_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("percentage".into(), match (&p.percentage) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -568,9 +573,10 @@ fn iface_orders__order_line_item_tax__to_json(p: &iface_orders::OrderLineItemTax
     Value::Object(m)
 }
 
-fn iface_orders__order_line_item_tax_metadata__to_json(p: &iface_orders::OrderLineItemTaxMetadata) -> Value {
+fn iface_orders__order_line_item_tax_metadata_entry__to_json(p: &iface_orders::OrderLineItemTaxMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -826,7 +832,7 @@ fn iface_orders__order__from_json(v: &Value) -> Option<iface_orders::Order> {
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         line_items: m.get("line_items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__order_line_item__from_json(x)).collect())),
         location_id: m.get("location_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders::OrderMetadataEntry { key: k.clone(), value: val })).collect())),
         net_amounts: m.get("net_amounts").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_money_amounts__from_json(v)),
         pricing_options: m.get("pricing_options").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_pricing_options__from_json(v)),
         reference_id: m.get("reference_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -857,7 +863,7 @@ fn iface_orders__order_line_item_discount__from_json(v: &Value) -> Option<iface_
         applied_money: m.get("applied_money").filter(|v| !v.is_null()).and_then(|v| iface_orders__money__from_json(v)),
         catalog_object_id: m.get("catalog_object_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         catalog_version: m.get("catalog_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_line_item_discount_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders::OrderLineItemDiscountMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         percentage: m.get("percentage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         pricing_rule_id: m.get("pricing_rule_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -876,17 +882,18 @@ fn iface_orders__money__from_json(v: &Value) -> Option<iface_orders::Money> {
     })
 }
 
-fn iface_orders__order_line_item_discount_metadata__from_json(v: &Value) -> Option<iface_orders::OrderLineItemDiscountMetadata> {
+fn iface_orders__order_line_item_discount_metadata_entry__from_json(v: &Value) -> Option<iface_orders::OrderLineItemDiscountMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_orders::OrderLineItemDiscountMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders::OrderLineItemDiscountMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_orders__order_fulfillment__from_json(v: &Value) -> Option<iface_orders::OrderFulfillment> {
     let m = v.as_object()?;
     Some(iface_orders::OrderFulfillment {
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_fulfillment_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders::OrderFulfillmentMetadataEntry { key: k.clone(), value: val })).collect())),
         pickup_details: m.get("pickup_details").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_fulfillment_pickup_details__from_json(v)),
         shipment_details: m.get("shipment_details").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_fulfillment_shipment_details__from_json(v)),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -895,10 +902,11 @@ fn iface_orders__order_fulfillment__from_json(v: &Value) -> Option<iface_orders:
     })
 }
 
-fn iface_orders__order_fulfillment_metadata__from_json(v: &Value) -> Option<iface_orders::OrderFulfillmentMetadata> {
+fn iface_orders__order_fulfillment_metadata_entry__from_json(v: &Value) -> Option<iface_orders::OrderFulfillmentMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_orders::OrderFulfillmentMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders::OrderFulfillmentMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -997,7 +1005,7 @@ fn iface_orders__order_line_item__from_json(v: &Value) -> Option<iface_orders::O
         catalog_version: m.get("catalog_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         gross_sales_money: m.get("gross_sales_money").filter(|v| !v.is_null()).and_then(|v| iface_orders__money__from_json(v)),
         item_type: m.get("item_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_line_item_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders::OrderLineItemMetadataEntry { key: k.clone(), value: val })).collect())),
         modifiers: m.get("modifiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__order_line_item_modifier__from_json(x)).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         note: m.get("note").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1031,10 +1039,11 @@ fn iface_orders__order_line_item_applied_tax__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_orders__order_line_item_metadata__from_json(v: &Value) -> Option<iface_orders::OrderLineItemMetadata> {
+fn iface_orders__order_line_item_metadata_entry__from_json(v: &Value) -> Option<iface_orders::OrderLineItemMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_orders::OrderLineItemMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders::OrderLineItemMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1107,10 +1116,11 @@ fn iface_orders__measurement_unit_custom__from_json(v: &Value) -> Option<iface_o
     })
 }
 
-fn iface_orders__order_metadata__from_json(v: &Value) -> Option<iface_orders::OrderMetadata> {
+fn iface_orders__order_metadata_entry__from_json(v: &Value) -> Option<iface_orders::OrderMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_orders::OrderMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders::OrderMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1287,7 +1297,7 @@ fn iface_orders__order_service_charge__from_json(v: &Value) -> Option<iface_orde
         calculation_phase: m.get("calculation_phase").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         catalog_object_id: m.get("catalog_object_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         catalog_version: m.get("catalog_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_service_charge_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders::OrderServiceChargeMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         percentage: m.get("percentage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         taxable: m.get("taxable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -1298,10 +1308,11 @@ fn iface_orders__order_service_charge__from_json(v: &Value) -> Option<iface_orde
     })
 }
 
-fn iface_orders__order_service_charge_metadata__from_json(v: &Value) -> Option<iface_orders::OrderServiceChargeMetadata> {
+fn iface_orders__order_service_charge_metadata_entry__from_json(v: &Value) -> Option<iface_orders::OrderServiceChargeMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_orders::OrderServiceChargeMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders::OrderServiceChargeMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1319,7 +1330,7 @@ fn iface_orders__order_line_item_tax__from_json(v: &Value) -> Option<iface_order
         auto_applied: m.get("auto_applied").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         catalog_object_id: m.get("catalog_object_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         catalog_version: m.get("catalog_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_line_item_tax_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders::OrderLineItemTaxMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         percentage: m.get("percentage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1328,10 +1339,11 @@ fn iface_orders__order_line_item_tax__from_json(v: &Value) -> Option<iface_order
     })
 }
 
-fn iface_orders__order_line_item_tax_metadata__from_json(v: &Value) -> Option<iface_orders::OrderLineItemTaxMetadata> {
+fn iface_orders__order_line_item_tax_metadata_entry__from_json(v: &Value) -> Option<iface_orders::OrderLineItemTaxMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_orders::OrderLineItemTaxMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders::OrderLineItemTaxMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

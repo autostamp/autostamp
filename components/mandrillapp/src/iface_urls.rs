@@ -86,21 +86,48 @@ fn iface_urls__tracking_domain_status_cname__to_json(p: &iface_urls::TrackingDom
     Value::Object(m)
 }
 
-fn iface_urls__url_infos__to_json(p: &iface_urls::UrlInfos) -> Value {
+fn iface_urls__url_infos_item__to_json(p: &iface_urls::UrlInfosItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_urls__time_series_response__to_json(p: &iface_urls::TimeSeriesResponse) -> Value {
+fn iface_urls__url_infos_item_v2__to_json(p: &iface_urls::UrlInfosItemV2) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_urls__tracking_domains_response__to_json(p: &iface_urls::TrackingDomainsResponse) -> Value {
+fn iface_urls__time_series_response_item__to_json(p: &iface_urls::TimeSeriesResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_urls__tracking_domains_response_item__to_json(p: &iface_urls::TrackingDomainsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("cname".into(), match (&p.cname) { Some(v) => iface_urls__tracking_domains_response_item_cname__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_tested_at".into(), match (&p.last_tested_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valid_tracking".into(), match (&p.valid_tracking) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_urls__tracking_domains_response_item_cname__to_json(p: &iface_urls::TrackingDomainsResponseItemCname) -> Value {
+    let mut m = Map::new();
+    m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valid".into(), match (&p.valid) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("valid_after".into(), match (&p.valid_after) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -164,24 +191,53 @@ fn iface_urls__tracking_domain_status_cname__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_urls__url_infos__from_json(v: &Value) -> Option<iface_urls::UrlInfos> {
+fn iface_urls__url_infos_item__from_json(v: &Value) -> Option<iface_urls::UrlInfosItem> {
     let m = v.as_object()?;
-    Some(iface_urls::UrlInfos {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_urls::UrlInfosItem {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_urls__time_series_response__from_json(v: &Value) -> Option<iface_urls::TimeSeriesResponse> {
+fn iface_urls__url_infos_item_v2__from_json(v: &Value) -> Option<iface_urls::UrlInfosItemV2> {
     let m = v.as_object()?;
-    Some(iface_urls::TimeSeriesResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_urls::UrlInfosItemV2 {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_urls__tracking_domains_response__from_json(v: &Value) -> Option<iface_urls::TrackingDomainsResponse> {
+fn iface_urls__time_series_response_item__from_json(v: &Value) -> Option<iface_urls::TimeSeriesResponseItem> {
     let m = v.as_object()?;
-    Some(iface_urls::TrackingDomainsResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_urls::TimeSeriesResponseItem {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_urls__tracking_domains_response_item__from_json(v: &Value) -> Option<iface_urls::TrackingDomainsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_urls::TrackingDomainsResponseItem {
+        cname: m.get("cname").filter(|v| !v.is_null()).and_then(|v| iface_urls__tracking_domains_response_item_cname__from_json(v)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_tested_at: m.get("last_tested_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_tracking: m.get("valid_tracking").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_urls__tracking_domains_response_item_cname__from_json(v: &Value) -> Option<iface_urls::TrackingDomainsResponseItemCname> {
+    let m = v.as_object()?;
+    Some(iface_urls::TrackingDomainsResponseItemCname {
+        error: m.get("error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid: m.get("valid").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        valid_after: m.get("valid_after").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -221,12 +277,12 @@ fn iface_urls__post_urls_check_tracking_domain_json__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_urls__post_urls_list_json__ok(body: String) -> Result<iface_urls::UrlInfos, crate::runtime::DispatchError> {
+fn iface_urls__post_urls_list_json__ok(body: String) -> Result<Vec<iface_urls::UrlInfosItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_urls__url_infos__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_urls__url_infos_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -239,12 +295,12 @@ fn iface_urls__post_urls_list_json__err(e: crate::runtime::DispatchError) -> Str
     }
 }
 
-fn iface_urls__post_urls_search_json__ok(body: String) -> Result<iface_urls::UrlInfos, crate::runtime::DispatchError> {
+fn iface_urls__post_urls_search_json__ok(body: String) -> Result<Vec<iface_urls::UrlInfosItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_urls__url_infos__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_urls__url_infos_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -257,12 +313,12 @@ fn iface_urls__post_urls_search_json__err(e: crate::runtime::DispatchError) -> S
     }
 }
 
-fn iface_urls__post_urls_time_series_json__ok(body: String) -> Result<iface_urls::TimeSeriesResponse, crate::runtime::DispatchError> {
+fn iface_urls__post_urls_time_series_json__ok(body: String) -> Result<Vec<iface_urls::TimeSeriesResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_urls__time_series_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_urls__time_series_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -275,12 +331,12 @@ fn iface_urls__post_urls_time_series_json__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_urls__post_urls_tracking_domains_json__ok(body: String) -> Result<iface_urls::TrackingDomainsResponse, crate::runtime::DispatchError> {
+fn iface_urls__post_urls_tracking_domains_json__ok(body: String) -> Result<Vec<iface_urls::TrackingDomainsResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_urls__tracking_domains_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_urls__tracking_domains_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -308,28 +364,28 @@ impl iface_urls::Guest for crate::Component {
             Err(e) => Err(iface_urls__post_urls_check_tracking_domain_json__err(e)),
         }
     }
-    fn post_urls_list_json(params: iface_urls::PostUrlsListJsonParams) -> Result<iface_urls::UrlInfos, String> {
+    fn post_urls_list_json(params: iface_urls::PostUrlsListJsonParams) -> Result<Vec<iface_urls::UrlInfosItem>, String> {
         let json = iface_urls__post_urls_list_json_params__to_json(&params);
         match dispatch(&OP_URLS_POST_URLS_LIST_JSON, json).and_then(iface_urls__post_urls_list_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_urls__post_urls_list_json__err(e)),
         }
     }
-    fn post_urls_search_json(params: iface_urls::PostUrlsSearchJsonParams) -> Result<iface_urls::UrlInfos, String> {
+    fn post_urls_search_json(params: iface_urls::PostUrlsSearchJsonParams) -> Result<Vec<iface_urls::UrlInfosItemV2>, String> {
         let json = iface_urls__post_urls_search_json_params__to_json(&params);
         match dispatch(&OP_URLS_POST_URLS_SEARCH_JSON, json).and_then(iface_urls__post_urls_search_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_urls__post_urls_search_json__err(e)),
         }
     }
-    fn post_urls_time_series_json(params: iface_urls::PostUrlsTimeSeriesJsonParams) -> Result<iface_urls::TimeSeriesResponse, String> {
+    fn post_urls_time_series_json(params: iface_urls::PostUrlsTimeSeriesJsonParams) -> Result<Vec<iface_urls::TimeSeriesResponseItem>, String> {
         let json = iface_urls__post_urls_time_series_json_params__to_json(&params);
         match dispatch(&OP_URLS_POST_URLS_TIME_SERIES_JSON, json).and_then(iface_urls__post_urls_time_series_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_urls__post_urls_time_series_json__err(e)),
         }
     }
-    fn post_urls_tracking_domains_json(params: iface_urls::PostUrlsTrackingDomainsJsonParams) -> Result<iface_urls::TrackingDomainsResponse, String> {
+    fn post_urls_tracking_domains_json(params: iface_urls::PostUrlsTrackingDomainsJsonParams) -> Result<Vec<iface_urls::TrackingDomainsResponseItem>, String> {
         let json = iface_urls__post_urls_tracking_domains_json_params__to_json(&params);
         match dispatch(&OP_URLS_POST_URLS_TRACKING_DOMAINS_JSON, json).and_then(iface_urls__post_urls_tracking_domains_json__ok) {
             Ok(v) => Ok(v),

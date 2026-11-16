@@ -237,9 +237,10 @@ fn iface_meal_planning__generate_meal_plan_response_nutrients__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_meal_planning__clear_meal_plan_day_response__to_json(p: &iface_meal_planning::ClearMealPlanDayResponse) -> Value {
+fn iface_meal_planning__clear_meal_plan_day_response_entry__to_json(p: &iface_meal_planning::ClearMealPlanDayResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -255,15 +256,17 @@ fn iface_meal_planning__add_to_meal_plan_body_value_ingredients_item__to_json(p:
     Value::Object(m)
 }
 
-fn iface_meal_planning__add_to_meal_plan_response__to_json(p: &iface_meal_planning::AddToMealPlanResponse) -> Value {
+fn iface_meal_planning__add_to_meal_plan_response_entry__to_json(p: &iface_meal_planning::AddToMealPlanResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_meal_planning__delete_from_meal_plan_response__to_json(p: &iface_meal_planning::DeleteFromMealPlanResponse) -> Value {
+fn iface_meal_planning__delete_from_meal_plan_response_entry__to_json(p: &iface_meal_planning::DeleteFromMealPlanResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -381,9 +384,10 @@ fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_mea
     Value::Object(m)
 }
 
-fn iface_meal_planning__delete_from_shopping_list_response__to_json(p: &iface_meal_planning::DeleteFromShoppingListResponse) -> Value {
+fn iface_meal_planning__delete_from_shopping_list_response_entry__to_json(p: &iface_meal_planning::DeleteFromShoppingListResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -581,9 +585,10 @@ fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summ
     Value::Object(m)
 }
 
-fn iface_meal_planning__delete_meal_plan_template_response__to_json(p: &iface_meal_planning::DeleteMealPlanTemplateResponse) -> Value {
+fn iface_meal_planning__delete_meal_plan_template_response_entry__to_json(p: &iface_meal_planning::DeleteMealPlanTemplateResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -857,24 +862,27 @@ fn iface_meal_planning__generate_meal_plan_response_nutrients__from_json(v: &Val
     })
 }
 
-fn iface_meal_planning__clear_meal_plan_day_response__from_json(v: &Value) -> Option<iface_meal_planning::ClearMealPlanDayResponse> {
+fn iface_meal_planning__clear_meal_plan_day_response_entry__from_json(v: &Value) -> Option<iface_meal_planning::ClearMealPlanDayResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_meal_planning::ClearMealPlanDayResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_meal_planning::ClearMealPlanDayResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_meal_planning__add_to_meal_plan_response__from_json(v: &Value) -> Option<iface_meal_planning::AddToMealPlanResponse> {
+fn iface_meal_planning__add_to_meal_plan_response_entry__from_json(v: &Value) -> Option<iface_meal_planning::AddToMealPlanResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_meal_planning::AddToMealPlanResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_meal_planning::AddToMealPlanResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_meal_planning__delete_from_meal_plan_response__from_json(v: &Value) -> Option<iface_meal_planning::DeleteFromMealPlanResponse> {
+fn iface_meal_planning__delete_from_meal_plan_response_entry__from_json(v: &Value) -> Option<iface_meal_planning::DeleteFromMealPlanResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_meal_planning::DeleteFromMealPlanResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_meal_planning::DeleteFromMealPlanResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1006,10 +1014,11 @@ fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_mea
     })
 }
 
-fn iface_meal_planning__delete_from_shopping_list_response__from_json(v: &Value) -> Option<iface_meal_planning::DeleteFromShoppingListResponse> {
+fn iface_meal_planning__delete_from_shopping_list_response_entry__from_json(v: &Value) -> Option<iface_meal_planning::DeleteFromShoppingListResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_meal_planning::DeleteFromShoppingListResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_meal_planning::DeleteFromShoppingListResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1231,10 +1240,11 @@ fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summ
     })
 }
 
-fn iface_meal_planning__delete_meal_plan_template_response__from_json(v: &Value) -> Option<iface_meal_planning::DeleteMealPlanTemplateResponse> {
+fn iface_meal_planning__delete_meal_plan_template_response_entry__from_json(v: &Value) -> Option<iface_meal_planning::DeleteMealPlanTemplateResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_meal_planning::DeleteMealPlanTemplateResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_meal_planning::DeleteMealPlanTemplateResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1378,12 +1388,12 @@ fn iface_meal_planning__generate_meal_plan__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_meal_planning__clear_meal_plan_day__ok(body: String) -> Result<iface_meal_planning::ClearMealPlanDayResponse, crate::runtime::DispatchError> {
+fn iface_meal_planning__clear_meal_plan_day__ok(body: String) -> Result<Vec<iface_meal_planning::ClearMealPlanDayResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_meal_planning__clear_meal_plan_day_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_meal_planning::ClearMealPlanDayResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1401,12 +1411,12 @@ fn iface_meal_planning__clear_meal_plan_day__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_meal_planning__add_to_meal_plan__ok(body: String) -> Result<iface_meal_planning::AddToMealPlanResponse, crate::runtime::DispatchError> {
+fn iface_meal_planning__add_to_meal_plan__ok(body: String) -> Result<Vec<iface_meal_planning::AddToMealPlanResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_meal_planning__add_to_meal_plan_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_meal_planning::AddToMealPlanResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1424,12 +1434,12 @@ fn iface_meal_planning__add_to_meal_plan__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_meal_planning__delete_from_meal_plan__ok(body: String) -> Result<iface_meal_planning::DeleteFromMealPlanResponse, crate::runtime::DispatchError> {
+fn iface_meal_planning__delete_from_meal_plan__ok(body: String) -> Result<Vec<iface_meal_planning::DeleteFromMealPlanResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_meal_planning__delete_from_meal_plan_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_meal_planning::DeleteFromMealPlanResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1493,12 +1503,12 @@ fn iface_meal_planning__add_to_shopping_list__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_meal_planning__delete_from_shopping_list__ok(body: String) -> Result<iface_meal_planning::DeleteFromShoppingListResponse, crate::runtime::DispatchError> {
+fn iface_meal_planning__delete_from_shopping_list__ok(body: String) -> Result<Vec<iface_meal_planning::DeleteFromShoppingListResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_meal_planning__delete_from_shopping_list_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_meal_planning::DeleteFromShoppingListResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1608,12 +1618,12 @@ fn iface_meal_planning__get_meal_plan_template__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_meal_planning__delete_meal_plan_template__ok(body: String) -> Result<iface_meal_planning::DeleteMealPlanTemplateResponse, crate::runtime::DispatchError> {
+fn iface_meal_planning__delete_meal_plan_template__ok(body: String) -> Result<Vec<iface_meal_planning::DeleteMealPlanTemplateResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_meal_planning__delete_meal_plan_template_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_meal_planning::DeleteMealPlanTemplateResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1685,21 +1695,21 @@ impl iface_meal_planning::Guest for crate::Component {
             Err(e) => Err(iface_meal_planning__generate_meal_plan__err(e)),
         }
     }
-    fn clear_meal_plan_day(params: iface_meal_planning::ClearMealPlanDayParams) -> Result<iface_meal_planning::ClearMealPlanDayResponse, iface_meal_planning::ClearMealPlanDayError> {
+    fn clear_meal_plan_day(params: iface_meal_planning::ClearMealPlanDayParams) -> Result<Vec<iface_meal_planning::ClearMealPlanDayResponseEntry>, iface_meal_planning::ClearMealPlanDayError> {
         let json = iface_meal_planning__clear_meal_plan_day_params__to_json(&params);
         match dispatch(&OP_MEAL_PLANNING_CLEAR_MEAL_PLAN_DAY, json).and_then(iface_meal_planning__clear_meal_plan_day__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_meal_planning__clear_meal_plan_day__err(e)),
         }
     }
-    fn add_to_meal_plan(params: iface_meal_planning::AddToMealPlanParams) -> Result<iface_meal_planning::AddToMealPlanResponse, iface_meal_planning::AddToMealPlanError> {
+    fn add_to_meal_plan(params: iface_meal_planning::AddToMealPlanParams) -> Result<Vec<iface_meal_planning::AddToMealPlanResponseEntry>, iface_meal_planning::AddToMealPlanError> {
         let json = iface_meal_planning__add_to_meal_plan_params__to_json(&params);
         match dispatch(&OP_MEAL_PLANNING_ADD_TO_MEAL_PLAN, json).and_then(iface_meal_planning__add_to_meal_plan__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_meal_planning__add_to_meal_plan__err(e)),
         }
     }
-    fn delete_from_meal_plan(params: iface_meal_planning::DeleteFromMealPlanParams) -> Result<iface_meal_planning::DeleteFromMealPlanResponse, iface_meal_planning::DeleteFromMealPlanError> {
+    fn delete_from_meal_plan(params: iface_meal_planning::DeleteFromMealPlanParams) -> Result<Vec<iface_meal_planning::DeleteFromMealPlanResponseEntry>, iface_meal_planning::DeleteFromMealPlanError> {
         let json = iface_meal_planning__delete_from_meal_plan_params__to_json(&params);
         match dispatch(&OP_MEAL_PLANNING_DELETE_FROM_MEAL_PLAN, json).and_then(iface_meal_planning__delete_from_meal_plan__ok) {
             Ok(v) => Ok(v),
@@ -1720,7 +1730,7 @@ impl iface_meal_planning::Guest for crate::Component {
             Err(e) => Err(iface_meal_planning__add_to_shopping_list__err(e)),
         }
     }
-    fn delete_from_shopping_list(params: iface_meal_planning::DeleteFromShoppingListParams) -> Result<iface_meal_planning::DeleteFromShoppingListResponse, iface_meal_planning::DeleteFromShoppingListError> {
+    fn delete_from_shopping_list(params: iface_meal_planning::DeleteFromShoppingListParams) -> Result<Vec<iface_meal_planning::DeleteFromShoppingListResponseEntry>, iface_meal_planning::DeleteFromShoppingListError> {
         let json = iface_meal_planning__delete_from_shopping_list_params__to_json(&params);
         match dispatch(&OP_MEAL_PLANNING_DELETE_FROM_SHOPPING_LIST, json).and_then(iface_meal_planning__delete_from_shopping_list__ok) {
             Ok(v) => Ok(v),
@@ -1755,7 +1765,7 @@ impl iface_meal_planning::Guest for crate::Component {
             Err(e) => Err(iface_meal_planning__get_meal_plan_template__err(e)),
         }
     }
-    fn delete_meal_plan_template(params: iface_meal_planning::DeleteMealPlanTemplateParams) -> Result<iface_meal_planning::DeleteMealPlanTemplateResponse, iface_meal_planning::DeleteMealPlanTemplateError> {
+    fn delete_meal_plan_template(params: iface_meal_planning::DeleteMealPlanTemplateParams) -> Result<Vec<iface_meal_planning::DeleteMealPlanTemplateResponseEntry>, iface_meal_planning::DeleteMealPlanTemplateError> {
         let json = iface_meal_planning__delete_meal_plan_template_params__to_json(&params);
         match dispatch(&OP_MEAL_PLANNING_DELETE_MEAL_PLAN_TEMPLATE, json).and_then(iface_meal_planning__delete_meal_plan_template__ok) {
             Ok(v) => Ok(v),

@@ -44,19 +44,13 @@ const OP_PINS_REMOVE: OpSpec = OpSpec {
 
 fn iface_pins__add_response__to_json(p: &iface_pins::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_pins__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_pins__defs_ok_true__to_json(p: &iface_pins::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_pins__remove_response__to_json(p: &iface_pins::RemoveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_pins__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -86,21 +80,14 @@ fn iface_pins__remove_params__to_json(p: &iface_pins::RemoveParams) -> Value {
 fn iface_pins__add_response__from_json(v: &Value) -> Option<iface_pins::AddResponse> {
     let m = v.as_object()?;
     Some(iface_pins::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_pins__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_pins__defs_ok_true__from_json(v: &Value) -> Option<iface_pins::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_pins::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_pins__remove_response__from_json(v: &Value) -> Option<iface_pins::RemoveResponse> {
     let m = v.as_object()?;
     Some(iface_pins::RemoveResponse {
-        ok: match m.get("ok").and_then(|v| iface_pins__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
